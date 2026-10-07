@@ -20,15 +20,15 @@ mod test;
 use soroban_sdk::{contract, contractimpl, Address, Env, String, Vec};
 
 pub use events::{
-    AdminChanged, AttesterAdded, AttesterRemoved, Initialized, ProviderRegistered,
+    AdminChanged, AdminProposed, AttesterAdded, AttesterRemoved, Initialized, ProviderRegistered,
     ProviderStatusChanged, ServiceRemoved, ServiceUpserted,
 };
 pub use types::{DataKey, Provider, ProviderStatus, RegistryError, ServiceItem};
 
 use storage::{
-    extend_instance, has_admin, has_provider, read_admin, read_attester, read_provider,
-    read_service, remove_service as storage_remove_service, write_admin, write_attester,
-    write_provider, write_service,
+    clear_pending_admin, extend_instance, has_admin, has_provider, read_admin, read_attester,
+    read_pending_admin, read_provider, read_service, remove_service as storage_remove_service,
+    write_admin, write_attester, write_pending_admin, write_provider, write_service,
 };
 
 #[contract]
@@ -203,10 +203,36 @@ impl Registry {
         Ok(())
     }
 
-    /// Transfers administration to a new address. Admin only.
-    pub fn set_admin(env: Env, admin: Address, new_admin: Address) -> Result<(), RegistryError> {
+    /// Nominates a new admin. Takes effect only once they accept.
+    ///
+    /// Two steps so a typo in the new address cannot permanently strand
+    /// provider verification. Proposing again replaces the earlier nominee.
+    pub fn propose_admin(
+        env: Env,
+        admin: Address,
+        new_admin: Address,
+    ) -> Result<(), RegistryError> {
         Self::require_admin(&env, &admin)?;
+        write_pending_admin(&env, &new_admin);
+        extend_instance(&env);
+        AdminProposed {
+            admin,
+            pending_admin: new_admin,
+        }
+        .publish(&env);
+        Ok(())
+    }
+
+    /// The nominated address accepts and becomes admin.
+    pub fn accept_admin(env: Env, new_admin: Address) -> Result<(), RegistryError> {
+        let pending = read_pending_admin(&env).ok_or(RegistryError::NoPendingAdmin)?;
+        if pending != new_admin {
+            return Err(RegistryError::NotAuthorized);
+        }
+        new_admin.require_auth();
+
         write_admin(&env, &new_admin);
+        clear_pending_admin(&env);
         extend_instance(&env);
         AdminChanged { new_admin }.publish(&env);
         Ok(())
@@ -216,6 +242,10 @@ impl Registry {
 
     pub fn get_admin(env: Env) -> Result<Address, RegistryError> {
         read_admin(&env)
+    }
+
+    pub fn get_pending_admin(env: Env) -> Option<Address> {
+        read_pending_admin(&env)
     }
 
     pub fn get_provider(env: Env, provider_addr: Address) -> Result<Provider, RegistryError> {

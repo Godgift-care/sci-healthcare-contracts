@@ -344,8 +344,14 @@ fn non_admin_cannot_add_attester() {
 fn admin_can_be_transferred() {
     let f = setup();
     let new_admin = Address::generate(&f.env);
-    f.client.set_admin(&f.admin, &new_admin);
+    f.client.propose_admin(&f.admin, &new_admin);
+    // Nothing changes until the nominee accepts.
+    assert_eq!(f.client.get_admin(), f.admin);
+    assert_eq!(f.client.get_pending_admin(), Some(new_admin.clone()));
+
+    f.client.accept_admin(&new_admin);
     assert_eq!(f.client.get_admin(), new_admin);
+    assert_eq!(f.client.get_pending_admin(), None);
 
     // Old admin loses authority.
     let attester = Address::generate(&f.env);
@@ -382,4 +388,51 @@ fn service_price_view_returns_zero_when_absent() {
 
     let stranger = Address::generate(&f.env);
     assert_eq!(f.client.get_service_price(&stranger, &101u32), 0);
+}
+
+#[test]
+fn only_the_nominee_can_accept_admin() {
+    let f = setup();
+    let nominee = Address::generate(&f.env);
+    let intruder = Address::generate(&f.env);
+    f.client.propose_admin(&f.admin, &nominee);
+
+    let err = f.client.try_accept_admin(&intruder).err().unwrap().unwrap();
+    assert_eq!(err, RegistryError::NotAuthorized);
+    assert_eq!(f.client.get_admin(), f.admin);
+}
+
+#[test]
+fn accept_admin_without_proposal_errors() {
+    let f = setup();
+    let someone = Address::generate(&f.env);
+    let err = f.client.try_accept_admin(&someone).err().unwrap().unwrap();
+    assert_eq!(err, RegistryError::NoPendingAdmin);
+}
+
+#[test]
+fn non_admin_cannot_propose_admin() {
+    let f = setup();
+    let someone = Address::generate(&f.env);
+    let err = f
+        .client
+        .try_propose_admin(&someone, &someone)
+        .err()
+        .unwrap()
+        .unwrap();
+    assert_eq!(err, RegistryError::NotAuthorized);
+}
+
+#[test]
+fn reproposing_replaces_the_nominee() {
+    let f = setup();
+    let typo = Address::generate(&f.env);
+    let intended = Address::generate(&f.env);
+    f.client.propose_admin(&f.admin, &typo);
+    f.client.propose_admin(&f.admin, &intended);
+
+    let err = f.client.try_accept_admin(&typo).err().unwrap().unwrap();
+    assert_eq!(err, RegistryError::NotAuthorized);
+    f.client.accept_admin(&intended);
+    assert_eq!(f.client.get_admin(), intended);
 }

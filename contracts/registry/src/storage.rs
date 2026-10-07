@@ -30,6 +30,20 @@ pub(crate) fn has_admin(env: &Env) -> bool {
     env.storage().instance().has(&DataKey::Admin)
 }
 
+pub(crate) fn read_pending_admin(env: &Env) -> Option<Address> {
+    env.storage().instance().get(&DataKey::PendingAdmin)
+}
+
+pub(crate) fn write_pending_admin(env: &Env, pending: &Address) {
+    env.storage()
+        .instance()
+        .set(&DataKey::PendingAdmin, pending);
+}
+
+pub(crate) fn clear_pending_admin(env: &Env) {
+    env.storage().instance().remove(&DataKey::PendingAdmin);
+}
+
 pub(crate) fn read_provider(env: &Env, addr: &Address) -> Result<Provider, RegistryError> {
     let key = DataKey::Provider(addr.clone());
     let provider: Provider = env
@@ -88,11 +102,24 @@ pub(crate) fn remove_service(env: &Env, provider: &Address, code: u32) {
         .remove(&DataKey::Service(provider.clone(), code));
 }
 
+/// Whether `addr` currently holds attester rights.
+///
+/// Extends the entry on every read, like providers and services, so an
+/// attester who keeps confirming care never has their role archived out
+/// from under them.
 pub(crate) fn read_attester(env: &Env, addr: &Address) -> bool {
-    env.storage()
-        .persistent()
-        .get(&DataKey::Attester(addr.clone()))
-        .unwrap_or(false)
+    let key = DataKey::Attester(addr.clone());
+    match env.storage().persistent().get::<_, bool>(&key) {
+        Some(enabled) => {
+            env.storage().persistent().extend_ttl(
+                &key,
+                PERSISTENT_TTL_THRESHOLD,
+                PERSISTENT_TTL_EXTEND,
+            );
+            enabled
+        }
+        None => false,
+    }
 }
 
 pub(crate) fn write_attester(env: &Env, addr: &Address, enabled: bool) {

@@ -50,6 +50,8 @@ pub enum DataKey {
     Provider(Address),
     Service(Address, u32),
     Attester(Address),
+    /// Address nominated by `propose_admin`, awaiting `accept_admin`.
+    PendingAdmin,
 }
 
 #[contracterror]
@@ -66,4 +68,5 @@ pub enum RegistryError {
     InvalidPrice = 8,
     InvalidCountry = 9,
     EmptyName = 10,
+    NoPendingAdmin = 11,
 }
