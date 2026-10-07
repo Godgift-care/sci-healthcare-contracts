@@ -34,6 +34,20 @@ pub struct MinterChanged {
 
 #[contractevent]
 #[derive(Clone, Debug, Eq, PartialEq)]
+pub struct AdminProposed {
+    #[topic]
+    pub admin: Address,
+    pub pending_admin: Address,
+}
+
+#[contractevent]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct AdminChanged {
+    pub new_admin: Address,
+}
+
+#[contractevent]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct ReceiptMinted {
     #[topic]
     pub beneficiary_ref: BytesN<32>,
@@ -77,6 +91,8 @@ pub enum DataKey {
     Receipt(u64),
     /// Running count of settled episodes per beneficiary reference.
     Count(BytesN<32>),
+    /// Address nominated by `propose_admin`, awaiting `accept_admin`.
+    PendingAdmin,
 }
 
 #[contracterror]
@@ -89,6 +105,7 @@ pub enum ReceiptError {
     ReceiptNotFound = 4,
     ReceiptExists = 5,
     InvalidAmount = 6,
+    NoPendingAdmin = 7,
 }
 
 #[contract]
@@ -190,6 +207,48 @@ impl ReceiptBook {
         }
         .publish(&env);
         Ok(())
+    }
+
+    /// Nominates a new admin. Takes effect only once they accept.
+    pub fn propose_admin(env: Env, admin: Address, new_admin: Address) -> Result<(), ReceiptError> {
+        Self::require_admin(&env, &admin)?;
+        env.storage()
+            .instance()
+            .set(&DataKey::PendingAdmin, &new_admin);
+        env.storage()
+            .instance()
+            .extend_ttl(INSTANCE_TTL_THRESHOLD, INSTANCE_TTL_EXTEND);
+        AdminProposed {
+            admin,
+            pending_admin: new_admin,
+        }
+        .publish(&env);
+        Ok(())
+    }
+
+    /// The nominated address accepts and becomes admin.
+    pub fn accept_admin(env: Env, new_admin: Address) -> Result<(), ReceiptError> {
+        let pending: Address = env
+            .storage()
+            .instance()
+            .get(&DataKey::PendingAdmin)
+            .ok_or(ReceiptError::NoPendingAdmin)?;
+        if pending != new_admin {
+            return Err(ReceiptError::NotAuthorized);
+        }
+        new_admin.require_auth();
+
+        env.storage().instance().set(&DataKey::Admin, &new_admin);
+        env.storage().instance().remove(&DataKey::PendingAdmin);
+        env.storage()
+            .instance()
+            .extend_ttl(INSTANCE_TTL_THRESHOLD, INSTANCE_TTL_EXTEND);
+        AdminChanged { new_admin }.publish(&env);
+        Ok(())
+    }
+
+    pub fn get_pending_admin(env: Env) -> Option<Address> {
+        env.storage().instance().get(&DataKey::PendingAdmin)
     }
 
     pub fn get_receipt(env: Env, voucher_id: u64) -> Result<Receipt, ReceiptError> {

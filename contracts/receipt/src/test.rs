@@ -214,3 +214,37 @@ fn non_admin_cannot_repoint_minter() {
         .unwrap();
     assert_eq!(err, ReceiptError::NotAuthorized);
 }
+
+#[test]
+fn admin_handover_takes_two_steps() {
+    let f = setup();
+    let new_admin = Address::generate(&f.env);
+    f.client.propose_admin(&f.admin, &new_admin);
+    assert_eq!(f.client.get_admin(), f.admin);
+
+    f.client.accept_admin(&new_admin);
+    assert_eq!(f.client.get_admin(), new_admin);
+    assert_eq!(f.client.get_pending_admin(), None);
+
+    // The old admin can no longer repoint the minter.
+    let err = f
+        .client
+        .try_set_minter(&f.admin, &new_admin)
+        .err()
+        .unwrap()
+        .unwrap();
+    assert_eq!(err, ReceiptError::NotAuthorized);
+}
+
+#[test]
+fn only_the_nominee_can_accept_admin() {
+    let f = setup();
+    let nominee = Address::generate(&f.env);
+    let err = f.client.try_accept_admin(&nominee).err().unwrap().unwrap();
+    assert_eq!(err, ReceiptError::NoPendingAdmin);
+
+    f.client.propose_admin(&f.admin, &nominee);
+    let intruder = Address::generate(&f.env);
+    let err = f.client.try_accept_admin(&intruder).err().unwrap().unwrap();
+    assert_eq!(err, ReceiptError::NotAuthorized);
+}
