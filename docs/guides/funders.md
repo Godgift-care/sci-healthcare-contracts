@@ -11,14 +11,14 @@ You are paying for a specific treatment at a specific clinic, for yourself or fo
 
 - A Stellar wallet. [Freighter](https://freighter.app) is the usual choice.
 - Your wallet set to **Testnet** while the protocol is in testing.
-- Some USDC in that wallet, and a trustline for it (see below).
+- Some USDC in that wallet, and a trustline for it (see below). On testnet, get free test USDC from the app: **My vouchers → Get test USDC** (once a day per wallet).
 - The patient's clinic reference and a secret key you both agree on.
 
 ## About the trustline
 
 Stellar requires you to explicitly opt in to holding an asset before you can receive it. This is called a trustline, and without one for USDC your wallet cannot hold it and funding will fail.
 
-Most wallets offer to add one when you first try to receive an asset. If yours does not, the app will prompt you.
+On testnet, add it by hand in your wallet. In Freighter: **Manage assets → Add an asset**, code `USDC`, issuer `GCKX5KAFVF7GLFZ3JWQGJ4F62RYYZU67PI3TACBGKVPJ73JELMI3L4KR`.
 
 ## Funding
 

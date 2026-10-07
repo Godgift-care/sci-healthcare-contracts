@@ -229,3 +229,28 @@ Only the minter — the voucher contract — may mint. Because the voucher contr
 ### Events
 
 `receipt_minted` — topics `beneficiary_ref`, `provider`; data `voucher_id`, `service_code`, `amount`, `settled_at`
+
+## faucet (testnet only)
+
+Lets anyone trying the demo get test USDC without a server holding the issuer key. The demo token's Stellar Asset Contract names the faucet as its admin, so `drip` can mint. **Never point it at a real asset.** `scripts/deploy-faucet.sh` refuses mainnet.
+
+| Function | Parameters | Returns | Auth |
+| --- | --- | --- | --- |
+| `initialize` | `admin, token, amount, cooldown` | `()` | once |
+| `drip` | `to` | `i128` | `to` |
+| `set_drip` | `admin, amount, cooldown` | `()` | `admin` |
+| `release_token_admin` | `admin, new_admin` | `()` | `admin` |
+| `get_config` | — | `FaucetConfig` | view |
+| `next_drip_at` | `to` | `u64` (0 if allowed now) | view |
+
+`drip` requires the recipient's signature, so one wallet cannot drain the faucet into addresses it does not control, and each address may drip once per `cooldown`. A classic account needs a trustline for the token first; the token reports a missing one as its error `#13`.
+
+On testnet the faucet drips 50 USDC once a day: [`CCB25WG7DQ2CSNXPTOHZO2PDZ324FQPZLH3LSNCCLWYM3FEH52GEXC47`](https://stellar.expert/explorer/testnet/contract/CCB25WG7DQ2CSNXPTOHZO2PDZ324FQPZLH3LSNCCLWYM3FEH52GEXC47).
+
+| # | Error |
+| --- | --- |
+| 1 | `AlreadyInitialized` |
+| 2 | `NotInitialized` |
+| 3 | `NotAuthorized` |
+| 4 | `InvalidAmount` |
+| 5 | `CoolingDown` |

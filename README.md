@@ -9,7 +9,7 @@
   <img src="https://img.shields.io/badge/soroban--sdk-27.0.6-blue" alt="soroban-sdk 27.0.6" />
   <img src="https://img.shields.io/badge/rust-1.96-orange" alt="rust 1.96" />
   <img src="https://img.shields.io/badge/license-Apache--2.0-green" alt="Apache 2.0" />
-  <img src="https://img.shields.io/badge/tests-84%20passing-brightgreen" alt="84 tests" />
+  <img src="https://img.shields.io/badge/tests-94%20passing-brightgreen" alt="94 tests" />
 </p>
 
 # SCI Healthcare — Contracts | [Documentation](https://godgift-care.github.io/sci-healthcare-contracts/)
@@ -47,6 +47,7 @@ Someone funds a voucher for a specific clinic and a specific service. The money 
 | Voucher escrow | [`CBPUQN6CNJCNGPKNEXB7UM4T7RINKQB7HQI5CXEOSQ5EFRHE4G4VKPSQ`](https://stellar.expert/explorer/testnet/contract/CBPUQN6CNJCNGPKNEXB7UM4T7RINKQB7HQI5CXEOSQ5EFRHE4G4VKPSQ) |
 | Care receipts | [`CBCJRI2BCZBMZNX77WWDC2NGSV4ZNAN5Q23XHYNBH6UTOQMPJHZGX5C7`](https://stellar.expert/explorer/testnet/contract/CBCJRI2BCZBMZNX77WWDC2NGSV4ZNAN5Q23XHYNBH6UTOQMPJHZGX5C7) |
 | Test USDC (SAC) | [`CCRLJ7FEIKTR3GBT3VQQPSIJGRBO2WPNMVFKJDP6AYGJQWECOR4QVE5M`](https://stellar.expert/explorer/testnet/contract/CCRLJ7FEIKTR3GBT3VQQPSIJGRBO2WPNMVFKJDP6AYGJQWECOR4QVE5M) |
+| Test USDC faucet (testnet only) | [`CCB25WG7DQ2CSNXPTOHZO2PDZ324FQPZLH3LSNCCLWYM3FEH52GEXC47`](https://stellar.expert/explorer/testnet/contract/CCB25WG7DQ2CSNXPTOHZO2PDZ324FQPZLH3LSNCCLWYM3FEH52GEXC47) |
 
 ## Architecture
 
@@ -102,7 +103,7 @@ cargo install --locked stellar-cli
 ```bash
 git clone https://github.com/Godgift-care/sci-healthcare-contracts
 cd sci-healthcare-contracts
-cargo test                                    # 84 tests
+cargo test                                    # 94 tests
 cargo build --target wasm32v1-none --release  # three .wasm artifacts
 ```
 
@@ -113,6 +114,7 @@ stellar keys generate --network testnet --fund sci-admin
 stellar keys generate --network testnet --fund sci-issuer
 ./scripts/deploy.sh testnet     # deploys in dependency order and wires them up
 ./scripts/seed.sh testnet       # demo clinic, services, attester, vouchers
+./scripts/deploy-faucet.sh      # testnet only: lets anyone get test USDC
 ```
 
 `deploy.sh` writes every address to `deployments/testnet.env` and prints a copy-pasteable block for the app's environment.
