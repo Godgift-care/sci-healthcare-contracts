@@ -1,4 +1,4 @@
-use soroban_sdk::Env;
+use soroban_sdk::{Address, Env};
 
 use crate::types::{Config, DataKey, Voucher, VoucherError};
 
@@ -53,10 +53,30 @@ pub(crate) fn read_voucher(env: &Env, id: u64) -> Result<Voucher, VoucherError> 
     Ok(voucher)
 }
 
+/// Writes a voucher and keeps the contract instance alive with it.
+///
+/// Every state transition goes through here, so a contract that is only
+/// ever claimed, attested and settled (never funded) for a month still has
+/// its config and id counter extended.
 pub(crate) fn write_voucher(env: &Env, voucher: &Voucher) {
     let key = DataKey::Voucher(voucher.id);
     env.storage().persistent().set(&key, voucher);
     env.storage()
         .persistent()
         .extend_ttl(&key, PERSISTENT_TTL_THRESHOLD, PERSISTENT_TTL_EXTEND);
+    extend_instance(env);
+}
+
+pub(crate) fn read_pending_admin(env: &Env) -> Option<Address> {
+    env.storage().instance().get(&DataKey::PendingAdmin)
+}
+
+pub(crate) fn write_pending_admin(env: &Env, pending: &Address) {
+    env.storage()
+        .instance()
+        .set(&DataKey::PendingAdmin, pending);
+}
+
+pub(crate) fn clear_pending_admin(env: &Env) {
+    env.storage().instance().remove(&DataKey::PendingAdmin);
 }

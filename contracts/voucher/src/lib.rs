@@ -44,20 +44,28 @@ use soroban_sdk::{contract, contractimpl, token, Address, BytesN, Env};
 
 #[allow(unused_imports)]
 pub use events::{
-    DisputeResolved, Initialized, VoucherAttested, VoucherClaimed, VoucherCreated, VoucherDisputed,
-    VoucherRefunded, VoucherSettled,
+    AdminChanged, AdminProposed, DisputeResolved, Initialized, VoucherAttested, VoucherClaimed,
+    VoucherCreated, VoucherDisputed, VoucherRefunded, VoucherSettled,
 };
 pub use interfaces::{ReceiptClient, RegistryClient};
 pub use types::{Config, DataKey, Voucher, VoucherError, VoucherStatus};
 
 use storage::{
-    bump_next_id, extend_instance, has_config, peek_next_id, read_config, read_voucher,
-    write_config, write_voucher,
+    bump_next_id, clear_pending_admin, extend_instance, has_config, peek_next_id, read_config,
+    read_pending_admin, read_voucher, write_config, write_pending_admin, write_voucher,
 };
 
 const BPS_DENOMINATOR: i128 = 10_000;
 /// Ceiling on the protocol fee, enforced at initialization. 10%.
 const MAX_FEE_BPS: u32 = 1_000;
+/// How long past expiry a claimed-but-never-attested voucher stays locked
+/// before the funder can take the money back. Seven days.
+///
+/// Without this, a provider that claims a voucher and never gets an
+/// attestation would hold the funder's money in escrow indefinitely unless
+/// the funder noticed and disputed. The grace period gives an attester
+/// that is merely slow time to confirm care that happened near expiry.
+pub const CLAIM_GRACE_SECS: u64 = 7 * 24 * 60 * 60;
 
 #[contract]
 pub struct VoucherEscrow;
@@ -164,7 +172,6 @@ impl VoucherEscrow {
             dispute_deadline: 0,
         };
         write_voucher(&env, &voucher);
-        extend_instance(&env);
 
         VoucherCreated {
             funder,
@@ -181,6 +188,9 @@ impl VoucherEscrow {
     }
 
     /// Provider marks the patient as presented and the service as begun.
+    ///
+    /// A provider suspended after the voucher was funded cannot claim it;
+    /// the voucher simply runs to expiry and refunds.
     pub fn claim(env: Env, provider: Address, voucher_id: u64) -> Result<(), VoucherError> {
         provider.require_auth();
 
@@ -190,6 +200,11 @@ impl VoucherEscrow {
         }
         if voucher.status != VoucherStatus::Funded {
             return Err(VoucherError::InvalidStatus);
+        }
+
+        let config = read_config(&env)?;
+        if !RegistryClient::new(&env, &config.registry).is_active_provider(&provider) {
+            return Err(VoucherError::ProviderNotActive);
         }
 
         let now = env.ledger().timestamp();
@@ -312,17 +327,20 @@ impl VoucherEscrow {
         Ok(())
     }
 
-    /// Returns escrow to the funder after an unclaimed voucher expires.
+    /// Returns escrow to the funder when care can no longer happen.
+    ///
+    /// - A `Funded` voucher is refundable once it expires unclaimed.
+    /// - A `Claimed` voucher that was never attested is refundable once
+    ///   `CLAIM_GRACE_SECS` have passed after expiry, so a claim alone can
+    ///   never lock the funder's money forever.
     ///
     /// Permissionless for the same reason as `settle`.
     pub fn refund(env: Env, voucher_id: u64) -> Result<(), VoucherError> {
         let config = read_config(&env)?;
         let mut voucher = read_voucher(&env, voucher_id)?;
 
-        if voucher.status != VoucherStatus::Funded {
-            return Err(VoucherError::InvalidStatus);
-        }
-        if env.ledger().timestamp() < voucher.expires_at {
+        let refundable_at = Self::refundable_at_for(&voucher)?;
+        if env.ledger().timestamp() < refundable_at {
             return Err(VoucherError::NotYetExpired);
         }
 
@@ -368,7 +386,57 @@ impl VoucherEscrow {
         Ok(())
     }
 
+    // ----- administration -----
+
+    /// Nominates a new admin. Takes effect only once they accept.
+    ///
+    /// Two steps so a typo in the new address cannot permanently strand
+    /// dispute resolution. Proposing again replaces the earlier nominee.
+    pub fn propose_admin(env: Env, admin: Address, new_admin: Address) -> Result<(), VoucherError> {
+        let config = read_config(&env)?;
+        if config.admin != admin {
+            return Err(VoucherError::NotAuthorized);
+        }
+        admin.require_auth();
+
+        write_pending_admin(&env, &new_admin);
+        extend_instance(&env);
+        AdminProposed {
+            admin,
+            pending_admin: new_admin,
+        }
+        .publish(&env);
+        Ok(())
+    }
+
+    /// The nominated address accepts and becomes admin.
+    pub fn accept_admin(env: Env, new_admin: Address) -> Result<(), VoucherError> {
+        let pending = read_pending_admin(&env).ok_or(VoucherError::NoPendingAdmin)?;
+        if pending != new_admin {
+            return Err(VoucherError::NotAuthorized);
+        }
+        new_admin.require_auth();
+
+        let mut config = read_config(&env)?;
+        config.admin = new_admin.clone();
+        write_config(&env, &config);
+        clear_pending_admin(&env);
+        extend_instance(&env);
+        AdminChanged { new_admin }.publish(&env);
+        Ok(())
+    }
+
     // ----- views -----
+
+    pub fn get_pending_admin(env: Env) -> Option<Address> {
+        read_pending_admin(&env)
+    }
+
+    /// Earliest ledger time at which `refund` will succeed, or
+    /// `InvalidStatus` if this voucher can no longer be refunded.
+    pub fn refundable_at(env: Env, voucher_id: u64) -> Result<u64, VoucherError> {
+        Self::refundable_at_for(&read_voucher(&env, voucher_id)?)
+    }
 
     pub fn get_voucher(env: Env, voucher_id: u64) -> Result<Voucher, VoucherError> {
         read_voucher(&env, voucher_id)
@@ -391,6 +459,17 @@ impl VoucherEscrow {
     }
 
     // ----- internal -----
+
+    fn refundable_at_for(voucher: &Voucher) -> Result<u64, VoucherError> {
+        match voucher.status {
+            VoucherStatus::Funded => Ok(voucher.expires_at),
+            VoucherStatus::Claimed => voucher
+                .expires_at
+                .checked_add(CLAIM_GRACE_SECS)
+                .ok_or(VoucherError::MathOverflow),
+            _ => Err(VoucherError::InvalidStatus),
+        }
+    }
 
     /// Basis-point fee. Integer math throughout; truncation favours the
     /// provider, never the protocol.

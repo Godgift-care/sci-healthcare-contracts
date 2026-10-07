@@ -9,6 +9,9 @@ use soroban_sdk::{contracterror, contracttype, Address, BytesN};
 ///     │ refund (past expiry)  │ dispute          │ dispute
 ///     ▼                       ▼                  ▼
 ///  Refunded  <──────────  Disputed  ────────────────> (resolve)
+///     ▲                       │
+///     └───────────────────────┘
+///       refund (claimed, never attested, past expiry + claim grace)
 /// ```
 ///
 /// `Settled` and `Refunded` are terminal.
@@ -69,6 +72,8 @@ pub enum DataKey {
     Config,
     NextId,
     Voucher(u64),
+    /// Address nominated by `propose_admin`, awaiting `accept_admin`.
+    PendingAdmin,
 }
 
 #[contracterror]
@@ -91,4 +96,5 @@ pub enum VoucherError {
     DisputeWindowClosed = 14,
     InvalidFee = 15,
     MathOverflow = 16,
+    NoPendingAdmin = 17,
 }

@@ -341,6 +341,23 @@ fn cannot_claim_expired_voucher() {
 }
 
 #[test]
+fn suspended_provider_cannot_claim() {
+    let f = setup();
+    let id = fund(&f);
+    f.registry
+        .set_provider_status(&f.admin, &f.provider, &ProviderStatus::Suspended);
+
+    let err = f
+        .voucher
+        .try_claim(&f.provider, &id)
+        .err()
+        .unwrap()
+        .unwrap();
+    assert_eq!(err, VoucherError::ProviderNotActive);
+    assert_eq!(f.voucher.get_voucher(&id).status, VoucherStatus::Funded);
+}
+
+#[test]
 fn cannot_claim_twice() {
     let f = setup();
     let id = fund(&f);
@@ -480,14 +497,64 @@ fn cannot_refund_before_expiry() {
 }
 
 #[test]
-fn cannot_refund_claimed_voucher() {
+fn claimed_voucher_is_locked_during_claim_grace() {
+    // One day past expiry: the attester still has time to confirm care
+    // that happened just before the voucher ran out.
     let f = setup();
     let id = fund(&f);
     f.voucher.claim(&f.provider, &id);
     advance(&f.env, 31 * 24 * 60 * 60);
 
     let err = f.voucher.try_refund(&id).err().unwrap().unwrap();
+    assert_eq!(err, VoucherError::NotYetExpired);
+}
+
+#[test]
+fn claimed_but_never_attested_voucher_refunds_after_grace() {
+    // A claim alone must never lock the funder's money forever.
+    let f = setup();
+    let before = f.token.balance(&f.funder);
+    let id = fund(&f);
+    f.voucher.claim(&f.provider, &id);
+
+    let expires_at = f.voucher.get_voucher(&id).expires_at;
+    assert_eq!(
+        f.voucher.refundable_at(&id),
+        expires_at + crate::CLAIM_GRACE_SECS
+    );
+
+    f.env
+        .ledger()
+        .with_mut(|li| li.timestamp = expires_at + crate::CLAIM_GRACE_SECS);
+    f.voucher.refund(&id);
+
+    assert_eq!(f.token.balance(&f.funder), before);
+    assert_eq!(f.token.balance(&f.provider), 0);
+    assert_eq!(f.voucher.get_voucher(&id).status, VoucherStatus::Refunded);
+}
+
+#[test]
+fn attested_voucher_cannot_be_refunded() {
+    let f = setup();
+    let id = fund(&f);
+    f.voucher.claim(&f.provider, &id);
+    f.voucher.attest(&f.attester, &id);
+    advance(&f.env, 365 * 24 * 60 * 60);
+
+    let err = f.voucher.try_refund(&id).err().unwrap().unwrap();
     assert_eq!(err, VoucherError::InvalidStatus);
+    let err = f.voucher.try_refundable_at(&id).err().unwrap().unwrap();
+    assert_eq!(err, VoucherError::InvalidStatus);
+}
+
+#[test]
+fn refundable_at_is_expiry_for_unclaimed_voucher() {
+    let f = setup();
+    let id = fund(&f);
+    assert_eq!(
+        f.voucher.refundable_at(&id),
+        f.voucher.get_voucher(&id).expires_at
+    );
 }
 
 // ----- disputes -----
@@ -654,4 +721,79 @@ fn missing_voucher_errors() {
     let f = setup();
     let err = f.voucher.try_get_voucher(&404u64).err().unwrap().unwrap();
     assert_eq!(err, VoucherError::VoucherNotFound);
+}
+
+// ----- administration -----
+
+#[test]
+fn admin_handover_takes_two_steps() {
+    let f = setup();
+    let new_admin = Address::generate(&f.env);
+
+    f.voucher.propose_admin(&f.admin, &new_admin);
+    assert_eq!(f.voucher.get_config().admin, f.admin);
+    assert_eq!(f.voucher.get_pending_admin(), Some(new_admin.clone()));
+
+    f.voucher.accept_admin(&new_admin);
+    assert_eq!(f.voucher.get_config().admin, new_admin);
+    assert_eq!(f.voucher.get_pending_admin(), None);
+}
+
+#[test]
+fn new_admin_resolves_disputes_and_old_admin_cannot() {
+    let f = setup();
+    let new_admin = Address::generate(&f.env);
+    f.voucher.propose_admin(&f.admin, &new_admin);
+    f.voucher.accept_admin(&new_admin);
+
+    let id = fund(&f);
+    f.voucher.claim(&f.provider, &id);
+    f.voucher.dispute(&f.funder, &id, &1u32);
+
+    let err = f
+        .voucher
+        .try_resolve_dispute(&f.admin, &id, &true)
+        .err()
+        .unwrap()
+        .unwrap();
+    assert_eq!(err, VoucherError::NotAuthorized);
+
+    f.voucher.resolve_dispute(&new_admin, &id, &true);
+    assert_eq!(f.voucher.get_voucher(&id).status, VoucherStatus::Refunded);
+}
+
+#[test]
+fn only_the_nominee_can_accept_admin() {
+    let f = setup();
+    let nominee = Address::generate(&f.env);
+    let intruder = Address::generate(&f.env);
+    f.voucher.propose_admin(&f.admin, &nominee);
+
+    let err = f
+        .voucher
+        .try_accept_admin(&intruder)
+        .err()
+        .unwrap()
+        .unwrap();
+    assert_eq!(err, VoucherError::NotAuthorized);
+}
+
+#[test]
+fn accept_admin_without_proposal_errors() {
+    let f = setup();
+    let someone = Address::generate(&f.env);
+    let err = f.voucher.try_accept_admin(&someone).err().unwrap().unwrap();
+    assert_eq!(err, VoucherError::NoPendingAdmin);
+}
+
+#[test]
+fn non_admin_cannot_propose_admin() {
+    let f = setup();
+    let err = f
+        .voucher
+        .try_propose_admin(&f.funder, &f.funder)
+        .err()
+        .unwrap()
+        .unwrap();
+    assert_eq!(err, VoucherError::NotAuthorized);
 }
