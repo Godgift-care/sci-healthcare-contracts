@@ -35,7 +35,7 @@ An attester can confirm care that never happened. If an attester and a clinic co
 
 What limits it: attesters are appointed by the admin and can be revoked; the provider cannot attest for itself; the funder has a 72-hour window to dispute before any money moves; and every attestation is permanently attributable on chain, so a dishonest attester leaves a complete record.
 
-What would improve it: an attester quorum for high-value vouchers, so one compromised party is not enough. This is [an open issue](https://github.com/otobongdev/sci-healthcare-contracts/issues), not something already built.
+What would improve it: an attester quorum for high-value vouchers, so one compromised party is not enough. This is [an open issue](https://github.com/Godgift-care/sci-healthcare-contracts/issues), not something already built.
 
 ### The admin
 

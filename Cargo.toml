@@ -10,7 +10,7 @@ members = [
 version = "0.1.0"
 edition = "2021"
 license = "Apache-2.0"
-repository = "https://github.com/sci-healthcare/sci-healthcare-contracts"
+repository = "https://github.com/Godgift-care/sci-healthcare-contracts"
 
 [workspace.dependencies]
 soroban-sdk = "27.0.6"

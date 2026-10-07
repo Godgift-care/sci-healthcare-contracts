@@ -23,12 +23,12 @@ heading_anchors: true
 
 aux_links:
   "GitHub":
-    - "https://github.com/otobongdev/sci-healthcare-contracts"
+    - "https://github.com/Godgift-care/sci-healthcare-contracts"
 
 nav_external_links:
   - title: Contracts repo
-    url: https://github.com/otobongdev/sci-healthcare-contracts
+    url: https://github.com/Godgift-care/sci-healthcare-contracts
   - title: Backend repo
-    url: https://github.com/otobongdev/sci-healthcare-backend
+    url: https://github.com/Godgift-care/sci-healthcare-backend
   - title: Frontend repo
-    url: https://github.com/otobongdev/sci-healthcare-frontend
+    url: https://github.com/Godgift-care/sci-healthcare-frontend

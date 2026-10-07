@@ -3,8 +3,8 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/otobongdev/sci-healthcare-contracts/actions/workflows/ci.yml">
-    <img src="https://github.com/otobongdev/sci-healthcare-contracts/actions/workflows/ci.yml/badge.svg" alt="CI" />
+  <a href="https://github.com/Godgift-care/sci-healthcare-contracts/actions/workflows/ci.yml">
+    <img src="https://github.com/Godgift-care/sci-healthcare-contracts/actions/workflows/ci.yml/badge.svg" alt="CI" />
   </a>
   <img src="https://img.shields.io/badge/soroban--sdk-27.0.6-blue" alt="soroban-sdk 27.0.6" />
   <img src="https://img.shields.io/badge/rust-1.96-orange" alt="rust 1.96" />
@@ -12,9 +12,9 @@
   <img src="https://img.shields.io/badge/tests-69%20passing-brightgreen" alt="69 tests" />
 </p>
 
-# SCI Healthcare — Contracts | [Documentation](https://otobongdev.github.io/sci-healthcare-contracts/)
+# SCI Healthcare — Contracts | [Documentation](https://godgift-care.github.io/sci-healthcare-contracts/)
 
-> **Live:** [App](https://sci-healthcare.vercel.app) · [API](https://sci-healthcare-api.onrender.com/stats) · [Docs](https://otobongdev.github.io/sci-healthcare-contracts/) · [Contracts on testnet](https://stellar.expert/explorer/testnet/contract/CBAOY2SQSMEIEQEITLZ3U3MER3K4ZBFQ5BTV5OCODAJINMXNOGLENC5I)
+> **Live:** [App](https://sci-healthcare.vercel.app) · [API](https://sci-healthcare-api.onrender.com/stats) · [Docs](https://godgift-care.github.io/sci-healthcare-contracts/) · [Contracts on testnet](https://stellar.expert/explorer/testnet/contract/CBAOY2SQSMEIEQEITLZ3U3MER3K4ZBFQ5BTV5OCODAJINMXNOGLENC5I)
 >
 > The API runs on Render's free tier and sleeps after ~15 minutes idle; the first
 > request may take 30–60 seconds to wake it.
@@ -25,7 +25,7 @@ Someone funds a voucher for a specific clinic and a specific service. The money 
 
 **No patient health information ever touches the ledger.** Vouchers carry a coarse service category and an opaque beneficiary reference, never a diagnosis, a result, or a name.
 
-## Maintainers | [Telegram](https://t.me/YOUR_TELEGRAM_GROUP)
+## Maintainers
 
 <table align="center">
   <tr>
@@ -35,8 +35,6 @@ Someone funds a voucher for a specific clinic and a specific service. The money 
       <strong>Adeleke | Protocol &amp; Contracts</strong>
       <br /><br />
       <a href="https://github.com/adelekevat">adelekevat</a>
-      <br />
-      <a href="https://t.me/YOUR_TELEGRAM_HANDLE">Telegram</a>
     </td>
   </tr>
 </table>
@@ -100,7 +98,7 @@ cargo install --locked stellar-cli
 ### Build and test
 
 ```bash
-git clone https://github.com/otobongdev/sci-healthcare-contracts
+git clone https://github.com/Godgift-care/sci-healthcare-contracts
 cd sci-healthcare-contracts
 cargo test                                    # 69 tests
 cargo build --target wasm32v1-none --release  # three .wasm artifacts
@@ -164,9 +162,9 @@ There is deliberately no transfer function on receipts.
 
 | Repo | Purpose |
 | --- | --- |
-| [sci-healthcare-contracts](https://github.com/otobongdev/sci-healthcare-contracts) | Soroban contracts (this repo) |
-| [sci-healthcare-backend](https://github.com/otobongdev/sci-healthcare-backend) | Event indexer and read API |
-| [sci-healthcare-frontend](https://github.com/otobongdev/sci-healthcare-frontend) | Web app for funders, clinics and attesters |
+| [sci-healthcare-contracts](https://github.com/Godgift-care/sci-healthcare-contracts) | Soroban contracts (this repo) |
+| [sci-healthcare-backend](https://github.com/Godgift-care/sci-healthcare-backend) | Event indexer and read API |
+| [sci-healthcare-frontend](https://github.com/Godgift-care/sci-healthcare-frontend) | Web app for funders, clinics and attesters |
 
 ## Contributing
 
@@ -174,8 +172,8 @@ Read [CONTRIBUTING.md](CONTRIBUTING.md) first. Issues labelled `good first issue
 
 ## Contributors
 
-<a href="https://github.com/otobongdev/sci-healthcare-contracts/graphs/contributors">
-  <img src="https://contrib.rocks/image?repo=otobongdev/sci-healthcare-contracts" />
+<a href="https://github.com/Godgift-care/sci-healthcare-contracts/graphs/contributors">
+  <img src="https://contrib.rocks/image?repo=Godgift-care/sci-healthcare-contracts" />
 </a>
 
 ## License
