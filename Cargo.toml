@@ -4,6 +4,7 @@ members = [
     "contracts/registry",
     "contracts/receipt",
     "contracts/voucher",
+    "contracts/faucet",
 ]
 
 [workspace.package]
