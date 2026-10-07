@@ -54,6 +54,8 @@ Watch it under **My vouchers**.
 
 **The patient never went.** Wait for the expiry date, then press **Refund me**. You get the full amount back, no fee. Anyone can trigger this, so you are not dependent on us.
 
+**The clinic claimed, but nobody ever confirmed the visit.** You can dispute straight away. If you do nothing, the voucher becomes refundable seven days after its expiry date and **Refund me** appears again.
+
 **The clinic claimed but did not treat them.** Press **Dispute** while the status is `Claimed` or `Attested`. Funds freeze and an administrator reviews it. Do this before the dispute window closes — 72 hours after attestation. Once it closes, settlement is automatic and irreversible.
 
 **The window closed and you missed it.** The money has gone to the clinic. The protocol cannot claw it back. Raise it with the clinic directly.

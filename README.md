@@ -9,7 +9,7 @@
   <img src="https://img.shields.io/badge/soroban--sdk-27.0.6-blue" alt="soroban-sdk 27.0.6" />
   <img src="https://img.shields.io/badge/rust-1.96-orange" alt="rust 1.96" />
   <img src="https://img.shields.io/badge/license-Apache--2.0-green" alt="Apache 2.0" />
-  <img src="https://img.shields.io/badge/tests-69%20passing-brightgreen" alt="69 tests" />
+  <img src="https://img.shields.io/badge/tests-84%20passing-brightgreen" alt="84 tests" />
 </p>
 
 # SCI Healthcare — Contracts | [Documentation](https://godgift-care.github.io/sci-healthcare-contracts/)
@@ -73,6 +73,8 @@ Three contracts, one responsibility each.
     │ refund (past expiry)  │ dispute             │ dispute
     ▼                       ▼                     ▼
  Refunded  <───────────  Disputed  ──── resolve ──┴──> Settled
+    ▲                       │
+    └───────────────────────┘ refund (claimed, never attested, 7 days past expiry)
 ```
 
 `settle` and `refund` are **permissionless** — a clinic never depends on the funder or an operator to get paid.
@@ -100,7 +102,7 @@ cargo install --locked stellar-cli
 ```bash
 git clone https://github.com/Godgift-care/sci-healthcare-contracts
 cd sci-healthcare-contracts
-cargo test                                    # 69 tests
+cargo test                                    # 84 tests
 cargo build --target wasm32v1-none --release  # three .wasm artifacts
 ```
 
@@ -128,7 +130,8 @@ stellar keys generate --network testnet --fund sci-issuer
 | `remove_service(provider, code)` | provider | Delists a service |
 | `add_attester(admin, attester)` | admin | Grants attester rights |
 | `remove_attester(admin, attester)` | admin | Revokes them |
-| `set_admin(admin, new_admin)` | admin | Transfers administration |
+| `propose_admin(admin, new_admin)` | admin | Nominates a new admin |
+| `accept_admin(new_admin)` | nominee | Completes the two-step handover |
 | `is_active_provider(provider)` | view | The check `voucher` relies on |
 | `get_service_price(provider, code)` | view | Price, or 0 if absent/inactive |
 | `is_attester(addr)` | view | Attester check |
@@ -143,7 +146,9 @@ stellar keys generate --network testnet --fund sci-issuer
 | `attest(attester, voucher_id)` | attester | Confirms delivery; opens the dispute window |
 | `dispute(funder, voucher_id, reason_code)` | funder | Contests before the window closes |
 | `settle(voucher_id)` | none | Releases escrow once the window closes |
-| `refund(voucher_id)` | none | Returns escrow after an unclaimed voucher expires |
+| `refund(voucher_id)` | none | Returns escrow after an unclaimed voucher expires, or 7 days after expiry if claimed but never attested |
+| `refundable_at(voucher_id)` | view | When `refund` will succeed |
+| `propose_admin` / `accept_admin` | admin / nominee | Two-step admin handover |
 | `resolve_dispute(admin, voucher_id, refund_funder)` | admin | Routes escrow to one of the two parties |
 | `quote(amount)` | view | `(fee, net)` so a clinic sees exactly what lands |
 

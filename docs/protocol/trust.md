@@ -21,9 +21,10 @@ These hold regardless of who behaves badly:
 2. **The clinic being paid cannot attest its own delivery.** The contract checks this explicitly and rejects it, even if that clinic address has been granted an attester role.
 3. **A clinic cannot be paid without an attestation.** No path exists from `Funded` or `Claimed` straight to `Settled`.
 4. **Money cannot be released early.** `settle` fails while the dispute window is open.
-5. **An unclaimed voucher always returns to the funder** once it expires, and nobody can prevent that — `refund` needs no authorisation.
+5. **An unattested voucher always returns to the funder.** Unclaimed, it is refundable at expiry; claimed but never attested, seven days after expiry. Nobody can prevent that — `refund` needs no authorisation.
 6. **The full amount is refunded.** No fee is taken on care that did not happen.
 7. **A settled voucher cannot be settled or refunded again.** Terminal states are terminal.
+8. **Admin rights cannot be handed to a mistyped address.** Every contract transfers administration in two steps — `propose_admin`, then `accept_admin` signed by the new address.
 
 ## What you are trusting
 

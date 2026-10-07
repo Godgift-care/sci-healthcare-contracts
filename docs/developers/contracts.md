@@ -47,7 +47,9 @@ pub struct ServiceItem {
 | `remove_service` | `provider_addr, code` | `()` | `provider_addr` | `ServiceNotFound` |
 | `add_attester` | `admin, attester` | `()` | `admin` | `NotAuthorized` |
 | `remove_attester` | `admin, attester` | `()` | `admin` | `NotAuthorized` |
-| `set_admin` | `admin, new_admin` | `()` | `admin` | `NotAuthorized` |
+| `propose_admin` | `admin, new_admin` | `()` | `admin` | `NotAuthorized` |
+| `accept_admin` | `new_admin` | `()` | `new_admin` | `NoPendingAdmin`, `NotAuthorized` |
+| `get_pending_admin` | — | `Option<Address>` | view | — |
 | `get_provider` | `provider_addr` | `Provider` | view | `ProviderNotFound` |
 | `is_active_provider` | `provider_addr` | `bool` | view | — |
 | `get_service` | `provider_addr, code` | `ServiceItem` | view | `ServiceNotFound` |
@@ -72,6 +74,7 @@ pub struct ServiceItem {
 | 8 | `InvalidPrice` |
 | 9 | `InvalidCountry` |
 | 10 | `EmptyName` |
+| 11 | `NoPendingAdmin` |
 
 ### Events
 
@@ -119,7 +122,11 @@ pub struct Voucher {
 | `settle` | `voucher_id` | `()` | **none** |
 | `refund` | `voucher_id` | `()` | **none** |
 | `resolve_dispute` | `admin, voucher_id, refund_funder: bool` | `()` | `admin` |
+| `propose_admin` | `admin, new_admin` | `()` | `admin` |
+| `accept_admin` | `new_admin` | `()` | `new_admin` |
 | `get_voucher` | `voucher_id` | `Voucher` | view |
+| `refundable_at` | `voucher_id` | `u64` | view |
+| `get_pending_admin` | — | `Option<Address>` | view |
 | `get_config` | — | `Config` | view |
 | `next_voucher_id` | — | `u64` | view |
 | `quote` | `amount` | `(i128, i128)` | view |
@@ -132,7 +139,7 @@ pub struct Voucher {
 
 **`create_voucher`** — amount > 0; expiry in the future; provider is `Active`; the service exists and is active; amount ≥ listed price. Transfers the token *before* writing the voucher, so a failed transfer reverts everything.
 
-**`claim`** — caller is the named provider; status is `Funded`; not expired.
+**`claim`** — caller is the named provider; provider is still `Active` in the registry; status is `Funded`; not expired.
 
 **`attest`** — caller is a registry attester; caller is **not** the provider; status is `Claimed`. Sets `dispute_deadline = now + dispute_window`.
 
@@ -140,7 +147,9 @@ pub struct Voucher {
 
 **`settle`** — status is `Attested`; now ≥ `dispute_deadline`. Pays provider, takes fee, mints a receipt.
 
-**`refund`** — status is `Funded`; now ≥ `expires_at`. Returns the full amount, no fee.
+**`refund`** — status is `Funded` and now ≥ `expires_at`, or status is `Claimed` and now ≥ `expires_at + CLAIM_GRACE_SECS` (7 days). Returns the full amount, no fee. `refundable_at` returns the exact time.
+
+**`propose_admin` / `accept_admin`** — two-step handover, identical in all three contracts. Proposing again replaces the nominee; nothing changes until the nominee signs `accept_admin`.
 
 **`resolve_dispute`** — caller is admin; status is `Disputed`. Routes to funder or provider; no third destination exists.
 
@@ -156,6 +165,7 @@ pub struct Voucher {
 | 6 | `ServiceNotOffered` | 14 | `DisputeWindowClosed` |
 | 7 | `AmountBelowPrice` | 15 | `InvalidFee` |
 | 8 | `InvalidAmount` | 16 | `MathOverflow` |
+|  |  | 17 | `NoPendingAdmin` |
 
 ### Events
 
@@ -214,6 +224,7 @@ Only the minter — the voucher contract — may mint. Because the voucher contr
 | 4 | `ReceiptNotFound` |
 | 5 | `ReceiptExists` |
 | 6 | `InvalidAmount` |
+| 7 | `NoPendingAdmin` |
 
 ### Events
 

@@ -15,6 +15,8 @@ A voucher is one commitment to pay one clinic for one service. It moves through 
     │ (past expiry)         ▼                     ▼
     ▼                    Disputed <───────────────┘
  Refunded  <──── resolve ────┴──── resolve ────> Settled
+    ▲
+    └── refund (Claimed, never attested, 7 days past expiry)
 ```
 
 `Settled` and `Refunded` are terminal. Nothing leaves them.
@@ -33,9 +35,11 @@ Before accepting the money the contract checks three things: the clinic is `Acti
 
 The patient turned up and the clinic called `claim`. This is the clinic saying "this person is in front of me", not "I have been paid".
 
-A voucher cannot be claimed after it expires.
+A voucher cannot be claimed after it expires, and a clinic that has been suspended since the voucher was funded cannot claim it at all.
 
-**Who can act:** an attester can `attest`. The funder can `dispute`.
+**Who can act:** an attester can `attest`. The funder can `dispute`. If no attestation arrives, anyone can `refund` once the voucher is seven days past its expiry — the claim grace period.
+
+The grace period exists so that a claim on its own can never hold the funder's money hostage. Seven days gives a slow attester time to confirm care that happened just before expiry; after that, the money goes home.
 
 ### Attested
 
@@ -57,7 +61,7 @@ The funder contested the claim. Funds stay in escrow until the admin resolves it
 
 ### Refunded
 
-Either the voucher expired unclaimed, or a dispute was resolved in the funder's favour. The **full** amount goes back — no fee is taken on care that did not happen.
+The voucher expired unclaimed, or it was claimed but never attested within the grace period, or a dispute was resolved in the funder's favour. The **full** amount goes back — no fee is taken on care that did not happen.
 
 ## A worked example
 
