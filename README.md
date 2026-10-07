@@ -14,7 +14,7 @@
 
 # SCI Healthcare — Contracts | [Documentation](https://godgift-care.github.io/sci-healthcare-contracts/)
 
-> **Live:** [App](https://sci-healthcare.vercel.app) · [API](https://sci-healthcare-api.onrender.com/stats) · [Docs](https://godgift-care.github.io/sci-healthcare-contracts/) · [Contracts on testnet](https://stellar.expert/explorer/testnet/contract/CBAOY2SQSMEIEQEITLZ3U3MER3K4ZBFQ5BTV5OCODAJINMXNOGLENC5I)
+> **Live:** [App](https://sci-healthcare.vercel.app) · [API](https://sci-healthcare-api.onrender.com/stats) · [Docs](https://godgift-care.github.io/sci-healthcare-contracts/) · [Contracts on testnet](https://stellar.expert/explorer/testnet/contract/CBPUQN6CNJCNGPKNEXB7UM4T7RINKQB7HQI5CXEOSQ5EFRHE4G4VKPSQ)
 >
 > The API runs on Render's free tier and sleeps after ~15 minutes idle; the first
 > request may take 30–60 seconds to wake it.
@@ -43,10 +43,10 @@ Someone funds a voucher for a specific clinic and a specific service. The money 
 
 | Contract | Address |
 | --- | --- |
-| Registry | [`CCY4K4FO3J4PHM7VQTTS4F5N5U3G7PJJQR5V7TGLYHGZQH2BQ2MQY77L`](https://stellar.expert/explorer/testnet/contract/CCY4K4FO3J4PHM7VQTTS4F5N5U3G7PJJQR5V7TGLYHGZQH2BQ2MQY77L) |
-| Voucher escrow | [`CBAOY2SQSMEIEQEITLZ3U3MER3K4ZBFQ5BTV5OCODAJINMXNOGLENC5I`](https://stellar.expert/explorer/testnet/contract/CBAOY2SQSMEIEQEITLZ3U3MER3K4ZBFQ5BTV5OCODAJINMXNOGLENC5I) |
-| Care receipts | [`CC25Q56WGEKNP4IDYOZK7BJJYD7JQ73JNCBAZIAEY4WCIVSUORQTS7PT`](https://stellar.expert/explorer/testnet/contract/CC25Q56WGEKNP4IDYOZK7BJJYD7JQ73JNCBAZIAEY4WCIVSUORQTS7PT) |
-| Test USDC (SAC) | [`CCKJV474HALEXYJC6URWG2QMUDPH5LY2SKAYA2S4TFHJTXW7OU4OAERQ`](https://stellar.expert/explorer/testnet/contract/CCKJV474HALEXYJC6URWG2QMUDPH5LY2SKAYA2S4TFHJTXW7OU4OAERQ) |
+| Registry | [`CAMU635NRFEHATJ6MTY5SI43IAZ43KHPFXAQDQAST2AHKCHLSGWHVE4V`](https://stellar.expert/explorer/testnet/contract/CAMU635NRFEHATJ6MTY5SI43IAZ43KHPFXAQDQAST2AHKCHLSGWHVE4V) |
+| Voucher escrow | [`CBPUQN6CNJCNGPKNEXB7UM4T7RINKQB7HQI5CXEOSQ5EFRHE4G4VKPSQ`](https://stellar.expert/explorer/testnet/contract/CBPUQN6CNJCNGPKNEXB7UM4T7RINKQB7HQI5CXEOSQ5EFRHE4G4VKPSQ) |
+| Care receipts | [`CBCJRI2BCZBMZNX77WWDC2NGSV4ZNAN5Q23XHYNBH6UTOQMPJHZGX5C7`](https://stellar.expert/explorer/testnet/contract/CBCJRI2BCZBMZNX77WWDC2NGSV4ZNAN5Q23XHYNBH6UTOQMPJHZGX5C7) |
+| Test USDC (SAC) | [`CCRLJ7FEIKTR3GBT3VQQPSIJGRBO2WPNMVFKJDP6AYGJQWECOR4QVE5M`](https://stellar.expert/explorer/testnet/contract/CCRLJ7FEIKTR3GBT3VQQPSIJGRBO2WPNMVFKJDP6AYGJQWECOR4QVE5M) |
 
 ## Architecture
 
