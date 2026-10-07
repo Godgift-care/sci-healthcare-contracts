@@ -59,6 +59,17 @@ The dispute window closed and `settle` ran. The clinic received the amount less 
 
 The funder contested the claim. Funds stay in escrow until the admin resolves it in favour of one party or the other. The admin cannot send the money anywhere else.
 
+A dispute carries a `reason_code`. The contract stores and emits it without interpreting it; the app, the indexer and whoever resolves disputes share this convention:
+
+| Code | Meaning |
+| --- | --- |
+| 1 | The patient was not seen |
+| 2 | Care was not delivered as described |
+| 3 | A different service was provided |
+| 4 | Something else |
+
+New codes may be added. Existing codes are never renumbered.
+
 ### Refunded
 
 The voucher expired unclaimed, or it was claimed but never attested within the grace period, or a dispute was resolved in the funder's favour. The **full** amount goes back — no fee is taken on care that did not happen.

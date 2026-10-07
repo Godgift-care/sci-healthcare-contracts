@@ -120,10 +120,13 @@ Without one, returns **400**:
 }
 ```
 
-Each voucher carries two derived booleans so clients do not re-implement the state machine:
+Each voucher carries derived fields so clients do not re-implement the state machine:
 
+- `serviceLabel` — the clinic's catalogue name for `serviceCode`, or `null` if the service was never indexed
+- `refundableAt` — when `refund` starts to succeed: the expiry for a `Funded` voucher, expiry plus the seven-day claim grace for a `Claimed` one, otherwise `null`
+- `disputeReason` — the funder's `reason_code` for a disputed voucher (see [the lifecycle](../protocol/lifecycle.md)), otherwise `null`
 - `isSettleable` — attested and past the dispute deadline
-- `isRefundable` — funded and past expiry
+- `isRefundable` — `refundableAt` has passed
 
 ```json
 {
@@ -132,6 +135,7 @@ Each voucher carries two derived booleans so clients do not re-implement the sta
   "beneficiaryRef": "72676a6f4fff92b09ab1c6368672b05112062f683014d07c9518d4141d094745",
   "provider": { "address": "GDOO…ZKBK", "name": "Ikeja General Clinic", "country": "NG" },
   "serviceCode": 101,
+  "serviceLabel": "Outpatient consult",
   "amount": "30000000",
   "amountDisplay": "3.0000000",
   "status": "Settled",
@@ -140,8 +144,10 @@ Each voucher carries two derived booleans so clients do not re-implement the sta
   "claimedAt": "2026-09-02T12:37:27.000Z",
   "attestedAt": "2026-09-02T12:37:32.000Z",
   "disputeDeadline": "2026-09-02T12:38:32.000Z",
+  "disputeReason": null,
   "settledNet": "29700000",
   "settledFee": "300000",
+  "refundableAt": null,
   "isSettleable": false,
   "isRefundable": false
 }
@@ -167,6 +173,7 @@ Because that value is an HMAC under a key held by the patient, this endpoint can
       "voucherId": "1",
       "providerAddress": "GDOO…ZKBK",
       "serviceCode": 101,
+      "serviceLabel": "Outpatient consult",
       "amount": "30000000",
       "amountDisplay": "3.0000000",
       "settledAt": "2026-09-02T12:38:42.000Z"
