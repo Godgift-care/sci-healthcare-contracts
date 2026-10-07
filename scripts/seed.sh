@@ -38,9 +38,17 @@ for who in "$FUNDER_ID" "$CLINIC_ID" "$ADMIN"; do
     --line "USDC:$ISSUER_ADDR" >/dev/null 2>&1 || echo "  ($who already trusts USDC)"
 done
 
-say "Minting 100 USDC to the funder"
-stellar contract invoke --id "$USDC_CONTRACT_ID" --source-account "$ISSUER" $N \
-  -- mint --to "$FUNDER" --amount 1000000000 2>&1 | quiet
+# Once deploy-faucet.sh has run, the faucet is the token admin and the
+# issuer can no longer mint, so the funder draws from the faucet instead.
+if [ -n "${FAUCET_CONTRACT_ID:-}" ]; then
+  say "Drawing test USDC for the funder from the faucet"
+  stellar contract invoke --id "$FAUCET_CONTRACT_ID" --source-account "$FUNDER_ID" $N \
+    -- drip --to "$FUNDER" 2>&1 | quiet
+else
+  say "Minting 100 USDC to the funder"
+  stellar contract invoke --id "$USDC_CONTRACT_ID" --source-account "$ISSUER" $N \
+    -- mint --to "$FUNDER" --amount 1000000000 2>&1 | quiet
+fi
 
 say "Registering provider"
 stellar contract invoke --id "$REGISTRY_CONTRACT_ID" --source-account "$CLINIC_ID" $N \
