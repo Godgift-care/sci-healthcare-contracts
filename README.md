@@ -25,6 +25,18 @@ Someone funds a voucher for a specific clinic and a specific service. The money 
 
 **No patient health information ever touches the ledger.** Vouchers carry a coarse service category and an opaque beneficiary reference, never a diagnosis, a result, or a name.
 
+## Try it in five minutes
+
+Everything runs on Stellar testnet with free test funds.
+
+1. **Wallet.** Install [Freighter](https://freighter.app), switch it to **Testnet**, and press *Fund with Friendbot* to get test XLM.
+2. **Trust the test USDC.** In Freighter: *Manage assets → Add an asset*, code `USDC`, issuer `GCKX5KAFVF7GLFZ3JWQGJ4F62RYYZU67PI3TACBGKVPJ73JELMI3L4KR`.
+3. **Get test USDC.** Open the [app](https://sci-healthcare.vercel.app/my), connect, and press **Get 50 test USDC** (once a day per wallet, from the [faucet contract](contracts/faucet)).
+4. **Fund care.** Open [Ikeja General Clinic](https://sci-healthcare.vercel.app/clinics/GBWBYKGC5OCRELVP5WHAKEMBSZMNUY3HOKVSYBQGLFNWWQHNH2SD53FZ), pick a service, enter any patient reference, press **Generate** for the key, check the fee quote, and sign. You land on your voucher's own page.
+5. **Follow the lifecycle.** [Voucher #1](https://sci-healthcare.vercel.app/vouchers/1) is a seeded voucher the clinic has claimed and an attester has confirmed; its page shows each step with on-chain timestamps. Under **My vouchers** you can dispute a claimed voucher or refund an expired one.
+
+Clinics and attesters must be verified by the registry admin, so those roles are played by seeded demo accounts. To try the clinic side, register a wallet under **Clinic desk** and open an issue asking for verification.
+
 ## Maintainers
 
 <table align="center">

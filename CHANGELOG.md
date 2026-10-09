@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.2.0 — 2026-10-09
 
 Redeployed to testnet on 2026-10-07; addresses are in `deployments/testnet.env`.
 
@@ -11,6 +11,8 @@ Redeployed to testnet on 2026-10-07; addresses are in `deployments/testnet.env`.
 - **registry:** attester entries are TTL-extended on read like providers and services.
 
 ### Added
+- "Try it in five minutes" walkthrough in the README.
+- Issue forms (bug, feature) and a pull request template; blank issues off, security reports routed to SECURITY.md.
 - **faucet** (testnet only): anyone can get 50 test USDC once a day from the app, with no server holding the issuer key. The demo token's SAC names the faucet as admin; `release_token_admin` hands it back. Deployed by `scripts/deploy-faucet.sh`, which refuses mainnet. 10 tests.
 - Two-step admin handover (`propose_admin` / `accept_admin` / `get_pending_admin`) in registry, voucher and receipt. Replaces the registry's one-step `set_admin`; the voucher admin previously could not be rotated at all.
 - `refundable_at(voucher_id)` view on the voucher contract.
