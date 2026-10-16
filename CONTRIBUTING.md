@@ -77,6 +77,16 @@ Events are part of the public interface. When adding or changing one:
 3. Update `TOPIC_FIELDS` in `sci-healthcare-backend/src/stellar/events.ts` in the
    same change set, and open a linked PR there.
 
+## How pull requests are merged
+
+A bot merges pull requests automatically (squash) as soon as every CI check on the latest commit has passed, provided the pull request:
+
+- is not a draft and has no `do-not-merge` label,
+- has no merge conflicts and is up to date with `main` (the bot comments if it is behind),
+- and, if it changes CI configuration, deployment settings or dependency manifests, has been approved by a maintainer. The exact paths are listed in `.github/workflows/automerge.yml`; the bot comments with the files that need approval.
+
+So open your pull request as a draft until it is ready, and keep CI green. To stop an automatic merge, add the `do-not-merge` label or convert the pull request back to a draft.
+
 ## Wave program
 
 Issues carry a complexity label that maps to Wave points: `trivial` (100),
