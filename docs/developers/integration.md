@@ -213,6 +213,8 @@ const VOUCHER_ERRORS = {
   16: 'MathOverflow',
   17: 'NoPendingAdmin',
   18: 'ServiceUnavailable',
+  19: 'AttestationCapReached',
+  20: 'InvalidAttestationCap',
 };
 
 const RECEIPT_ERRORS = {

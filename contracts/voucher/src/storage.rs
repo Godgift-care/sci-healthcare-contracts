@@ -1,5 +1,7 @@
 use soroban_sdk::{Address, Env};
 
+use crate::DEFAULT_MAX_ATTESTATIONS_PER_DAY;
+
 use crate::types::{Config, DataKey, Voucher, VoucherError};
 
 const DAY_IN_LEDGERS: u32 = 17_280;
@@ -7,6 +9,9 @@ const INSTANCE_TTL_THRESHOLD: u32 = 7 * DAY_IN_LEDGERS;
 const INSTANCE_TTL_EXTEND: u32 = 30 * DAY_IN_LEDGERS;
 const PERSISTENT_TTL_THRESHOLD: u32 = 30 * DAY_IN_LEDGERS;
 const PERSISTENT_TTL_EXTEND: u32 = 90 * DAY_IN_LEDGERS;
+/// An attestation counter is only read on the day it counts; two days of
+/// ledgers covers that day whatever the hour it was first written.
+const ATTESTATIONS_TTL: u32 = 2 * DAY_IN_LEDGERS;
 
 pub(crate) fn extend_instance(env: &Env) {
     env.storage()
@@ -79,4 +84,31 @@ pub(crate) fn write_pending_admin(env: &Env, pending: &Address) {
 
 pub(crate) fn clear_pending_admin(env: &Env) {
     env.storage().instance().remove(&DataKey::PendingAdmin);
+}
+
+pub(crate) fn read_attestation_cap(env: &Env) -> u32 {
+    env.storage()
+        .instance()
+        .get(&DataKey::AttestationCap)
+        .unwrap_or(DEFAULT_MAX_ATTESTATIONS_PER_DAY)
+}
+
+pub(crate) fn write_attestation_cap(env: &Env, cap: u32) {
+    env.storage().instance().set(&DataKey::AttestationCap, &cap);
+}
+
+/// Attestations `attester` has made on UTC `day`; 0 if none.
+pub(crate) fn read_attestations(env: &Env, attester: &Address, day: u64) -> u32 {
+    env.storage()
+        .temporary()
+        .get(&DataKey::Attestations(attester.clone(), day))
+        .unwrap_or(0)
+}
+
+pub(crate) fn write_attestations(env: &Env, attester: &Address, day: u64, count: u32) {
+    let key = DataKey::Attestations(attester.clone(), day);
+    env.storage().temporary().set(&key, &count);
+    env.storage()
+        .temporary()
+        .extend_ttl(&key, ATTESTATIONS_TTL, ATTESTATIONS_TTL);
 }

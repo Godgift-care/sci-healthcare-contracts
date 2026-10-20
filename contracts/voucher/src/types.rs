@@ -74,6 +74,12 @@ pub enum DataKey {
     Voucher(u64),
     /// Address nominated by `propose_admin`, awaiting `accept_admin`.
     PendingAdmin,
+    /// Most attestations one attester may make per UTC day. Unset means
+    /// `DEFAULT_MAX_ATTESTATIONS_PER_DAY`.
+    AttestationCap,
+    /// Attestations made by an attester on a UTC day (`timestamp / 86400`).
+    /// Temporary storage: it only has to outlive the day it counts.
+    Attestations(Address, u64),
 }
 
 #[contracterror]
@@ -100,4 +106,9 @@ pub enum VoucherError {
     /// The clinic has paused this service; it cannot be funded until it
     /// is made available again.
     ServiceUnavailable = 18,
+    /// This attester has used up today's attestations; try again tomorrow
+    /// (UTC) or ask the admin to raise the cap.
+    AttestationCapReached = 19,
+    /// The attestation cap must be at least 1.
+    InvalidAttestationCap = 20,
 }

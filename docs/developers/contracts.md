@@ -171,10 +171,13 @@ pub struct Voucher {
 | `settle` | `voucher_id` | `()` | **none** |
 | `refund` | `voucher_id` | `()` | **none** |
 | `resolve_dispute` | `admin, voucher_id, refund_funder: bool` | `()` | `admin` |
+| `set_attestation_cap` | `admin, cap: u32` | `()` | `admin` |
 | `propose_admin` | `admin, new_admin` | `()` | `admin` |
 | `accept_admin` | `new_admin` | `()` | `new_admin` |
 | `get_voucher` | `voucher_id` | `Voucher` | view |
 | `refundable_at` | `voucher_id` | `u64` | view |
+| `get_attestation_cap` | — | `u32` | view |
+| `attestations_left` | `attester` | `u32` | view |
 | `get_pending_admin` | — | `Option<Address>` | view |
 | `get_config` | — | `Config` | view |
 | `next_voucher_id` | — | `u64` | view |
@@ -199,8 +202,11 @@ Every public function, with the exact signer it demands. `AUTH_MATRIX` in `contr
 | `settle` | none (permissionless) |
 | `refund` | none (permissionless) |
 | `resolve_dispute` | `admin` |
+| `set_attestation_cap` | `admin` |
 | `propose_admin` | `admin` |
 | `accept_admin` | `new_admin` |
+| `get_attestation_cap` | none (view) |
+| `attestations_left` | none (view) |
 | `get_pending_admin` | none (view) |
 | `refundable_at` | none (view) |
 | `get_voucher` | none (view) |
@@ -220,7 +226,9 @@ rejects the voucher's own provider even if it holds that role.
 
 **`claim`** — caller is the named provider; provider is still `Active` in the registry; status is `Funded`; not expired.
 
-**`attest`** — caller is a registry attester; caller is **not** the provider; status is `Claimed`. Sets `dispute_deadline = now + dispute_window`.
+**`attest`** — caller is a registry attester; caller is **not** the provider; status is `Claimed`; the attester has attestations left today. Sets `dispute_deadline = now + dispute_window`.
+
+**`set_attestation_cap`** — caller is admin; `cap` ≥ 1 (`InvalidAttestationCap`). Each attester may attest at most `cap` vouchers per UTC day (`timestamp / 86400`); the next is rejected with `AttestationCapReached` until midnight UTC, when the counter resets. The default is `DEFAULT_MAX_ATTESTATIONS_PER_DAY` (100). Counters live in temporary storage keyed by `(attester, day)`. The cap bounds what a stolen attester key can confirm before the admin removes it from the registry; `attestations_left(attester)` and the `remaining_today` field of `voucher_attested` show how close an attester is.
 
 **`dispute`** — caller is the funder; status is `Claimed`, or `Attested` and before the deadline.
 
@@ -246,6 +254,8 @@ rejects the voucher's own provider even if it holds that role.
 | 8 | `InvalidAmount` | 16 | `MathOverflow` |
 |  |  | 17 | `NoPendingAdmin` |
 |  |  | 18 | `ServiceUnavailable` |
+|  |  | 19 | `AttestationCapReached` |
+|  |  | 20 | `InvalidAttestationCap` |
 
 ### Events
 
@@ -253,11 +263,12 @@ rejects the voucher's own provider even if it holds that role.
 | --- | --- | --- |
 | `voucher_created` | `funder`, `provider`, `beneficiary_ref` | `voucher_id`, `service_code`, `amount`, `created_at`, `expires_at` |
 | `voucher_claimed` | `provider` | `voucher_id`, `claimed_at`, `service_code`, `amount` |
-| `voucher_attested` | `attester` | `voucher_id`, `attested_at`, `dispute_deadline`, `service_code`, `amount` |
+| `voucher_attested` | `attester` | `voucher_id`, `attested_at`, `dispute_deadline`, `service_code`, `amount`, `remaining_today` |
 | `voucher_disputed` | `funder` | `voucher_id`, `reason_code`, `service_code`, `amount` |
 | `voucher_settled` | `provider` | `voucher_id`, `net`, `fee`, `service_code`, `amount` |
 | `voucher_refunded` | `funder` | `voucher_id`, `amount`, `service_code` |
 | `dispute_resolved` | `admin` | `voucher_id`, `refunded_funder` |
+| `attestation_cap_changed` | `admin` | `cap` |
 
 > Fields listed under **Topics** are published in the event's topic list, **not** in its data map. An indexer reading them off the data map gets `undefined`.
 >

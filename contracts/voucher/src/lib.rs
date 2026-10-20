@@ -44,15 +44,17 @@ use soroban_sdk::{contract, contractimpl, token, Address, BytesN, Env, String};
 
 #[allow(unused_imports)]
 pub use events::{
-    AdminChanged, AdminProposed, DisputeResolved, Initialized, VoucherAttested, VoucherClaimed,
-    VoucherCreated, VoucherDisputed, VoucherRefunded, VoucherSettled,
+    AdminChanged, AdminProposed, AttestationCapChanged, DisputeResolved, Initialized,
+    VoucherAttested, VoucherClaimed, VoucherCreated, VoucherDisputed, VoucherRefunded,
+    VoucherSettled,
 };
 pub use interfaces::{ReceiptClient, RegistryClient};
 pub use types::{Config, DataKey, Voucher, VoucherError, VoucherStatus};
 
 use storage::{
-    bump_next_id, clear_pending_admin, extend_instance, has_config, peek_next_id, read_config,
-    read_pending_admin, read_voucher, write_config, write_pending_admin, write_voucher,
+    bump_next_id, clear_pending_admin, extend_instance, has_config, peek_next_id,
+    read_attestation_cap, read_attestations, read_config, read_pending_admin, read_voucher,
+    write_attestation_cap, write_attestations, write_config, write_pending_admin, write_voucher,
 };
 
 const BPS_DENOMINATOR: i128 = 10_000;
@@ -66,6 +68,15 @@ const MAX_FEE_BPS: u32 = 1_000;
 /// the funder noticed and disputed. The grace period gives an attester
 /// that is merely slow time to confirm care that happened near expiry.
 pub const CLAIM_GRACE_SECS: u64 = 7 * 24 * 60 * 60;
+/// Attestations one attester may make per UTC day until the admin sets
+/// another cap with `set_attestation_cap`.
+///
+/// Limits the blast radius of a stolen attester key: it can confirm at most
+/// this many vouchers before the day ends, buying the admin time to remove
+/// it from the registry.
+pub const DEFAULT_MAX_ATTESTATIONS_PER_DAY: u32 = 100;
+/// Seconds in a UTC day: buckets the per-attester attestation counter.
+const SECONDS_PER_DAY: u64 = 24 * 60 * 60;
 
 #[contract]
 pub struct VoucherEscrow;
@@ -236,6 +247,9 @@ impl VoucherEscrow {
     /// Only a registry attester may call this — deliberately *not* the
     /// provider being paid. Separating the party who gets paid from the
     /// party who confirms delivery is the main check in this protocol.
+    ///
+    /// Each attester may attest at most the attestation cap per UTC day
+    /// (`AttestationCapReached` beyond it); the counter resets at midnight.
     pub fn attest(env: Env, attester: Address, voucher_id: u64) -> Result<(), VoucherError> {
         attester.require_auth();
 
@@ -256,6 +270,15 @@ impl VoucherEscrow {
         }
 
         let now = env.ledger().timestamp();
+        let day = now / SECONDS_PER_DAY;
+        let cap = read_attestation_cap(&env);
+        let attested_today = read_attestations(&env, &attester, day);
+        if attested_today >= cap {
+            return Err(VoucherError::AttestationCapReached);
+        }
+        let attested_today = attested_today + 1;
+        write_attestations(&env, &attester, day, attested_today);
+
         voucher.status = VoucherStatus::Attested;
         voucher.attested_at = now;
         voucher.dispute_deadline = now
@@ -270,6 +293,7 @@ impl VoucherEscrow {
             dispute_deadline: voucher.dispute_deadline,
             service_code: voucher.service_code,
             amount: voucher.amount,
+            remaining_today: cap - attested_today,
         }
         .publish(&env);
         Ok(())
@@ -436,7 +460,38 @@ impl VoucherEscrow {
         Ok(())
     }
 
+    /// Sets how many attestations one attester may make per UTC day.
+    ///
+    /// Takes effect at once, including for today's count. Must be at least
+    /// 1: to stop an attester entirely, remove it from the registry.
+    pub fn set_attestation_cap(env: Env, admin: Address, cap: u32) -> Result<(), VoucherError> {
+        let config = read_config(&env)?;
+        if config.admin != admin {
+            return Err(VoucherError::NotAuthorized);
+        }
+        admin.require_auth();
+        if cap == 0 {
+            return Err(VoucherError::InvalidAttestationCap);
+        }
+
+        write_attestation_cap(&env, cap);
+        extend_instance(&env);
+        AttestationCapChanged { admin, cap }.publish(&env);
+        Ok(())
+    }
+
     // ----- views -----
+
+    /// Most attestations one attester may make per UTC day.
+    pub fn get_attestation_cap(env: Env) -> u32 {
+        read_attestation_cap(&env)
+    }
+
+    /// Attestations `attester` may still make today (UTC).
+    pub fn attestations_left(env: Env, attester: Address) -> u32 {
+        let day = env.ledger().timestamp() / SECONDS_PER_DAY;
+        read_attestation_cap(&env).saturating_sub(read_attestations(&env, &attester, day))
+    }
 
     pub fn get_pending_admin(env: Env) -> Option<Address> {
         read_pending_admin(&env)

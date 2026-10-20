@@ -53,6 +53,9 @@ pub struct VoucherAttested {
     /// Appended, after the original fields; see `VoucherClaimed`.
     pub service_code: u32,
     pub amount: i128,
+    /// Appended: attestations this attester has left today (UTC), so a
+    /// burst from one key is visible to the indexer as it happens.
+    pub remaining_today: u32,
 }
 
 #[contractevent]
@@ -101,6 +104,14 @@ pub struct DisputeResolved {
     pub admin: Address,
     pub voucher_id: u64,
     pub refunded_funder: bool,
+}
+
+#[contractevent]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct AttestationCapChanged {
+    #[topic]
+    pub admin: Address,
+    pub cap: u32,
 }
 
 #[contractevent]

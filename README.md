@@ -237,6 +237,7 @@ deployed contract.
 | `dispute(funder, voucher_id, reason_code)` | funder | Contests before the window closes |
 | `settle(voucher_id)` | none | Releases escrow once the window closes |
 | `refund(voucher_id)` | none | Returns escrow after an unclaimed voucher expires, or 7 days after expiry if claimed but never attested |
+| `set_attestation_cap(admin, cap)` | admin | Caps attestations per attester per UTC day (default 100) |
 | `refundable_at(voucher_id)` | view | When `refund` will succeed |
 | `propose_admin` / `accept_admin` | admin / nominee | Two-step admin handover |
 | `resolve_dispute(admin, voucher_id, refund_funder)` | admin | Routes escrow to one of the two parties |
