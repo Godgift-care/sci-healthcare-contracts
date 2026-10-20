@@ -92,7 +92,7 @@
           "function": {
             "contract_fn": {
               "contract_address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM",
-              "function_name": "set_service_available",
+              "function_name": "schedule_service_price",
               "args": [
                 {
                   "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHK3M"
@@ -101,7 +101,10 @@
                   "u32": 101
                 },
                 {
-                  "bool": false
+                  "i128": "30000000"
+                },
+                {
+                  "u64": "86400"
                 }
               ]
             }
@@ -225,7 +228,7 @@
                       "symbol": "available"
                     },
                     "val": {
-                      "bool": false
+                      "bool": true
                     }
                   },
                   {
@@ -238,10 +241,26 @@
                   },
                   {
                     "key": {
+                      "symbol": "effective_at"
+                    },
+                    "val": {
+                      "u64": "86400"
+                    }
+                  },
+                  {
+                    "key": {
                       "symbol": "label"
                     },
                     "val": {
                       "string": "Consult"
+                    }
+                  },
+                  {
+                    "key": {
+                      "symbol": "pending_price"
+                    },
+                    "val": {
+                      "i128": "30000000"
                     }
                   },
                   {
@@ -402,7 +421,7 @@
           "v0": {
             "topics": [
               {
-                "symbol": "service_availability_changed"
+                "symbol": "service_price_scheduled"
               },
               {
                 "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHK3M"
@@ -415,10 +434,18 @@
               "map": [
                 {
                   "key": {
-                    "symbol": "available"
+                    "symbol": "effective_at"
                   },
                   "val": {
-                    "bool": false
+                    "u64": "86400"
+                  }
+                },
+                {
+                  "key": {
+                    "symbol": "price"
+                  },
+                  "val": {
+                    "i128": "30000000"
                   }
                 }
               ]

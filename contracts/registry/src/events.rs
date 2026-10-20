@@ -52,6 +52,17 @@ pub struct ServiceRemoved {
 
 #[contractevent]
 #[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ServicePriceScheduled {
+    #[topic]
+    pub provider: Address,
+    #[topic]
+    pub code: u32,
+    pub price: i128,
+    pub effective_at: u64,
+}
+
+#[contractevent]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct ServiceAvailabilityChanged {
     #[topic]
     pub provider: Address,

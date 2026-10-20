@@ -26,8 +26,10 @@
 - **faucet:** `set_drip` now emits a `DripChanged { amount, cooldown }` event so configuration changes are auditable. Closes #62.
 - **contracts:** a `version()` view on registry, voucher, receipt and faucet returning the crate version (`env!("CARGO_PKG_VERSION")`), so integrators and the indexer can tell which build a deployment runs. No signature required. Closes #97.
 - **registry:** clinics can pause a service without delisting it. `ServiceItem` gains `available` (true on first listing), `set_service_available(provider_addr, code, available)` toggles it and emits `service_availability_changed { provider, code, available }`, and `is_service_available` reports it. `upsert_service` keeps a paused service paused. **voucher:** `create_voucher` rejects a paused service with the new `ServiceUnavailable` (#18); vouchers already funded settle normally. Closes #98.
+- **registry:** clinics schedule price changes instead of springing them. `schedule_service_price(provider_addr, code, price, effective_at)` stores `pending_price` and `effective_at` on the service, requires at least `MIN_PRICE_NOTICE_SECS` (24 h) of notice (`PriceNoticeTooShort`, #12) and emits `service_price_scheduled { provider, code, price, effective_at }`. Every read applies a due price, so `get_service_price` returns the new price from `effective_at` on with no keeper; `get_upcoming_price` shows what is coming. Closes #99.
 
 ### Changed
+- **registry:** `upsert_service` no longer raises the price of an existing service; it returns `PriceIncreaseNeedsNotice` (#13) and the rise goes through `schedule_service_price`. Listing a new service and lowering a price still apply at once. `ServiceItem` gains `pending_price` and `effective_at`. (#99)
 - **receipt:** `count_for` now extends the TTL of the count entry it reads. It was the only persistent read in the three contracts that did not, so a patient's episode count could be archived while their receipts stayed live. Covered by `count_for_extends_its_own_entry`.
 - **scripts:** `scripts/deploy.sh` now refuses to overwrite an existing `deployments/<network>.env` unless `--force` is passed, so an accidental second run cannot replace the live addresses. `--dry-run` prints every command without building, deploying or sending a transaction, and the final summary makes the outcome explicit. `scripts/test-deploy.sh` covers the refusal, `--force` and dry-run paths without a network, and the new `deploy script` CI job runs it on every pull request.
 - **deploy:** `scripts/deploy.sh` and `scripts/deploy-faucet.sh` deploy the wasm that `scripts/build-wasm.sh` produces, so what is deployed is what is released. The faucet used to be built on its own (`cargo build -p sci-faucet`), which links a different `soroban-sdk` than the rest of the workspace and produces different bytes.
@@ -35,7 +37,7 @@
 - **cargo:** the workspace path dependencies carry a version, so `cargo deny` does not read them as wildcard version requirements.
 - **voucher:** `voucher_claimed`, `voucher_attested`, `voucher_disputed`, `voucher_settled` and `voucher_refunded` now carry `service_code` and `amount` in their data, appended after the fields each event already had. Only `voucher_created` used to say what the voucher was for, so an indexer or wallet reading a single lifecycle event had to load the voucher to show what was paid for. `voucher_refunded` already carried `amount`; it gains `service_code` only. Topics are unchanged and the data map is keyed by name, so the indexer in `sci-healthcare-backend` decodes the new layout without a breaking change (its matching decoder change is linked from the pull request). Covered by five event snapshot tests in `contracts/voucher/src/test.rs` that read the decoded XDR event and the regenerated `test_snapshots`.
 
-Tests: 155 (was 135).
+Tests: 163 (was 135).
 
 ## 0.2.0 — 2026-10-09
 

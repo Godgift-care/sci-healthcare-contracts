@@ -5,7 +5,7 @@ use soroban_sdk::{
     Address, Env, String, Vec,
 };
 
-use crate::{ProviderStatus, Registry, RegistryClient, RegistryError};
+use crate::{ProviderStatus, Registry, RegistryClient, RegistryError, MIN_PRICE_NOTICE_SECS};
 
 struct Fixture {
     env: Env,
@@ -190,20 +190,189 @@ fn active_provider_manages_catalog() {
 }
 
 #[test]
-fn upsert_overwrites_price() {
+fn upsert_lowers_price_immediately() {
     let f = setup();
     let provider = register_active_provider(&f);
     let label = String::from_str(&f.env, "Malaria RDT");
 
     f.client
-        .upsert_service(&provider, &202u32, &label, &10_000_000i128);
-    f.client
         .upsert_service(&provider, &202u32, &label, &12_500_000i128);
+    f.client
+        .upsert_service(&provider, &202u32, &label, &10_000_000i128);
 
     assert_eq!(
         f.client.get_service(&provider, &202u32).price,
-        12_500_000i128
+        10_000_000i128
     );
+}
+
+#[test]
+fn upsert_cannot_raise_price_without_notice() {
+    let f = setup();
+    let provider = register_active_provider(&f);
+    let label = String::from_str(&f.env, "Malaria RDT");
+    f.client
+        .upsert_service(&provider, &202u32, &label, &10_000_000i128);
+
+    let err = f
+        .client
+        .try_upsert_service(&provider, &202u32, &label, &12_500_000i128)
+        .err()
+        .unwrap()
+        .unwrap();
+    assert_eq!(err, RegistryError::PriceIncreaseNeedsNotice);
+    assert_eq!(f.client.get_service_price(&provider, &202u32), 10_000_000);
+}
+
+/// Lists one service at `PRICE` at a provider and starts the clock at
+/// `START`, so schedules can be expressed relative to it.
+fn priced_service(f: &Fixture) -> Address {
+    f.env.ledger().with_mut(|li| li.timestamp = START);
+    let provider = register_active_provider(f);
+    f.client.upsert_service(
+        &provider,
+        &CONSULT,
+        &String::from_str(&f.env, "Outpatient consult"),
+        &PRICE,
+    );
+    provider
+}
+
+const START: u64 = 1_700_000_000;
+
+#[test]
+fn scheduled_price_applies_at_the_effective_time() {
+    let f = setup();
+    let provider = priced_service(&f);
+    let effective_at = START + MIN_PRICE_NOTICE_SECS;
+
+    f.client
+        .schedule_service_price(&provider, &CONSULT, &(PRICE * 2), &effective_at);
+
+    // Before: the current price stands and the upcoming one is visible.
+    assert_eq!(f.client.get_service_price(&provider, &CONSULT), PRICE);
+    assert_eq!(
+        f.client.get_upcoming_price(&provider, &CONSULT),
+        (PRICE * 2, effective_at)
+    );
+    f.env
+        .ledger()
+        .with_mut(|li| li.timestamp = effective_at - 1);
+    assert_eq!(f.client.get_service_price(&provider, &CONSULT), PRICE);
+
+    // At the effective time it applies, with nobody calling in.
+    f.env.ledger().with_mut(|li| li.timestamp = effective_at);
+    assert_eq!(f.client.get_service_price(&provider, &CONSULT), PRICE * 2);
+    assert_eq!(f.client.get_service(&provider, &CONSULT).price, PRICE * 2);
+    assert_eq!(f.client.get_upcoming_price(&provider, &CONSULT), (0, 0));
+    let codes = Vec::from_array(&f.env, [CONSULT]);
+    assert_eq!(
+        f.client
+            .get_services(&provider, &codes)
+            .get_unchecked(0)
+            .price,
+        PRICE * 2
+    );
+}
+
+#[test]
+fn scheduled_price_needs_the_minimum_notice() {
+    let f = setup();
+    let provider = priced_service(&f);
+
+    for effective_at in [START, START + MIN_PRICE_NOTICE_SECS - 1] {
+        let err = f
+            .client
+            .try_schedule_service_price(&provider, &CONSULT, &(PRICE * 2), &effective_at)
+            .err()
+            .unwrap()
+            .unwrap();
+        assert_eq!(err, RegistryError::PriceNoticeTooShort);
+    }
+    assert_eq!(f.client.get_upcoming_price(&provider, &CONSULT), (0, 0));
+}
+
+#[test]
+fn rescheduling_replaces_the_earlier_schedule() {
+    let f = setup();
+    let provider = priced_service(&f);
+    let first = START + MIN_PRICE_NOTICE_SECS;
+    let second = START + 2 * MIN_PRICE_NOTICE_SECS;
+
+    f.client
+        .schedule_service_price(&provider, &CONSULT, &(PRICE * 2), &first);
+    // Scheduling the current price is how a clinic calls a change off.
+    f.client
+        .schedule_service_price(&provider, &CONSULT, &PRICE, &second);
+
+    f.env.ledger().with_mut(|li| li.timestamp = first);
+    assert_eq!(f.client.get_service_price(&provider, &CONSULT), PRICE);
+    assert_eq!(
+        f.client.get_upcoming_price(&provider, &CONSULT),
+        (PRICE, second)
+    );
+}
+
+#[test]
+fn upsert_keeps_a_scheduled_price() {
+    let f = setup();
+    let provider = priced_service(&f);
+    let effective_at = START + MIN_PRICE_NOTICE_SECS;
+    f.client
+        .schedule_service_price(&provider, &CONSULT, &(PRICE * 2), &effective_at);
+
+    f.client.upsert_service(
+        &provider,
+        &CONSULT,
+        &String::from_str(&f.env, "Consult (renamed)"),
+        &PRICE,
+    );
+
+    assert_eq!(
+        f.client.get_upcoming_price(&provider, &CONSULT),
+        (PRICE * 2, effective_at)
+    );
+}
+
+#[test]
+fn schedule_rejects_bad_input() {
+    let f = setup();
+    let provider = priced_service(&f);
+    let effective_at = START + MIN_PRICE_NOTICE_SECS;
+
+    let err = f
+        .client
+        .try_schedule_service_price(&provider, &CONSULT, &0i128, &effective_at)
+        .err()
+        .unwrap()
+        .unwrap();
+    assert_eq!(err, RegistryError::InvalidPrice);
+
+    let err = f
+        .client
+        .try_schedule_service_price(&provider, &999u32, &PRICE, &effective_at)
+        .err()
+        .unwrap()
+        .unwrap();
+    assert_eq!(err, RegistryError::ServiceNotFound);
+
+    let err = f
+        .client
+        .try_get_upcoming_price(&provider, &999u32)
+        .err()
+        .unwrap()
+        .unwrap();
+    assert_eq!(err, RegistryError::ServiceNotFound);
+
+    f.client
+        .set_provider_status(&f.admin, &provider, &ProviderStatus::Suspended);
+    let err = f
+        .client
+        .try_schedule_service_price(&provider, &CONSULT, &PRICE, &effective_at)
+        .err()
+        .unwrap()
+        .unwrap();
+    assert_eq!(err, RegistryError::ProviderNotActive);
 }
 
 #[test]
@@ -658,6 +827,10 @@ const AUTH_MATRIX: &[AuthCase] = &[
         auth: signer("`provider_addr`", provider_addr),
     },
     AuthCase {
+        function: "schedule_service_price",
+        auth: signer("`provider_addr`", provider_addr),
+    },
+    AuthCase {
         function: "set_service_available",
         auth: signer("`provider_addr`", provider_addr),
     },
@@ -703,6 +876,10 @@ const AUTH_MATRIX: &[AuthCase] = &[
     },
     AuthCase {
         function: "get_service_price",
+        auth: Auth::Free("none (view)"),
+    },
+    AuthCase {
+        function: "get_upcoming_price",
         auth: Auth::Free("none (view)"),
     },
     AuthCase {
@@ -761,6 +938,16 @@ fn run_case(f: &AuthFixture, function: &str) -> std::vec::Vec<Address> {
             activate(&f.f, &f.provider);
             upsert();
             client.remove_service(&f.provider, &CONSULT);
+        }
+        "schedule_service_price" => {
+            activate(&f.f, &f.provider);
+            upsert();
+            client.schedule_service_price(&f.provider, &CONSULT, &PRICE, &MIN_PRICE_NOTICE_SECS);
+        }
+        "get_upcoming_price" => {
+            activate(&f.f, &f.provider);
+            upsert();
+            client.get_upcoming_price(&f.provider, &CONSULT);
         }
         "set_service_available" => {
             activate(&f.f, &f.provider);
@@ -1177,6 +1364,31 @@ fn service_removed_event_snapshot() {
     let e = one_event(&f);
     assert_layout(&e, "service_removed", &[ScVal::from(&provider)], &["code"]);
     assert_eq!(field_u32(&e, "code"), CONSULT);
+}
+
+#[test]
+fn service_price_scheduled_event_snapshot() {
+    let f = setup();
+    let provider = register_active_provider(&f);
+    f.client.upsert_service(
+        &provider,
+        &CONSULT,
+        &String::from_str(&f.env, "Outpatient consult"),
+        &PRICE,
+    );
+
+    f.client
+        .schedule_service_price(&provider, &CONSULT, &(PRICE * 2), &MIN_PRICE_NOTICE_SECS);
+
+    let e = one_event(&f);
+    assert_layout(
+        &e,
+        "service_price_scheduled",
+        &[ScVal::from(&provider), ScVal::U32(CONSULT)],
+        &["price", "effective_at"],
+    );
+    assert_eq!(field_i128(&e, "price"), PRICE * 2);
+    assert_eq!(field_u64(&e, "effective_at"), MIN_PRICE_NOTICE_SECS);
 }
 
 #[test]

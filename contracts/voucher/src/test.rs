@@ -7,7 +7,7 @@ use soroban_sdk::{
 
 use crate::{VoucherError, VoucherEscrow, VoucherEscrowClient, VoucherStatus};
 use sci_receipt::{ReceiptBook, ReceiptBookClient};
-use sci_registry::{ProviderStatus, Registry, RegistryClient};
+use sci_registry::{ProviderStatus, Registry, RegistryClient, MIN_PRICE_NOTICE_SECS};
 
 const DISPUTE_WINDOW: u64 = 72 * 60 * 60; // 72 hours
 const FEE_BPS: u32 = 100; // 1%
@@ -236,6 +236,33 @@ fn pausing_a_service_does_not_affect_funded_vouchers() {
     advance(&f.env, DISPUTE_WINDOW + 1);
     f.voucher.settle(&id);
     assert_eq!(f.voucher.get_voucher(&id).status, VoucherStatus::Settled);
+}
+
+#[test]
+fn scheduled_price_rise_applies_to_funding_at_the_effective_time() {
+    let f = setup();
+    let effective_at = START_TIME + MIN_PRICE_NOTICE_SECS;
+    f.registry
+        .schedule_service_price(&f.provider, &CONSULT, &(CONSULT_PRICE * 2), &effective_at);
+
+    // Before the effective time the listed price still funds.
+    assert_eq!(fund(&f), 1);
+
+    f.env.ledger().with_mut(|li| li.timestamp = effective_at);
+    let err = f
+        .voucher
+        .try_create_voucher(
+            &f.funder,
+            &patient(&f.env),
+            &f.provider,
+            &CONSULT,
+            &CONSULT_PRICE,
+            &(effective_at + 1000),
+        )
+        .err()
+        .unwrap()
+        .unwrap();
+    assert_eq!(err, VoucherError::AmountBelowPrice);
 }
 
 #[test]

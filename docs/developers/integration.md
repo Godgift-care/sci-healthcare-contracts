@@ -328,6 +328,9 @@ async function deriveBeneficiaryRefBrowser(identifier, key) {
 Before showing a price, check that the clinic is active and that the service is
 listed. `get_service_price` returns `0` for a missing or inactive service, and
 `is_service_available` returns `false` while the clinic has paused it.
+`get_upcoming_price` returns `(price, effective_at)` when the clinic has
+scheduled a price change (at least 24 hours ahead), or `(0, 0)` — show it so the
+funder is not surprised.
 
 The provider below is the clinic created by the current testnet seed; replace it
 with the provider from your own deployment.

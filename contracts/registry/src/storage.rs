@@ -85,6 +85,8 @@ pub(crate) fn read_service(
     env.storage()
         .persistent()
         .extend_ttl(&key, PERSISTENT_TTL_THRESHOLD, PERSISTENT_TTL_EXTEND);
+    let mut item = item;
+    item.apply_due_price(env.ledger().timestamp());
     Ok(item)
 }
 

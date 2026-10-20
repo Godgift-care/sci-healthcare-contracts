@@ -212,7 +212,8 @@ deployed contract.
 | `initialize(admin)` | once | Sets the administrator |
 | `register_provider(owner, name, country)` | owner | Self-registers a clinic as `Pending` |
 | `set_provider_status(admin, provider, status)` | admin | `Pending` → `Active` → `Suspended` |
-| `upsert_service(provider, code, label, price)` | provider | Lists a billable service; requires `Active` |
+| `upsert_service(provider, code, label, price)` | provider | Lists a billable service or lowers its price; requires `Active` |
+| `schedule_service_price(provider, code, price, effective_at)` | provider | Schedules a price change at least 24 h ahead |
 | `remove_service(provider, code)` | provider | Delists a service |
 | `set_service_available(provider, code, available)` | provider | Pauses or resumes a service without delisting it |
 | `add_attester(admin, attester)` | admin | Grants attester rights |
@@ -222,6 +223,7 @@ deployed contract.
 | `is_active_provider(provider)` | view | The check `voucher` relies on |
 | `get_service_price(provider, code)` | view | Price, or 0 if absent/inactive |
 | `is_service_available(provider, code)` | view | Listed, active and not paused |
+| `get_upcoming_price(provider, code)` | view | Scheduled price and when it applies, or `(0, 0)` |
 | `is_attester(addr)` | view | Attester check |
 
 ### `voucher`
