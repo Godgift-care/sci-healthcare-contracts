@@ -45,7 +45,7 @@ jobs:
           sparse-checkout: .github/scripts
           persist-credentials: false
 
-      - uses: actions/github-script@v8
+      - uses: actions/github-script@v9
         env:
           # Pull requests that change these paths also need a maintainer
           # approval. CI runs with the workflow files from the pull request
