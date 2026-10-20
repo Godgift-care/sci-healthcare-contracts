@@ -74,7 +74,7 @@ jobs:
             --ignore-filename-regex '/(tests?/.*|src/test\.rs)$' \
             --fail-under-lines 98 \
             --fail-under-regions 95
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: always()
         with:
           name: coverage-lcov
@@ -118,7 +118,7 @@ jobs:
         run: |
           ls -lh dist
           cat dist/SHA256SUMS
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: contracts-wasm
           path: |
