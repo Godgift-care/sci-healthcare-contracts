@@ -42,6 +42,9 @@ pub struct FaucetConfig {
     /// Base units the faucet may mint per UTC day, across all addresses
     /// combined. Resets when the day changes.
     pub daily_cap: i128,
+    /// While true, `drip` is rejected for everyone. Toggled with
+    /// `set_paused`; pausing does not give up the token admin role.
+    pub paused: bool,
 }
 
 #[contracttype]
@@ -66,6 +69,8 @@ pub enum FaucetError {
     CoolingDown = 5,
     /// The daily minting cap across all addresses has been reached.
     DailyCapReached = 6,
+    /// The faucet is paused; `drip` is rejected until the admin unpauses.
+    Paused = 7,
 }
 
 #[contractevent]
@@ -108,6 +113,7 @@ impl Faucet {
                 amount,
                 cooldown,
                 daily_cap,
+                paused: false,
             },
         );
         Ok(())
@@ -120,8 +126,11 @@ impl Faucet {
     /// many addresses it does not control. A classic account also needs a
     /// trustline for the token, as for any Stellar asset.
     pub fn drip(env: Env, to: Address) -> Result<i128, FaucetError> {
-        to.require_auth();
         let config = Self::read_config(&env)?;
+        if config.paused {
+            return Err(FaucetError::Paused);
+        }
+        to.require_auth();
 
         let now = env.ledger().timestamp();
 
@@ -179,6 +188,19 @@ impl Faucet {
         }
         config.amount = amount;
         config.cooldown = cooldown;
+        Self::write_config(&env, &config);
+        Ok(())
+    }
+
+    /// Pauses or unpauses the faucet. While paused, `drip` is rejected for
+    /// everyone. Pausing does not give up the token admin role. Admin only.
+    pub fn set_paused(
+        env: Env,
+        admin: Address,
+        paused: bool,
+    ) -> Result<(), FaucetError> {
+        let mut config = Self::require_admin(&env, &admin)?;
+        config.paused = paused;
         Self::write_config(&env, &config);
         Ok(())
     }

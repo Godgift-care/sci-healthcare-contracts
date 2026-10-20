@@ -143,6 +143,38 @@ fn daily_cap_resets_at_day_boundary() {
 }
 
 #[test]
+fn paused_faucet_rejects_drips() {
+    let f = setup();
+    let user = Address::generate(&f.env);
+
+    f.faucet.set_paused(&f.admin, &true);
+    let err = f
+        .faucet
+        .try_drip(&user)
+        .err()
+        .unwrap()
+        .unwrap();
+    assert_eq!(err, FaucetError::Paused);
+
+    f.faucet.set_paused(&f.admin, &false);
+    f.faucet.drip(&user);
+    assert_eq!(f.token.balance(&user), DRIP);
+}
+
+#[test]
+fn non_admin_cannot_pause() {
+    let f = setup();
+    let impostor = Address::generate(&f.env);
+    let err = f
+        .faucet
+        .try_set_paused(&impostor, &true)
+        .err()
+        .unwrap()
+        .unwrap();
+    assert_eq!(err, FaucetError::NotAuthorized);
+}
+
+#[test]
 fn admin_can_change_the_drip() {
     let f = setup();
     f.faucet.set_drip(&f.admin, &10i128, &0u64);
