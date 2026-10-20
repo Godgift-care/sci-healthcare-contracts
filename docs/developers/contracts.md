@@ -269,10 +269,15 @@ pub struct Receipt {
 | `mint` | `minter, voucher_id, beneficiary_ref, provider, service_code, amount` | `()` | `minter` |
 | `get_receipt` | `voucher_id` | `Receipt` | view |
 | `count_for` | `beneficiary_ref` | `u32` | view |
+| `name` | — | `String` | none (view) |
+| `symbol` | — | `String` | none (view) |
+| `receipt_uri` | `voucher_id` | `String` | none (view) |
 | `get_minter` | — | `Address` | view |
 | `get_admin` | — | `Address` | view |
 
 Only the minter — the voucher contract — may mint. Because the voucher contract does not exist when the receipt book is initialised, deploy order is: receipt, voucher, then `set_minter`.
+
+Receipts are soulbound: there is deliberately no transfer function, so a receipt stays bound to the beneficiary reference it was minted against. `name`, `symbol` and `receipt_uri` are read-only wallet metadata. `receipt_uri(voucher_id)` returns `https://receipts.sci.health/v1/receipt/<voucher_id>` — the voucher id only, no patient or beneficiary data — so explorers can display the receipt without exposing any PHI.
 
 ### Authorisation matrix
 
@@ -288,6 +293,9 @@ Every public function, with the exact signer it demands. `AUTH_MATRIX` in `contr
 | `get_pending_admin` | none (view) |
 | `get_receipt` | none (view) |
 | `count_for` | none (view) |
+| `name` | none (view) |
+| `symbol` | none (view) |
+| `receipt_uri` | none (view) |
 | `get_minter` | none (view) |
 | `get_admin` | none (view) |
 

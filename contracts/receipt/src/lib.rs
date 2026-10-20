@@ -14,8 +14,11 @@
 //! There is deliberately no transfer function. These are bound to the
 //! beneficiary reference they were minted against.
 
+extern crate alloc;
+
 use soroban_sdk::{
     contract, contracterror, contractevent, contractimpl, contracttype, Address, BytesN, Env,
+    String,
 };
 
 /// Typed contract events. Field names are part of the public interface:
@@ -64,6 +67,14 @@ const INSTANCE_TTL_THRESHOLD: u32 = 7 * DAY_IN_LEDGERS;
 const INSTANCE_TTL_EXTEND: u32 = 30 * DAY_IN_LEDGERS;
 const PERSISTENT_TTL_THRESHOLD: u32 = 30 * DAY_IN_LEDGERS;
 const PERSISTENT_TTL_EXTEND: u32 = 90 * DAY_IN_LEDGERS;
+
+/// Human-readable name wallets and explorers show for a receipt.
+const RECEIPT_NAME: &str = "SCI Care Receipt";
+/// Token-style symbol explorers use when listing the receipt.
+const RECEIPT_SYMBOL: &str = "SCIREC";
+/// Base of the per-receipt URI. Only the voucher id is appended, so the URI
+/// carries no patient or beneficiary data.
+const RECEIPT_URI_BASE: &str = "https://receipts.sci.health/v1/receipt/";
 
 /// A settled care episode.
 ///
@@ -284,6 +295,31 @@ impl ReceiptBook {
             }
             None => 0,
         }
+    }
+
+    /// Human-readable name shown by wallets and explorers.
+    ///
+    /// Read-only view, no signature required. Receipts are soulbound: there is
+    /// no transfer function, so a receipt stays bound to the beneficiary
+    /// reference it was minted against.
+    pub fn name(env: Env) -> String {
+        String::from_str(&env, RECEIPT_NAME)
+    }
+
+    /// Token-style symbol shown by wallets and explorers.
+    ///
+    /// Read-only view, no signature required. Receipts are soulbound.
+    pub fn symbol(env: Env) -> String {
+        String::from_str(&env, RECEIPT_SYMBOL)
+    }
+
+    /// Read-only, per-receipt URI for explorers and wallets.
+    ///
+    /// The URI is derived only from `voucher_id`. It contains no patient or
+    /// beneficiary data — it is an opaque pointer to the receipt, not the
+    /// care record itself. No signature required.
+    pub fn receipt_uri(env: Env, voucher_id: u64) -> String {
+        String::from_str(&env, &alloc::format!("{}{}", RECEIPT_URI_BASE, voucher_id))
     }
 
     pub fn get_minter(env: Env) -> Result<Address, ReceiptError> {

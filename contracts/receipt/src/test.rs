@@ -1,6 +1,6 @@
 #![cfg(test)]
 
-use soroban_sdk::{testutils::Address as _, Address, BytesN, Env};
+use soroban_sdk::{testutils::Address as _, Address, BytesN, Env, String};
 
 use crate::{ReceiptBook, ReceiptBookClient, ReceiptError};
 
@@ -175,6 +175,51 @@ fn missing_receipt_errors() {
     let f = setup();
     let err = f.client.try_get_receipt(&404u64).err().unwrap().unwrap();
     assert_eq!(err, ReceiptError::ReceiptNotFound);
+}
+
+#[test]
+fn name_symbol_and_receipt_uri_are_wallet_metadata() {
+    let f = setup();
+    assert_eq!(
+        f.client.name(),
+        String::from_str(&f.env, "SCI Care Receipt")
+    );
+    assert_eq!(f.client.symbol(), String::from_str(&f.env, "SCIREC"));
+    assert_eq!(
+        f.client.receipt_uri(&1u64),
+        String::from_str(&f.env, "https://receipts.sci.health/v1/receipt/1")
+    );
+    assert_eq!(
+        f.client.receipt_uri(&42u64),
+        String::from_str(&f.env, "https://receipts.sci.health/v1/receipt/42")
+    );
+}
+
+#[test]
+fn receipt_uri_contains_no_patient_data() {
+    let f = setup();
+    let patient = bref(&f.env, 7);
+    let provider = Address::generate(&f.env);
+    f.client
+        .mint(&f.minter, &1u64, &patient, &provider, &101u32, &10i128);
+
+    let uri = f.client.receipt_uri(&1u64);
+    // Derived from the voucher id only: no patient data, no beneficiary ref.
+    assert_eq!(
+        uri,
+        String::from_str(&f.env, "https://receipts.sci.health/v1/receipt/1")
+    );
+}
+
+#[test]
+fn no_transfer_entry_points() {
+    for case in AUTH_MATRIX {
+        assert!(
+            case.function != "transfer" && case.function != "transfer_from",
+            "`{}` would make receipts transferable; receipts are soulbound",
+            case.function,
+        );
+    }
 }
 
 #[test]
@@ -375,6 +420,18 @@ const AUTH_MATRIX: &[AuthCase] = &[
         auth: Auth::Free("none (view)"),
     },
     AuthCase {
+        function: "name",
+        auth: Auth::Free("none (view)"),
+    },
+    AuthCase {
+        function: "symbol",
+        auth: Auth::Free("none (view)"),
+    },
+    AuthCase {
+        function: "receipt_uri",
+        auth: Auth::Free("none (view)"),
+    },
+    AuthCase {
         function: "get_minter",
         auth: Auth::Free("none (view)"),
     },
@@ -443,6 +500,15 @@ fn run_case(f: &AuthFixture, function: &str) -> std::vec::Vec<Address> {
         }
         "count_for" => {
             client.count_for(&bref(env, 7));
+        }
+        "name" => {
+            client.name();
+        }
+        "symbol" => {
+            client.symbol();
+        }
+        "receipt_uri" => {
+            client.receipt_uri(&1u64);
         }
         "get_minter" => {
             client.get_minter();
