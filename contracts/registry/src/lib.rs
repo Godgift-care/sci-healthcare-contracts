@@ -21,7 +21,7 @@ use soroban_sdk::{contract, contractimpl, Address, Env, String, Vec};
 
 pub use events::{
     AdminChanged, AdminProposed, AttesterAdded, AttesterRemoved, Initialized, ProviderRegistered,
-    ProviderStatusChanged, ServiceRemoved, ServiceUpserted,
+    ProviderStatusChanged, ServiceAvailabilityChanged, ServiceRemoved, ServiceUpserted,
 };
 pub use types::{DataKey, Provider, ProviderStatus, RegistryError, ServiceItem};
 
@@ -138,11 +138,18 @@ impl Registry {
             return Err(RegistryError::ProviderNotActive);
         }
 
+        // Re-pricing or relabelling a paused service must not quietly put
+        // it back on sale; only `set_service_available` does that.
+        let available = match read_service(&env, &provider_addr, code) {
+            Ok(existing) => existing.available,
+            Err(_) => true,
+        };
         let item = ServiceItem {
             code,
             label: label.clone(),
             price,
             active: true,
+            available,
         };
         write_service(&env, &provider_addr, code, &item);
         extend_instance(&env);
@@ -176,6 +183,32 @@ impl Registry {
         ServiceRemoved {
             provider: provider_addr,
             code,
+        }
+        .publish(&env);
+        Ok(())
+    }
+
+    /// Pauses or resumes a service without delisting it.
+    ///
+    /// While paused, `voucher` refuses to fund the service. Vouchers already
+    /// funded against it are unaffected and settle normally.
+    pub fn set_service_available(
+        env: Env,
+        provider_addr: Address,
+        code: u32,
+        available: bool,
+    ) -> Result<(), RegistryError> {
+        provider_addr.require_auth();
+
+        let mut item = read_service(&env, &provider_addr, code)?;
+        item.available = available;
+        write_service(&env, &provider_addr, code, &item);
+        extend_instance(&env);
+
+        ServiceAvailabilityChanged {
+            provider: provider_addr,
+            code,
+            available,
         }
         .publish(&env);
         Ok(())
@@ -286,6 +319,9 @@ impl Registry {
 
     /// Price for a provider's service, or 0 if absent or inactive.
     ///
+    /// A paused service still reports its price, so `voucher` can tell
+    /// "not offered" apart from "temporarily unavailable".
+    ///
     /// Returns a primitive rather than a struct so the voucher contract can
     /// validate pricing over a cross-contract interface without having to
     /// redeclare this contract's types.
@@ -293,6 +329,15 @@ impl Registry {
         match read_service(&env, &provider_addr, code) {
             Ok(item) if item.active => item.price,
             _ => 0,
+        }
+    }
+
+    /// Whether the service is listed, active and not paused — the second
+    /// check `voucher` makes before escrowing, after the price.
+    pub fn is_service_available(env: Env, provider_addr: Address, code: u32) -> bool {
+        match read_service(&env, &provider_addr, code) {
+            Ok(item) => item.active && item.available,
+            Err(_) => false,
         }
     }
 

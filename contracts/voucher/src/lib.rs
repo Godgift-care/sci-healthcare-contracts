@@ -149,6 +149,10 @@ impl VoucherEscrow {
         if amount < price {
             return Err(VoucherError::AmountBelowPrice);
         }
+        // Listed, but paused by the clinic (e.g. out of test kits).
+        if !registry.is_service_available(&provider, &service_code) {
+            return Err(VoucherError::ServiceUnavailable);
+        }
 
         // Escrow first, record second: if the transfer fails the whole
         // invocation reverts and no voucher is written.

@@ -331,6 +331,79 @@ fn get_services_batches_and_skips_missing() {
 }
 
 #[test]
+fn new_service_is_available() {
+    let f = setup();
+    let provider = register_active_provider(&f);
+    f.client.upsert_service(
+        &provider,
+        &202u32,
+        &String::from_str(&f.env, "Malaria RDT"),
+        &10_000_000i128,
+    );
+
+    assert!(f.client.get_service(&provider, &202u32).available);
+    assert!(f.client.is_service_available(&provider, &202u32));
+}
+
+#[test]
+fn paused_service_stays_listed_and_priced() {
+    let f = setup();
+    let provider = register_active_provider(&f);
+    f.client.upsert_service(
+        &provider,
+        &202u32,
+        &String::from_str(&f.env, "Malaria RDT"),
+        &10_000_000i128,
+    );
+
+    f.client.set_service_available(&provider, &202u32, &false);
+
+    let item = f.client.get_service(&provider, &202u32);
+    assert!(!item.available);
+    assert!(item.active);
+    assert!(!f.client.is_service_available(&provider, &202u32));
+    // Still priced, so `voucher` can say "unavailable" rather than "not offered".
+    assert_eq!(
+        f.client.get_service_price(&provider, &202u32),
+        10_000_000i128
+    );
+    let codes = Vec::from_array(&f.env, [202u32]);
+    assert_eq!(f.client.get_services(&provider, &codes).len(), 1);
+
+    f.client.set_service_available(&provider, &202u32, &true);
+    assert!(f.client.is_service_available(&provider, &202u32));
+}
+
+#[test]
+fn repricing_a_paused_service_keeps_it_paused() {
+    let f = setup();
+    let provider = register_active_provider(&f);
+    let label = String::from_str(&f.env, "Malaria RDT");
+    f.client
+        .upsert_service(&provider, &202u32, &label, &10_000_000i128);
+    f.client.set_service_available(&provider, &202u32, &false);
+
+    f.client
+        .upsert_service(&provider, &202u32, &label, &9_000_000i128);
+
+    assert!(!f.client.get_service(&provider, &202u32).available);
+}
+
+#[test]
+fn pausing_absent_service_errors() {
+    let f = setup();
+    let provider = register_active_provider(&f);
+    let err = f
+        .client
+        .try_set_service_available(&provider, &999u32, &false)
+        .err()
+        .unwrap()
+        .unwrap();
+    assert_eq!(err, RegistryError::ServiceNotFound);
+    assert!(!f.client.is_service_available(&provider, &999u32));
+}
+
+#[test]
 fn attester_lifecycle() {
     let f = setup();
     let attester = Address::generate(&f.env);
@@ -585,6 +658,10 @@ const AUTH_MATRIX: &[AuthCase] = &[
         auth: signer("`provider_addr`", provider_addr),
     },
     AuthCase {
+        function: "set_service_available",
+        auth: signer("`provider_addr`", provider_addr),
+    },
+    AuthCase {
         function: "add_attester",
         auth: signer("`admin`", admin_addr),
     },
@@ -626,6 +703,10 @@ const AUTH_MATRIX: &[AuthCase] = &[
     },
     AuthCase {
         function: "get_service_price",
+        auth: Auth::Free("none (view)"),
+    },
+    AuthCase {
+        function: "is_service_available",
         auth: Auth::Free("none (view)"),
     },
     AuthCase {
@@ -681,6 +762,11 @@ fn run_case(f: &AuthFixture, function: &str) -> std::vec::Vec<Address> {
             upsert();
             client.remove_service(&f.provider, &CONSULT);
         }
+        "set_service_available" => {
+            activate(&f.f, &f.provider);
+            upsert();
+            client.set_service_available(&f.provider, &CONSULT, &false);
+        }
         "add_attester" => {
             client.add_attester(&f.f.admin, &f.new_provider);
         }
@@ -723,6 +809,11 @@ fn run_case(f: &AuthFixture, function: &str) -> std::vec::Vec<Address> {
             activate(&f.f, &f.provider);
             upsert();
             client.get_service_price(&f.provider, &CONSULT);
+        }
+        "is_service_available" => {
+            activate(&f.f, &f.provider);
+            upsert();
+            client.is_service_available(&f.provider, &CONSULT);
         }
         "is_attester" => {
             client.is_attester(&f.provider);
@@ -1086,6 +1177,29 @@ fn service_removed_event_snapshot() {
     let e = one_event(&f);
     assert_layout(&e, "service_removed", &[ScVal::from(&provider)], &["code"]);
     assert_eq!(field_u32(&e, "code"), CONSULT);
+}
+
+#[test]
+fn service_availability_changed_event_snapshot() {
+    let f = setup();
+    let provider = register_active_provider(&f);
+    f.client.upsert_service(
+        &provider,
+        &CONSULT,
+        &String::from_str(&f.env, "Outpatient consult"),
+        &PRICE,
+    );
+
+    f.client.set_service_available(&provider, &CONSULT, &false);
+
+    let e = one_event(&f);
+    assert_layout(
+        &e,
+        "service_availability_changed",
+        &[ScVal::from(&provider), ScVal::U32(CONSULT)],
+        &["available"],
+    );
+    assert_eq!(field(&e, "available"), ScVal::Bool(false));
 }
 
 #[test]

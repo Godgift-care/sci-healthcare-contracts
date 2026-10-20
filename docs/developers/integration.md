@@ -212,6 +212,7 @@ const VOUCHER_ERRORS = {
   15: 'InvalidFee',
   16: 'MathOverflow',
   17: 'NoPendingAdmin',
+  18: 'ServiceUnavailable',
 };
 
 const RECEIPT_ERRORS = {
@@ -325,7 +326,8 @@ async function deriveBeneficiaryRefBrowser(identifier, key) {
 ## 2. Read the clinic, service and fee quote
 
 Before showing a price, check that the clinic is active and that the service is
-listed. `get_service_price` returns `0` for a missing or inactive service.
+listed. `get_service_price` returns `0` for a missing or inactive service, and
+`is_service_available` returns `false` while the clinic has paused it.
 
 The provider below is the clinic created by the current testnet seed; replace it
 with the provider from your own deployment.
@@ -347,6 +349,13 @@ const price = await read(contracts.registry, 'get_service_price', [
 
 if (!active || price === 0n) {
   throw new Error('The clinic is not active or does not offer this service');
+}
+const available = await read(contracts.registry, 'is_service_available', [
+  arg.address(provider),
+  arg.u32(serviceCode),
+]);
+if (!available) {
+  throw new Error('The clinic has paused this service for now');
 }
 if (amount < price) {
   throw new Error(`Amount must be at least ${price} (the listed price)`);
@@ -526,6 +535,7 @@ the common voucher errors:
 | 13 | `DisputeWindowOpen` | Settlement is not available until the dispute deadline. |
 | 14 | `DisputeWindowClosed` | The funder can no longer dispute. |
 | 15 | `InvalidFee` | The deployment's fee exceeds the 10% cap; contact the operator. |
+| 18 | `ServiceUnavailable` | The clinic has paused this service for now; try again later or choose another service. |
 
 Recommended handling:
 

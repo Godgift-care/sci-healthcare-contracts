@@ -41,6 +41,10 @@ pub struct ServiceItem {
     /// Price in the smallest unit of the settlement token.
     pub price: i128,
     pub active: bool,
+    /// Whether the clinic can deliver this service right now. A clinic that
+    /// runs out of a test kit pauses the service instead of delisting it, so
+    /// it keeps its catalogue entry. Defaults to `true` on first listing.
+    pub available: bool,
 }
 
 #[contracttype]

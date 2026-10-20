@@ -97,4 +97,7 @@ pub enum VoucherError {
     InvalidFee = 15,
     MathOverflow = 16,
     NoPendingAdmin = 17,
+    /// The clinic has paused this service; it cannot be funded until it
+    /// is made available again.
+    ServiceUnavailable = 18,
 }

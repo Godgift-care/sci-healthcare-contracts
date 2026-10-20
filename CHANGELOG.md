@@ -25,6 +25,7 @@
 - **faucet:** `set_paused(admin, bool)` lets the admin stop drips without releasing the token admin role; `drip` is rejected while paused. Closes #61.
 - **faucet:** `set_drip` now emits a `DripChanged { amount, cooldown }` event so configuration changes are auditable. Closes #62.
 - **contracts:** a `version()` view on registry, voucher, receipt and faucet returning the crate version (`env!("CARGO_PKG_VERSION")`), so integrators and the indexer can tell which build a deployment runs. No signature required. Closes #97.
+- **registry:** clinics can pause a service without delisting it. `ServiceItem` gains `available` (true on first listing), `set_service_available(provider_addr, code, available)` toggles it and emits `service_availability_changed { provider, code, available }`, and `is_service_available` reports it. `upsert_service` keeps a paused service paused. **voucher:** `create_voucher` rejects a paused service with the new `ServiceUnavailable` (#18); vouchers already funded settle normally. Closes #98.
 
 ### Changed
 - **receipt:** `count_for` now extends the TTL of the count entry it reads. It was the only persistent read in the three contracts that did not, so a patient's episode count could be archived while their receipts stayed live. Covered by `count_for_extends_its_own_entry`.
@@ -34,7 +35,7 @@
 - **cargo:** the workspace path dependencies carry a version, so `cargo deny` does not read them as wildcard version requirements.
 - **voucher:** `voucher_claimed`, `voucher_attested`, `voucher_disputed`, `voucher_settled` and `voucher_refunded` now carry `service_code` and `amount` in their data, appended after the fields each event already had. Only `voucher_created` used to say what the voucher was for, so an indexer or wallet reading a single lifecycle event had to load the voucher to show what was paid for. `voucher_refunded` already carried `amount`; it gains `service_code` only. Topics are unchanged and the data map is keyed by name, so the indexer in `sci-healthcare-backend` decodes the new layout without a breaking change (its matching decoder change is linked from the pull request). Covered by five event snapshot tests in `contracts/voucher/src/test.rs` that read the decoded XDR event and the regenerated `test_snapshots`.
 
-Tests: 148 (was 135).
+Tests: 155 (was 135).
 
 ## 0.2.0 — 2026-10-09
 

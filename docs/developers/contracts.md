@@ -35,6 +35,7 @@ pub struct ServiceItem {
     pub label: String,
     pub price: i128,
     pub active: bool,
+    pub available: bool,      // false while the clinic has paused it
 }
 ```
 
@@ -47,6 +48,7 @@ pub struct ServiceItem {
 | `set_provider_status` | `admin, provider_addr, status` | `()` | `admin` | `NotAuthorized`, `ProviderNotFound` |
 | `upsert_service` | `provider_addr, code, label, price` | `()` | `provider_addr` | `InvalidPrice`, `EmptyName`, `ProviderNotActive` |
 | `remove_service` | `provider_addr, code` | `()` | `provider_addr` | `ServiceNotFound` |
+| `set_service_available` | `provider_addr, code, available: bool` | `()` | `provider_addr` | `ServiceNotFound` |
 | `add_attester` | `admin, attester` | `()` | `admin` | `NotAuthorized` |
 | `remove_attester` | `admin, attester` | `()` | `admin` | `NotAuthorized` |
 | `propose_admin` | `admin, new_admin` | `()` | `admin` | `NotAuthorized` |
@@ -57,11 +59,14 @@ pub struct ServiceItem {
 | `get_service` | `provider_addr, code` | `ServiceItem` | view | `ServiceNotFound` |
 | `get_services` | `provider_addr, codes: Vec<u32>` | `Vec<ServiceItem>` | view | — |
 | `get_service_price` | `provider_addr, code` | `i128` | view | — |
+| `is_service_available` | `provider_addr, code` | `bool` | view | — |
 | `is_attester` | `addr` | `bool` | view | — |
 | `get_admin` | — | `Address` | view | `NotInitialized` |
 | `version` | — | `String` | view | — |
 
 `get_service_price` returns `0` when the service is absent or inactive. It exists so `voucher` can validate pricing over an interface of primitives only, without the two contracts sharing types.
+
+A clinic that temporarily cannot deliver a service (out of test kits, say) calls `set_service_available(provider_addr, code, false)` instead of delisting it. The service keeps its catalogue entry and its price, `is_service_available` returns `false`, and `voucher` refuses to fund it with `ServiceUnavailable`. Vouchers already funded against it are unaffected. `upsert_service` keeps a paused service paused; only `set_service_available(…, true)` puts it back on sale. New services are listed as available.
 
 Every contract — registry, voucher, receipt and faucet — has a `version()` view returning the crate version it was built from (`CARGO_PKG_VERSION`, the workspace version, currently `0.2.0`). Use it to tell which build a deployment runs before relying on a newer function.
 
@@ -76,6 +81,7 @@ Every public function, with the exact signer it demands — no signature that is
 | `set_provider_status` | `admin` |
 | `upsert_service` | `provider_addr` |
 | `remove_service` | `provider_addr` |
+| `set_service_available` | `provider_addr` |
 | `add_attester` | `admin` |
 | `remove_attester` | `admin` |
 | `propose_admin` | `admin` |
@@ -87,6 +93,7 @@ Every public function, with the exact signer it demands — no signature that is
 | `get_service` | none (view) |
 | `get_services` | none (view) |
 | `get_service_price` | none (view) |
+| `is_service_available` | none (view) |
 | `is_attester` | none (view) |
 | `version` | none (view) |
 
@@ -110,7 +117,7 @@ A signer is not the same as a role: `admin` must be the stored admin **and** sig
 
 ### Events
 
-`provider_registered`, `provider_status_changed`, `service_upserted`, `service_removed`, `attester_added`, `attester_removed`, `admin_changed`, `initialized`
+`provider_registered`, `provider_status_changed`, `service_upserted`, `service_removed`, `service_availability_changed` (topics `provider`, `code`; data `available`), `attester_added`, `attester_removed`, `admin_changed`, `initialized`
 
 ---
 
@@ -199,7 +206,7 @@ rejects the voucher's own provider even if it holds that role.
 
 ### What each function checks
 
-**`create_voucher`** — amount > 0; expiry in the future; provider is `Active`; the service exists and is active; amount ≥ listed price. Transfers the token *before* writing the voucher, so a failed transfer reverts everything.
+**`create_voucher`** — amount > 0; expiry in the future; provider is `Active`; the service exists and is active; amount ≥ listed price; the service is not paused (`ServiceUnavailable`). Transfers the token *before* writing the voucher, so a failed transfer reverts everything.
 
 **`claim`** — caller is the named provider; provider is still `Active` in the registry; status is `Funded`; not expired.
 
@@ -228,6 +235,7 @@ rejects the voucher's own provider even if it holds that role.
 | 7 | `AmountBelowPrice` | 15 | `InvalidFee` |
 | 8 | `InvalidAmount` | 16 | `MathOverflow` |
 |  |  | 17 | `NoPendingAdmin` |
+|  |  | 18 | `ServiceUnavailable` |
 
 ### Events
 

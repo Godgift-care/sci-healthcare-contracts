@@ -214,12 +214,14 @@ deployed contract.
 | `set_provider_status(admin, provider, status)` | admin | `Pending` → `Active` → `Suspended` |
 | `upsert_service(provider, code, label, price)` | provider | Lists a billable service; requires `Active` |
 | `remove_service(provider, code)` | provider | Delists a service |
+| `set_service_available(provider, code, available)` | provider | Pauses or resumes a service without delisting it |
 | `add_attester(admin, attester)` | admin | Grants attester rights |
 | `remove_attester(admin, attester)` | admin | Revokes them |
 | `propose_admin(admin, new_admin)` | admin | Nominates a new admin |
 | `accept_admin(new_admin)` | nominee | Completes the two-step handover |
 | `is_active_provider(provider)` | view | The check `voucher` relies on |
 | `get_service_price(provider, code)` | view | Price, or 0 if absent/inactive |
+| `is_service_available(provider, code)` | view | Listed, active and not paused |
 | `is_attester(addr)` | view | Attester check |
 
 ### `voucher`

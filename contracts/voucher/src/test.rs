@@ -196,6 +196,49 @@ fn cannot_fund_unoffered_service() {
 }
 
 #[test]
+fn cannot_fund_paused_service() {
+    let f = setup();
+    f.registry
+        .set_service_available(&f.provider, &CONSULT, &false);
+
+    let err = f
+        .voucher
+        .try_create_voucher(
+            &f.funder,
+            &patient(&f.env),
+            &f.provider,
+            &CONSULT,
+            &CONSULT_PRICE,
+            &(START_TIME + 1000),
+        )
+        .err()
+        .unwrap()
+        .unwrap();
+    assert_eq!(err, VoucherError::ServiceUnavailable);
+    assert_eq!(f.voucher.next_voucher_id(), 1, "no voucher was written");
+
+    // Resumed: funding works again.
+    f.registry
+        .set_service_available(&f.provider, &CONSULT, &true);
+    assert_eq!(fund(&f), 1);
+}
+
+#[test]
+fn pausing_a_service_does_not_affect_funded_vouchers() {
+    let f = setup();
+    let id = fund(&f);
+
+    f.registry
+        .set_service_available(&f.provider, &CONSULT, &false);
+
+    f.voucher.claim(&f.provider, &id);
+    f.voucher.attest(&f.attester, &id);
+    advance(&f.env, DISPUTE_WINDOW + 1);
+    f.voucher.settle(&id);
+    assert_eq!(f.voucher.get_voucher(&id).status, VoucherStatus::Settled);
+}
+
+#[test]
 fn cannot_underfund_below_list_price() {
     let f = setup();
     let err = f

@@ -10,6 +10,7 @@ pub trait RegistryInterface {
     fn is_active_provider(env: Env, provider_addr: Address) -> bool;
     fn is_attester(env: Env, addr: Address) -> bool;
     fn get_service_price(env: Env, provider_addr: Address, code: u32) -> i128;
+    fn is_service_available(env: Env, provider_addr: Address, code: u32) -> bool;
 }
 
 /// The slice of `sci-receipt` this contract depends on.

@@ -633,6 +633,14 @@
                   },
                   {
                     "key": {
+                      "symbol": "available"
+                    },
+                    "val": {
+                      "bool": true
+                    }
+                  },
+                  {
+                    "key": {
                       "symbol": "code"
                     },
                     "val": {

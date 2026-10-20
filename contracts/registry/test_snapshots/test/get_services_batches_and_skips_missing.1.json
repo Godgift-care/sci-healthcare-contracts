@@ -226,6 +226,14 @@
                   },
                   {
                     "key": {
+                      "symbol": "available"
+                    },
+                    "val": {
+                      "bool": true
+                    }
+                  },
+                  {
+                    "key": {
                       "symbol": "code"
                     },
                     "val": {
@@ -282,6 +290,14 @@
                   {
                     "key": {
                       "symbol": "active"
+                    },
+                    "val": {
+                      "bool": true
+                    }
+                  },
+                  {
+                    "key": {
+                      "symbol": "available"
                     },
                     "val": {
                       "bool": true
