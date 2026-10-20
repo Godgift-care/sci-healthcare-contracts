@@ -81,6 +81,13 @@ pub struct Dripped {
     pub amount: i128,
 }
 
+#[contractevent]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct DripChanged {
+    pub amount: i128,
+    pub cooldown: u64,
+}
+
 #[contract]
 pub struct Faucet;
 
@@ -144,16 +151,11 @@ impl Faucet {
         // Daily cap is shared by every address and resets at day boundaries.
         let day = now / SECONDS_PER_DAY;
         let cap_key = DataKey::DailyCap;
-        let mut state: (u64, i128) =
-            env.storage().instance().get(&cap_key).unwrap_or((0, 0));
+        let mut state: (u64, i128) = env.storage().instance().get(&cap_key).unwrap_or((0, 0));
         if state.0 != day {
             state = (day, 0);
         }
-        if state
-            .1
-            .saturating_add(config.amount)
-            > config.daily_cap
-        {
+        if state.1.saturating_add(config.amount) > config.daily_cap {
             return Err(FaucetError::DailyCapReached);
         }
 
@@ -189,16 +191,13 @@ impl Faucet {
         config.amount = amount;
         config.cooldown = cooldown;
         Self::write_config(&env, &config);
+        DripChanged { amount, cooldown }.publish(&env);
         Ok(())
     }
 
     /// Pauses or unpauses the faucet. While paused, `drip` is rejected for
     /// everyone. Pausing does not give up the token admin role. Admin only.
-    pub fn set_paused(
-        env: Env,
-        admin: Address,
-        paused: bool,
-    ) -> Result<(), FaucetError> {
+    pub fn set_paused(env: Env, admin: Address, paused: bool) -> Result<(), FaucetError> {
         let mut config = Self::require_admin(&env, &admin)?;
         config.paused = paused;
         Self::write_config(&env, &config);

@@ -23,6 +23,7 @@
 - **receipt:** wallet-friendly metadata — `name()`, `symbol()` and `receipt_uri(voucher_id)` read-only views so wallets and explorers can display receipts. The URI carries only the voucher id (no patient data), and receipts are documented as soulbound: there is no transfer function. Closes #59.
 - **faucet:** a `daily_cap` in `FaucetConfig`, backed by a shared `(day, minted)` counter that resets at each day boundary; drips beyond the cap are rejected with the new `DailyCapReached` error, so unlimited testnet accounts cannot drain the demo token. Closes #60.
 - **faucet:** `set_paused(admin, bool)` lets the admin stop drips without releasing the token admin role; `drip` is rejected while paused. Closes #61.
+- **faucet:** `set_drip` now emits a `DripChanged { amount, cooldown }` event so configuration changes are auditable. Closes #62.
 
 ### Changed
 - **receipt:** `count_for` now extends the TTL of the count entry it reads. It was the only persistent read in the three contracts that did not, so a patient's episode count could be archived while their receipts stayed live. Covered by `count_for_extends_its_own_entry`.
@@ -32,7 +33,7 @@
 - **cargo:** the workspace path dependencies carry a version, so `cargo deny` does not read them as wildcard version requirements.
 - **voucher:** `voucher_claimed`, `voucher_attested`, `voucher_disputed`, `voucher_settled` and `voucher_refunded` now carry `service_code` and `amount` in their data, appended after the fields each event already had. Only `voucher_created` used to say what the voucher was for, so an indexer or wallet reading a single lifecycle event had to load the voucher to show what was paid for. `voucher_refunded` already carried `amount`; it gains `service_code` only. Topics are unchanged and the data map is keyed by name, so the indexer in `sci-healthcare-backend` decodes the new layout without a breaking change (its matching decoder change is linked from the pull request). Covered by five event snapshot tests in `contracts/voucher/src/test.rs` that read the decoded XDR event and the regenerated `test_snapshots`.
 
-Tests: 143 (was 135).
+Tests: 144 (was 135).
 
 ## 0.2.0 — 2026-10-09
 

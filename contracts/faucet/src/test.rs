@@ -1,7 +1,9 @@
 #![cfg(test)]
+extern crate std;
 
+use soroban_sdk::xdr::{ContractEvent, ContractEventBody, ScVal};
 use soroban_sdk::{
-    testutils::{Address as _, Ledger as _},
+    testutils::{Address as _, Events as _, Ledger as _},
     token, Address, Env,
 };
 
@@ -114,12 +116,7 @@ fn daily_cap_limits_total_minted_per_day() {
 
     // DAILY_CAP is two drips: a third address is rejected even though it has
     // never dripped before.
-    let err = f
-        .faucet
-        .try_drip(&c)
-        .err()
-        .unwrap()
-        .unwrap();
+    let err = f.faucet.try_drip(&c).err().unwrap().unwrap();
     assert_eq!(err, FaucetError::DailyCapReached);
     assert_eq!(f.token.balance(&c), 0);
 }
@@ -148,12 +145,7 @@ fn paused_faucet_rejects_drips() {
     let user = Address::generate(&f.env);
 
     f.faucet.set_paused(&f.admin, &true);
-    let err = f
-        .faucet
-        .try_drip(&user)
-        .err()
-        .unwrap()
-        .unwrap();
+    let err = f.faucet.try_drip(&user).err().unwrap().unwrap();
     assert_eq!(err, FaucetError::Paused);
 
     f.faucet.set_paused(&f.admin, &false);
@@ -263,4 +255,74 @@ fn zero_daily_cap_is_rejected() {
         .unwrap()
         .unwrap();
     assert_eq!(err, FaucetError::InvalidAmount);
+}
+
+// ----- event assertions -----
+
+fn symbol_of(v: &ScVal) -> Option<&str> {
+    match v {
+        ScVal::Symbol(s) => (&s.0).try_into().ok(),
+        _ => None,
+    }
+}
+
+/// The events published by `contract` so far.
+fn faucet_events(env: &Env, contract: &Address) -> std::vec::Vec<ContractEvent> {
+    let events = env.events().all().filter_by_contract(contract);
+    std::vec::Vec::from(events.events())
+}
+
+/// The name carried in topic 0 of the last faucet event.
+fn last_event_name(env: &Env, contract: &Address) -> std::string::String {
+    let list = faucet_events(env, contract);
+    let last = list.last().unwrap();
+    match &last.body {
+        ContractEventBody::V0(v0) => match &v0.topics[0] {
+            ScVal::Symbol(s) => std::string::String::from_utf8_lossy(&s.0).into_owned(),
+            other => panic!("event topic 0 is not a symbol: {other:?}"),
+        },
+    }
+}
+
+/// One data-map field of the last faucet event.
+fn last_event_field(env: &Env, contract: &Address, name: &str) -> ScVal {
+    let list = faucet_events(env, contract);
+    let last = list.last().unwrap();
+    match &last.body {
+        ContractEventBody::V0(v0) => match &v0.data {
+            ScVal::Map(Some(map)) => map
+                .iter()
+                .find(|entry| symbol_of(&entry.key) == Some(name))
+                .map(|entry| entry.val.clone())
+                .unwrap_or_else(|| panic!("last event has no `{name}` field")),
+            _ => panic!("last event data is not a map"),
+        },
+    }
+}
+
+fn last_event_i128(env: &Env, contract: &Address, name: &str) -> i128 {
+    match last_event_field(env, contract, name) {
+        ScVal::I128(parts) => i128::from(&parts),
+        other => panic!("event field `{name}` is {other:?}, want i128"),
+    }
+}
+
+fn last_event_u64(env: &Env, contract: &Address, name: &str) -> u64 {
+    match last_event_field(env, contract, name) {
+        ScVal::U64(v) => v,
+        other => panic!("event field `{name}` is {other:?}, want u64"),
+    }
+}
+
+#[test]
+fn set_drip_emits_drip_changed_event() {
+    let f = setup();
+    let contract = &f.faucet.address;
+    f.faucet.set_drip(&f.admin, &10i128, &0u64);
+
+    let events = faucet_events(&f.env, contract);
+    assert_eq!(events.len(), 1, "set_drip must publish exactly one event");
+    assert_eq!(last_event_name(&f.env, contract), "drip_changed");
+    assert_eq!(last_event_i128(&f.env, contract, "amount"), 10);
+    assert_eq!(last_event_u64(&f.env, contract, "cooldown"), 0);
 }

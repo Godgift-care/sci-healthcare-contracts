@@ -345,6 +345,15 @@ On testnet the faucet drips 50 USDC once a day: [`CCB25WG7DQ2CSNXPTOHZO2PDZ324FQ
 | 6 | `DailyCapReached` |
 | 7 | `Paused` |
 
+### Events
+
+| Event | Topics | Data |
+| --- | --- | --- |
+| `dripped` | `to` | `amount` |
+| `drip_changed` | — | `amount`, `cooldown` |
+
+`drip_changed` is published by `set_drip` so configuration changes are auditable. Its data map is keyed by field name; topics are unchanged.
+
 ---
 
 ## Storage lifetime (TTL)
