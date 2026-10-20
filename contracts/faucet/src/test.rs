@@ -4,7 +4,7 @@ extern crate std;
 use soroban_sdk::xdr::{ContractEvent, ContractEventBody, ScVal};
 use soroban_sdk::{
     testutils::{Address as _, Events as _, Ledger as _},
-    token, Address, Env,
+    token, Address, Env, String,
 };
 
 use crate::{Faucet, FaucetClient, FaucetError};
@@ -223,6 +223,15 @@ fn non_admin_cannot_take_the_token() {
         .unwrap()
         .unwrap();
     assert_eq!(err, FaucetError::NotAuthorized);
+}
+
+#[test]
+fn version_is_the_crate_version() {
+    let f = setup();
+    let version = f.faucet.version();
+    assert_eq!(version, String::from_str(&f.env, env!("CARGO_PKG_VERSION")));
+    // Every contract shares the workspace version.
+    assert_eq!(version, String::from_str(&f.env, "0.2.0"));
 }
 
 #[test]

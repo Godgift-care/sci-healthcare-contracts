@@ -41,6 +41,15 @@ fn initialize_sets_admin_and_minter() {
 }
 
 #[test]
+fn version_is_the_crate_version() {
+    let f = setup();
+    let version = f.client.version();
+    assert_eq!(version, String::from_str(&f.env, env!("CARGO_PKG_VERSION")));
+    // Every contract shares the workspace version.
+    assert_eq!(version, String::from_str(&f.env, "0.2.0"));
+}
+
+#[test]
 fn initialize_is_single_shot() {
     let f = setup();
     let other = Address::generate(&f.env);
@@ -439,6 +448,10 @@ const AUTH_MATRIX: &[AuthCase] = &[
         function: "get_admin",
         auth: Auth::Free("none (view)"),
     },
+    AuthCase {
+        function: "version",
+        auth: Auth::Free("none (view)"),
+    },
 ];
 
 /// The signers the host recorded for the invocation that just ran.
@@ -515,6 +528,9 @@ fn run_case(f: &AuthFixture, function: &str) -> std::vec::Vec<Address> {
         }
         "get_admin" => {
             client.get_admin();
+        }
+        "version" => {
+            client.version();
         }
         other => {
             panic!("no call is defined for `{other}`, so the matrix test cannot check it")

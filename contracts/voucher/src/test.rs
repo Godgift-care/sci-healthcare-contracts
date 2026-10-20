@@ -679,6 +679,15 @@ fn cannot_resolve_undisputed_voucher() {
 // ----- config -----
 
 #[test]
+fn version_is_the_crate_version() {
+    let f = setup();
+    let version = f.voucher.version();
+    assert_eq!(version, String::from_str(&f.env, env!("CARGO_PKG_VERSION")));
+    // Every contract shares the workspace version.
+    assert_eq!(version, String::from_str(&f.env, "0.2.0"));
+}
+
+#[test]
 fn initialize_is_single_shot() {
     let f = setup();
     let a = Address::generate(&f.env);
@@ -1261,6 +1270,10 @@ const AUTH_MATRIX: &[AuthCase] = &[
         function: "quote",
         auth: Auth::Free("none (view)"),
     },
+    AuthCase {
+        function: "version",
+        auth: Auth::Free("none (view)"),
+    },
 ];
 
 /// The signers the host recorded for the invocation that just ran.
@@ -1358,6 +1371,9 @@ fn run_case(f: &AuthFixture, function: &str) -> std::vec::Vec<Address> {
         }
         "quote" => {
             voucher.quote(&CONSULT_PRICE);
+        }
+        "version" => {
+            voucher.version();
         }
         other => {
             panic!("no call is defined for `{other}`, so the matrix test cannot check it")

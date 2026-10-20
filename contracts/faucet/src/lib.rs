@@ -14,7 +14,7 @@
 //! token here would let anyone mint it.
 
 use soroban_sdk::{
-    contract, contracterror, contractevent, contractimpl, contracttype, token, Address, Env,
+    contract, contracterror, contractevent, contractimpl, contracttype, token, Address, Env, String,
 };
 
 #[cfg(test)]
@@ -232,6 +232,14 @@ impl Faucet {
             }
             _ => 0,
         })
+    }
+
+    /// Crate version this contract was built from, e.g. `"0.2.0"`.
+    ///
+    /// Lets integrators and the indexer tell deployments apart without
+    /// comparing wasm hashes.
+    pub fn version(env: Env) -> String {
+        String::from_str(&env, env!("CARGO_PKG_VERSION"))
     }
 
     // ----- internal -----

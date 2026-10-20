@@ -40,7 +40,7 @@ mod types;
 #[cfg(test)]
 mod test;
 
-use soroban_sdk::{contract, contractimpl, token, Address, BytesN, Env};
+use soroban_sdk::{contract, contractimpl, token, Address, BytesN, Env, String};
 
 #[allow(unused_imports)]
 pub use events::{
@@ -462,6 +462,14 @@ impl VoucherEscrow {
         let config = read_config(&env)?;
         let fee = Self::fee_for(amount, config.fee_bps)?;
         Ok((fee, amount - fee))
+    }
+
+    /// Crate version this contract was built from, e.g. `"0.2.0"`.
+    ///
+    /// Lets integrators and the indexer tell deployments apart without
+    /// comparing wasm hashes.
+    pub fn version(env: Env) -> String {
+        String::from_str(&env, env!("CARGO_PKG_VERSION"))
     }
 
     // ----- internal -----

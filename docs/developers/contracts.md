@@ -59,8 +59,11 @@ pub struct ServiceItem {
 | `get_service_price` | `provider_addr, code` | `i128` | view | — |
 | `is_attester` | `addr` | `bool` | view | — |
 | `get_admin` | — | `Address` | view | `NotInitialized` |
+| `version` | — | `String` | view | — |
 
 `get_service_price` returns `0` when the service is absent or inactive. It exists so `voucher` can validate pricing over an interface of primitives only, without the two contracts sharing types.
+
+Every contract — registry, voucher, receipt and faucet — has a `version()` view returning the crate version it was built from (`CARGO_PKG_VERSION`, the workspace version, currently `0.2.0`). Use it to tell which build a deployment runs before relying on a newer function.
 
 ### Authorisation matrix
 
@@ -85,6 +88,7 @@ Every public function, with the exact signer it demands — no signature that is
 | `get_services` | none (view) |
 | `get_service_price` | none (view) |
 | `is_attester` | none (view) |
+| `version` | none (view) |
 
 A signer is not the same as a role: `admin` must be the stored admin **and** sign, and the two checks are ordered so a wrong `admin` argument fails before any signature is requested.
 
@@ -158,6 +162,7 @@ pub struct Voucher {
 | `get_config` | — | `Config` | view |
 | `next_voucher_id` | — | `u64` | view |
 | `quote` | `amount` | `(i128, i128)` | view |
+| `version` | — | `String` | view |
 
 `fee_bps` is capped at 1000 (10%) at initialisation.
 
@@ -185,6 +190,7 @@ Every public function, with the exact signer it demands. `AUTH_MATRIX` in `contr
 | `get_config` | none (view) |
 | `next_voucher_id` | none (view) |
 | `quote` | none (view) |
+| `version` | none (view) |
 
 `settle` and `refund` are the two permissionless rows, and that is the point:
 anyone may trigger them, so a provider is never dependent on the funder or an
@@ -274,6 +280,7 @@ pub struct Receipt {
 | `receipt_uri` | `voucher_id` | `String` | none (view) |
 | `get_minter` | — | `Address` | view |
 | `get_admin` | — | `Address` | view |
+| `version` | — | `String` | view |
 
 Only the minter — the voucher contract — may mint. Because the voucher contract does not exist when the receipt book is initialised, deploy order is: receipt, voucher, then `set_minter`.
 
@@ -298,6 +305,7 @@ Every public function, with the exact signer it demands. `AUTH_MATRIX` in `contr
 | `receipt_uri` | none (view) |
 | `get_minter` | none (view) |
 | `get_admin` | none (view) |
+| `version` | none (view) |
 
 ### Errors
 
@@ -328,6 +336,7 @@ Lets anyone trying the demo get test USDC without a server holding the issuer ke
 | `release_token_admin` | `admin, new_admin` | `()` | `admin` |
 | `get_config` | — | `FaucetConfig` | view |
 | `next_drip_at` | `to` | `u64` (0 if allowed now) | view |
+| `version` | — | `String` | view |
 
 `drip` requires the recipient's signature, so one wallet cannot drain the faucet into addresses it does not control, and each address may drip once per `cooldown`. A classic account needs a trustline for the token first; the token reports a missing one as its error `#13`.
 

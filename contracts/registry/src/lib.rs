@@ -300,6 +300,14 @@ impl Registry {
         read_attester(&env, &addr)
     }
 
+    /// Crate version this contract was built from, e.g. `"0.2.0"`.
+    ///
+    /// Lets integrators and the indexer tell deployments apart without
+    /// comparing wasm hashes.
+    pub fn version(env: Env) -> String {
+        String::from_str(&env, env!("CARGO_PKG_VERSION"))
+    }
+
     // ----- internal -----
 
     fn require_admin(env: &Env, admin: &Address) -> Result<(), RegistryError> {
