@@ -23,6 +23,7 @@ ADMIN="${ADMIN:-sci-admin}"
 ISSUER="${ISSUER:-sci-issuer}"
 DRIP="${DRIP:-500000000}"          # 50 USDC at 7 decimals
 COOLDOWN="${COOLDOWN:-86400}"      # once a day per address
+DAILY_CAP="${DAILY_CAP:-2500000000}" # 250 USDC per day across all addresses
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 ENV_FILE="$ROOT/deployments/$NETWORK.env"
@@ -49,7 +50,7 @@ echo "  faucet: $FAUCET_ID"
 say "Initializing faucet"
 stellar contract invoke --id "$FAUCET_ID" --source-account "$ADMIN" --network "$NETWORK" \
   -- initialize --admin "$ADMIN_ADDR" --token "$USDC_CONTRACT_ID" \
-  --amount "$DRIP" --cooldown "$COOLDOWN"
+  --amount "$DRIP" --cooldown "$COOLDOWN" --daily-cap "$DAILY_CAP"
 
 say "Handing token administration to the faucet"
 stellar contract invoke --id "$USDC_CONTRACT_ID" --source-account "$ISSUER" --network "$NETWORK" \

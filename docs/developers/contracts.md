@@ -321,7 +321,7 @@ Lets anyone trying the demo get test USDC without a server holding the issuer ke
 
 | Function | Parameters | Returns | Auth |
 | --- | --- | --- | --- |
-| `initialize` | `admin, token, amount, cooldown` | `()` | once |
+| `initialize` | `admin, token, amount, cooldown, daily_cap` | `()` | once |
 | `drip` | `to` | `i128` | `to` |
 | `set_drip` | `admin, amount, cooldown` | `()` | `admin` |
 | `release_token_admin` | `admin, new_admin` | `()` | `admin` |
@@ -329,6 +329,8 @@ Lets anyone trying the demo get test USDC without a server holding the issuer ke
 | `next_drip_at` | `to` | `u64` (0 if allowed now) | view |
 
 `drip` requires the recipient's signature, so one wallet cannot drain the faucet into addresses it does not control, and each address may drip once per `cooldown`. A classic account needs a trustline for the token first; the token reports a missing one as its error `#13`.
+
+`initialize` sets a `daily_cap` — the total base units the faucet may mint per UTC day across every address combined. The counter resets at each day boundary, and drips beyond it are rejected with `DailyCapReached`.
 
 On testnet the faucet drips 50 USDC once a day: [`CCB25WG7DQ2CSNXPTOHZO2PDZ324FQPZLH3LSNCCLWYM3FEH52GEXC47`](https://stellar.expert/explorer/testnet/contract/CCB25WG7DQ2CSNXPTOHZO2PDZ324FQPZLH3LSNCCLWYM3FEH52GEXC47).
 
@@ -339,6 +341,7 @@ On testnet the faucet drips 50 USDC once a day: [`CCB25WG7DQ2CSNXPTOHZO2PDZ324FQ
 | 3 | `NotAuthorized` |
 | 4 | `InvalidAmount` |
 | 5 | `CoolingDown` |
+| 6 | `DailyCapReached` |
 
 ---
 

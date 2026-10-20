@@ -238,11 +238,38 @@
                           },
                           {
                             "key": {
+                              "symbol": "daily_cap"
+                            },
+                            "val": {
+                              "i128": "1000000000"
+                            }
+                          },
+                          {
+                            "key": {
                               "symbol": "token"
                             },
                             "val": {
                               "address": "CBUSYNQKASUYFWYC3M2GUEDMX4AIVWPALDBYJPNK6554BREHTGZ2IUNF"
                             }
+                          }
+                        ]
+                      }
+                    },
+                    {
+                      "key": {
+                        "vec": [
+                          {
+                            "symbol": "DailyCap"
+                          }
+                        ]
+                      },
+                      "val": {
+                        "vec": [
+                          {
+                            "u64": "19676"
+                          },
+                          {
+                            "i128": "500000000"
                           }
                         ]
                       }
