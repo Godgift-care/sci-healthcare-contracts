@@ -111,6 +111,13 @@ pub enum VoucherError {
     AttestationCapReached = 19,
     /// The attestation cap must be at least 1.
     InvalidAttestationCap = 20,
+    /// The contract holds less of the settlement token than this voucher
+    /// escrows. Happens only if the token issuer clawed escrowed funds back.
+    EscrowShortfall = 21,
+    /// The token refused the payment, typically because the issuer froze
+    /// (deauthorized) the escrow or the recipient. Nothing moved; the voucher
+    /// is unchanged and the call can be retried once the freeze is lifted.
+    TokenTransferFailed = 22,
 }
 
 /// Maps the shared helpers' failures onto this contract's error numbers, so
