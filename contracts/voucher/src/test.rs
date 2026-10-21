@@ -123,6 +123,77 @@ fn fund(f: &Fixture) -> u64 {
     )
 }
 
+/// Asserts the reported open escrow and the contract's real token balance are
+/// both `expected`: the two drifting apart is the bug `escrow_summary` exists
+/// to expose.
+fn assert_escrow(f: &Fixture, expected: i128) {
+    let (open_escrow, token_balance) = f.voucher.escrow_summary();
+    assert_eq!(open_escrow, expected, "open_escrow is wrong");
+    assert_eq!(token_balance, expected, "token balance is wrong");
+}
+
+// ----- escrow summary -----
+
+#[test]
+fn escrow_summary_tracks_the_settlement_lifecycle() {
+    let f = setup();
+    assert_escrow(&f, 0);
+
+    let id = fund(&f);
+    assert_escrow(&f, CONSULT_PRICE);
+
+    f.voucher.claim(&f.provider, &id);
+    assert_escrow(&f, CONSULT_PRICE);
+
+    f.voucher.attest(&f.attester, &id);
+    assert_escrow(&f, CONSULT_PRICE);
+
+    advance(&f.env, DISPUTE_WINDOW + 1);
+    f.voucher.settle(&id);
+    assert_escrow(&f, 0);
+}
+
+#[test]
+fn escrow_summary_tracks_a_refund() {
+    let f = setup();
+    let id = fund(&f);
+    assert_escrow(&f, CONSULT_PRICE);
+
+    advance(&f.env, 31 * 24 * 60 * 60);
+    f.voucher.refund(&id);
+    assert_escrow(&f, 0);
+}
+
+#[test]
+fn escrow_summary_tracks_each_voucher_and_dispute_resolution() {
+    let f = setup();
+    let first = fund(&f);
+    let second = fund(&f);
+    assert_escrow(&f, 2 * CONSULT_PRICE);
+
+    // Settle the first voucher; the second keeps its share in escrow.
+    f.voucher.claim(&f.provider, &first);
+    f.voucher.attest(&f.attester, &first);
+    advance(&f.env, DISPUTE_WINDOW + 1);
+    f.voucher.settle(&first);
+    assert_escrow(&f, CONSULT_PRICE);
+
+    // Dispute and refund the second; escrow is empty again.
+    f.voucher.claim(&f.provider, &second);
+    f.voucher.dispute(&f.funder, &second, &1u32);
+    assert_escrow(&f, CONSULT_PRICE);
+    f.voucher.resolve_dispute(&f.admin, &second, &true);
+    assert_escrow(&f, 0);
+
+    // The other outcome pays the provider and clears escrow as well.
+    let third = fund(&f);
+    assert_escrow(&f, CONSULT_PRICE);
+    f.voucher.claim(&f.provider, &third);
+    f.voucher.dispute(&f.funder, &third, &1u32);
+    f.voucher.resolve_dispute(&f.admin, &third, &false);
+    assert_escrow(&f, 0);
+}
+
 // ----- funding -----
 
 #[test]
@@ -1606,6 +1677,10 @@ const AUTH_MATRIX: &[AuthCase] = &[
         auth: Auth::Free("none (view)"),
     },
     AuthCase {
+        function: "escrow_summary",
+        auth: Auth::Free("none (view)"),
+    },
+    AuthCase {
         function: "version",
         auth: Auth::Free("none (view)"),
     },
@@ -1715,6 +1790,9 @@ fn run_case(f: &AuthFixture, function: &str) -> std::vec::Vec<Address> {
         }
         "quote" => {
             voucher.quote(&CONSULT_PRICE);
+        }
+        "escrow_summary" => {
+            voucher.escrow_summary();
         }
         "version" => {
             voucher.version();

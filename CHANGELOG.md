@@ -3,6 +3,10 @@
 ## Unreleased
 
 ### Added
+- **voucher:** `escrow_summary()` returns `(open_escrow, token_balance)`, a read-only solvency check anyone can run. `open_escrow` is a running instance-storage total, increased by `create_voucher` and decreased by `settle`, `refund` and both outcomes of `resolve_dispute`; `token_balance` is the contract's real token balance. Lifecycle tests assert the two stay equal after every operation, so an accounting bug is caught rather than hidden. Closes #132.
+- **faucet:** a per-address lifetime cap. `FaucetConfig` and `initialize` gain `lifetime_cap`: the total base units one address may ever receive, with `0` meaning unlimited. A persistent per-address counter is TTL-extended on every read and write, and a drip past the cap is rejected with the new `LifetimeCapReached` (#8) even on a new UTC day. Closes #131.
+- **docs:** a [testing guide](CONTRIBUTING.md#testing) covering fixtures for the registry, receipt book and token, time travel with `timestamp` and `sequence_number`, asserting `env.auths()`, decoding events and pinning typed errors with the generated `try_*` methods. The same section is in [the docs copy](docs/developers/contributing.md#testing). Closes #130.
+- **docs:** a Mermaid sequence diagram of the claim → attest → dispute → resolution flow in [How a voucher works](docs/protocol/lifecycle.md#the-dispute-sequence), including the no-dispute settlement path and the claim-grace refund when no attestation arrives. Closes #113.
 - **test:** every error variant in `VoucherError`, `RegistryError`, `ReceiptError` and `FaucetError` now has a dedicated test that triggers it, satisfying the requirement that all error codes are reachable and tested. Closes #109.
 - **ci:** `unwrap()` and `expect()` are now denied in contract code (outside tests) via `#![deny(clippy::unwrap_used, clippy::expect_used)]` gated to non-test builds. Existing uses were replaced with proper error returns. CI fails on any new unwrap in contract code. Closes #110.
 - **ci:** a `reproducible-build` job builds the contracts twice in clean directories and compares `SHA256SUMS`; CI fails if the two builds differ. Closes #111.
@@ -43,6 +47,7 @@
 - **voucher:** a daily attestation cap per attester. `attest` counts each attester's attestations per UTC day in temporary storage keyed by `(attester, day)` and rejects any beyond the cap with `AttestationCapReached` (#19); the count resets at midnight UTC. The cap defaults to `DEFAULT_MAX_ATTESTATIONS_PER_DAY` (100) and the admin changes it with `set_attestation_cap(admin, cap)` (`InvalidAttestationCap`, #20, for 0), which emits `attestation_cap_changed { admin, cap }`. `get_attestation_cap` and `attestations_left(attester)` are views. A stolen attester key can now confirm at most one day's cap before the admin removes it. Closes #100.
 
 ### Changed
+- **faucet:** `initialize` now takes a sixth argument, `lifetime_cap`, and `FaucetConfig` carries it. Existing deployments must pass `0` to keep today's unlimited behaviour; `scripts/deploy-faucet.sh` defaults `LIFETIME_CAP` to `0` and passes it through. No event layout changed.
 - **receipt:** `set_minter(admin, minter)` is replaced by `propose_minter` / `accept_minter` (see Added). `scripts/deploy.sh` now initialises the receipt book with the voucher contract as minter directly, because both instances are deployed before either is initialised; later changes go through the two-step handover.
 - **voucher:** `quote` and `settle` are covered by a lifecycle test for a range of amounts, including the rounding cases and the largest fundable amount, so a quote shown before signing is proven to match what settlement pays. (#108)
 - **voucher:** `voucher_attested` carries `remaining_today`, appended after the existing fields: the attestations that attester has left today. Topics are unchanged and the data map is keyed by name, so decoders that read by field name pick it up without a breaking change. (#100)
@@ -54,7 +59,7 @@
 - **cargo:** the workspace path dependencies carry a version, so `cargo deny` does not read them as wildcard version requirements.
 - **voucher:** `voucher_claimed`, `voucher_attested`, `voucher_disputed`, `voucher_settled` and `voucher_refunded` now carry `service_code` and `amount` in their data, appended after the fields each event already had. Only `voucher_created` used to say what the voucher was for, so an indexer or wallet reading a single lifecycle event had to load the voucher to show what was paid for. `voucher_refunded` already carried `amount`; it gains `service_code` only. Topics are unchanged and the data map is keyed by name, so the indexer in `sci-healthcare-backend` decodes the new layout without a breaking change (its matching decoder change is linked from the pull request). Covered by five event snapshot tests in `contracts/voucher/src/test.rs` that read the decoded XDR event and the regenerated `test_snapshots`.
 
-Tests: 178 (was 135).
+Tests: 193 (was 186).
 
 ## 0.2.0 — 2026-10-09
 

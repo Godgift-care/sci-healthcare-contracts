@@ -60,9 +60,9 @@ pub use interfaces::{ReceiptClient, RegistryClient};
 pub use types::{Config, DataKey, Voucher, VoucherError, VoucherStatus};
 
 use storage::{
-    bump_next_id, extend_instance, has_config, peek_next_id, read_attestation_cap,
-    read_attestations, read_config, read_voucher, write_attestation_cap, write_attestations,
-    write_config, write_voucher,
+    bump_next_id, decrease_open_escrow, extend_instance, has_config, increase_open_escrow,
+    peek_next_id, read_attestation_cap, read_attestations, read_config, read_open_escrow,
+    read_voucher, write_attestation_cap, write_attestations, write_config, write_voucher,
 };
 
 const BPS_DENOMINATOR: i128 = 10_000;
@@ -178,6 +178,7 @@ impl VoucherEscrow {
         let escrow = env.current_contract_address();
         let token_client = token::Client::new(&env, &config.token);
         token_client.transfer(&funder, &escrow, &amount);
+        increase_open_escrow(&env, amount)?;
 
         let id = bump_next_id(&env);
         let voucher = Voucher {
@@ -386,7 +387,7 @@ impl VoucherEscrow {
             return Err(VoucherError::NotYetExpired);
         }
 
-        Self::pay_back(&env, &config, &mut voucher);
+        Self::pay_back(&env, &config, &mut voucher)?;
         Ok(())
     }
 
@@ -418,7 +419,7 @@ impl VoucherEscrow {
         .publish(&env);
 
         if refund_funder {
-            Self::pay_back(&env, &config, &mut voucher);
+            Self::pay_back(&env, &config, &mut voucher)?;
         } else {
             Self::pay_out(&env, &config, &mut voucher)?;
         }
@@ -515,6 +516,23 @@ impl VoucherEscrow {
         Ok((fee, amount - fee))
     }
 
+    /// Read-only solvency check: `(open_escrow, token_balance)`.
+    ///
+    /// `open_escrow` is the running total of amounts belonging to vouchers
+    /// that have been funded and not yet settled or refunded. `token_balance`
+    /// is the contract's actual balance of the settlement token. The two are
+    /// equal when the accounting is correct; anything else is a bug or tokens
+    /// sent to the contract outside a voucher.
+    ///
+    /// No authorisation: anyone may run the check.
+    pub fn escrow_summary(env: Env) -> Result<(i128, i128), VoucherError> {
+        let config = read_config(&env)?;
+        let open_escrow = read_open_escrow(&env);
+        let token_balance =
+            token::Client::new(&env, &config.token).balance(&env.current_contract_address());
+        Ok((open_escrow, token_balance))
+    }
+
     /// Crate version this contract was built from, e.g. `"0.2.0"`.
     ///
     /// Lets integrators and the indexer tell deployments apart without
@@ -558,6 +576,7 @@ impl VoucherEscrow {
         if fee > 0 {
             token_client.transfer(&escrow, &config.fee_account, &fee);
         }
+        decrease_open_escrow(env, voucher.amount)?;
 
         voucher.status = VoucherStatus::Settled;
         write_voucher(env, voucher);
@@ -585,12 +604,13 @@ impl VoucherEscrow {
 
     /// Returns the full escrowed amount to the funder. No fee is taken on
     /// care that never happened.
-    fn pay_back(env: &Env, config: &Config, voucher: &mut Voucher) {
+    fn pay_back(env: &Env, config: &Config, voucher: &mut Voucher) -> Result<(), VoucherError> {
         token::Client::new(env, &config.token).transfer(
             &env.current_contract_address(),
             &voucher.funder,
             &voucher.amount,
         );
+        decrease_open_escrow(env, voucher.amount)?;
 
         voucher.status = VoucherStatus::Refunded;
         write_voucher(env, voucher);
@@ -602,5 +622,6 @@ impl VoucherEscrow {
             service_code: voucher.service_code,
         }
         .publish(env);
+        Ok(())
     }
 }
