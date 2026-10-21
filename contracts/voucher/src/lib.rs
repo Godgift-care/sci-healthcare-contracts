@@ -1,4 +1,9 @@
 #![no_std]
+// A panic aborts the whole invocation with an opaque host error. Contract
+// code must return a typed error instead, so both are denied outside tests.
+// Tests keep them for brevity: they are fail-fast assertions, not contract
+// behaviour.
+#![cfg_attr(not(test), deny(clippy::unwrap_used, clippy::expect_used))]
 
 //! # SCI Healthcare — Care Vouchers
 //!

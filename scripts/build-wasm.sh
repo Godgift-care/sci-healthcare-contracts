@@ -52,11 +52,13 @@ fi
 # toolchain has unpacked is remapped to the same fixed prefix.
 CARGO_HOME_DIR="${CARGO_HOME:-$HOME/.cargo}"
 REMAP=""
-for dir in "$CARGO_HOME_DIR"/registry/src/*/; do
-  [ -d "$dir" ] || continue
-  REMAP="$REMAP --remap-path-prefix=${dir%/}=cargo-registry"
-done
-[ -n "$REMAP" ] || printf 'warning: no cargo registry found under %s; the build may embed local paths.\n' "$CARGO_HOME_DIR" >&2
+# Use a fixed remapping for the entire cargo home to ensure reproducibility.
+# The cargo home contains registry/index and registry/cache which may have
+# non-deterministic timestamps. We remap the entire cargo home to a fixed prefix.
+if [ -d "$CARGO_HOME_DIR" ]; then
+  REMAP="--remap-path-prefix=$CARGO_HOME_DIR=cargo-home"
+fi
+[ -n "$REMAP" ] || printf 'warning: no cargo home found under %s; the build may embed local paths.\n' "$CARGO_HOME_DIR" >&2
 
 say "Building contracts ($TARGET, release profile)"
 (

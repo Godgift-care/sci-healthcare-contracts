@@ -1560,3 +1560,46 @@ fn registry_reads_restore_a_lapsed_entry() {
     // And it is still billable: a voucher for this provider can be funded.
     assert!(f.client.is_active_provider(&provider));
 }
+
+#[test]
+fn not_initialized_errors() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let a = Address::generate(&env);
+    let addr = env.register(Registry, ());
+    let client = RegistryClient::new(&env, &addr);
+
+    // Calls that read the admin before initialize should return NotInitialized.
+    let err = client.try_get_admin().err().unwrap().unwrap();
+    assert_eq!(err, RegistryError::NotInitialized);
+    // get_provider returns ProviderNotFound because the provider doesn't exist,
+    // not because the contract isn't initialized.
+    let err = client.try_get_provider(&a).err().unwrap().unwrap();
+    assert_eq!(err, RegistryError::ProviderNotFound);
+}
+
+#[test]
+fn provider_not_found() {
+    let f = setup();
+    let unknown = Address::generate(&f.env);
+    let err = f.client.try_get_provider(&unknown).err().unwrap().unwrap();
+    assert_eq!(err, RegistryError::ProviderNotFound);
+    // upsert_service returns ProviderNotFound when the provider doesn't exist,
+    // because it calls read_provider first.
+    let err = f
+        .client
+        .try_upsert_service(&unknown, &1u32, &String::from_str(&f.env, "X"), &100i128)
+        .err()
+        .unwrap()
+        .unwrap();
+    assert_eq!(err, RegistryError::ProviderNotFound);
+    // set_service_available calls read_service directly (not read_provider),
+    // so it returns ServiceNotFound.
+    let err = f
+        .client
+        .try_set_service_available(&unknown, &1u32, &true)
+        .err()
+        .unwrap()
+        .unwrap();
+    assert_eq!(err, RegistryError::ServiceNotFound);
+}

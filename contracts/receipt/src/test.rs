@@ -1172,3 +1172,19 @@ fn provider_index_extends_its_own_entries() {
     assert_eq!(provider_count_ttl(&f, &provider), NINETY_DAYS);
     assert_eq!(provider_entry_ttl(&f, &provider, 0), NINETY_DAYS);
 }
+
+#[test]
+fn not_initialized_errors() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let _a = Address::generate(&env);
+    let _patient = BytesN::from_array(&env, &[1u8; 32]);
+    let addr = env.register(ReceiptBook, ());
+    let client = ReceiptBookClient::new(&env, &addr);
+
+    // Calls that read the admin/minter before initialize should return NotInitialized.
+    let err = client.try_get_admin().err().unwrap().unwrap();
+    assert_eq!(err, ReceiptError::NotInitialized);
+    let err = client.try_get_minter().err().unwrap().unwrap();
+    assert_eq!(err, ReceiptError::NotInitialized);
+}

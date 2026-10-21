@@ -335,3 +335,22 @@ fn set_drip_emits_drip_changed_event() {
     assert_eq!(last_event_i128(&f.env, contract, "amount"), 10);
     assert_eq!(last_event_u64(&f.env, contract, "cooldown"), 0);
 }
+
+#[test]
+fn not_initialized_errors() {
+    let env = Env::default();
+    env.mock_all_auths();
+    env.ledger().with_mut(|li| li.timestamp = START_TIME);
+    let a = Address::generate(&env);
+    let issuer = Address::generate(&env);
+    let asset = env.register_stellar_asset_contract_v2(issuer);
+    let _token_addr = asset.address();
+    let faucet_addr = env.register(Faucet, ());
+    let faucet = FaucetClient::new(&env, &faucet_addr);
+
+    // Any call before initialize should return NotInitialized.
+    let err = faucet.try_get_config().err().unwrap().unwrap();
+    assert_eq!(err, FaucetError::NotInitialized);
+    let err = faucet.try_drip(&a).err().unwrap().unwrap();
+    assert_eq!(err, FaucetError::NotInitialized);
+}
