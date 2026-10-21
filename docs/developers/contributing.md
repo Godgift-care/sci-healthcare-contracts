@@ -49,6 +49,123 @@ These are the rules a review will fail you on.
 - **Every new function needs tests for the failure paths**, not just the happy
   one. Look at how existing tests assert specific error variants.
 
+## Testing
+
+`cargo test` runs every contract's tests. The tests live in each contract's
+`src/test.rs` and use the Soroban test environment, so a failure names the
+contract call and the assertion rather than needing a running network.
+
+### Fixtures
+
+Each contract has a `setup()` that builds the same state a deployment has.
+The voucher fixture registers the token, registry, receipt book and voucher,
+then wires them together in the order `scripts/deploy.sh` uses:
+
+```rust
+let env = Env::default();
+env.mock_all_auths();
+env.ledger().with_mut(|li| li.timestamp = START_TIME);
+
+let issuer = Address::generate(&env);
+let sac = env.register_stellar_asset_contract_v2(issuer);
+let token_addr = sac.address();
+
+let registry_addr = env.register(Registry, ());
+let registry = RegistryClient::new(&env, &registry_addr);
+registry.initialize(&admin);
+
+let voucher_addr = env.register(VoucherEscrow, ());
+let voucher = VoucherEscrowClient::new(&env, &voucher_addr);
+
+let receipt_addr = env.register(ReceiptBook, ());
+let receipts = ReceiptBookClient::new(&env, &receipt_addr);
+receipts.initialize(&admin, &voucher_addr);
+
+voucher.initialize(
+    &admin,
+    &registry_addr,
+    &receipt_addr,
+    &token_addr,
+    &DISPUTE_WINDOW,
+    &FEE_BPS,
+    &fee_account,
+);
+```
+
+Keep generated addresses in the fixture and reuse them. Address generation
+depends on call order, so adding an `Address::generate` in `setup()` changes
+every snapshot that test writes; the authorisation-matrix tests deliberately
+generate their extra nominee in their own fixture for this reason.
+
+### Time travel
+
+`timestamp` is ledger time in seconds; `sequence_number` is the ledger count
+used by TTL tests. Move them independently, and only as far as the test needs:
+
+```rust
+// Advance three days: a dispute window closes, but the voucher TTL does not.
+env.ledger().with_mut(|li| {
+    li.timestamp += 3 * 24 * 60 * 60;
+});
+
+// Advance sixty days of ledgers to exercise TTL extension.
+env.ledger().with_mut(|li| {
+    li.sequence_number += 60 * 17_280;
+    li.timestamp += 60 * 24 * 60 * 60;
+});
+```
+
+### Authentication
+
+`env.mock_all_auths()` makes every `require_auth()` succeed, which is useful
+for setting up state but hides a missing `require_auth()`. Assert what the
+last invocation actually demanded:
+
+```rust
+let auths = env.auths();
+assert_eq!(auths.len(), 1);
+assert_eq!(auths[0].0, funder);
+```
+
+The `authorisation_matrix_matches_every_public_function` test is built on
+this: one table row per public function, with the exact signer it must demand.
+A missing `require_auth()` lets anyone move another party's money; an extra
+one turns a permissionless `settle` into a call that needs a signature nobody
+should have to collect.
+
+### Events
+
+Read the events the invocation published, filtered to the contract:
+
+```rust
+use soroban_sdk::testutils::Events as _;
+
+let events = env.events().all().filter_by_contract(&voucher.address);
+assert_eq!(events.events().len(), 1);
+```
+
+Event payloads are part of the public interface. The `*_event_snapshot` tests
+decode the XDR and assert the exact topic list and data map, so renaming a
+field or moving one between topic and data fails instead of silently breaking
+the indexer. Regenerate the files under `contracts/*/test_snapshots/` only
+when the change is intentional, and update `TOPIC_FIELDS` in
+`sci-healthcare-backend/src/stellar/events.ts` in the same change set.
+
+### Errors
+
+Every fallible entry point has a generated `try_` method. It returns the
+host result and then the contract's typed error, so two unwraps reach the
+variant:
+
+```rust
+let err = voucher.try_refund(&id).err().unwrap().unwrap();
+assert_eq!(err, VoucherError::NotYetExpired);
+```
+
+Prefer this to `#[should_panic]`: it pins the error number callers decode and
+keeps the failure path readable. Test each new error variant, including the
+input validation, authorisation and state checks, not only the happy path.
+
 ## Commits
 
 Conventional commits, one logical change per commit:

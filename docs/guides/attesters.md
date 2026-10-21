@@ -45,6 +45,6 @@ Work through the [attester evidence checklist and code of conduct](attester-chec
 
 ## If you are unsure
 
-Do not attest. An unattested voucher is not lost — it stays escrowed and refunds to the funder at expiry. The failure mode of not attesting is a delay. The failure mode of wrongly attesting is a patient's money going to a clinic that did nothing, with no way to get it back after 72 hours.
+Do not attest. An unattested voucher is not lost — it stays escrowed and refunds to the funder at expiry, or immediately if the clinic is no longer active. The failure mode of not attesting is a delay. The failure mode of wrongly attesting is a patient's money going to a clinic that did nothing, with no way to get it back after 72 hours.
 
 If you believe a clinic is claiming for care it did not deliver, tell an administrator so it can be suspended.

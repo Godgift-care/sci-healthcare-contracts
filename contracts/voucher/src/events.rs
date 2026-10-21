@@ -103,7 +103,16 @@ pub struct DisputeResolved {
     #[topic]
     pub admin: Address,
     pub voucher_id: u64,
+    /// `true` only when the funder received the whole voucher back.
     pub refunded_funder: bool,
+    /// Appended: the gross amount awarded to the clinic, before the fee.
+    /// Zero on a full refund, the whole voucher on a full payout, and
+    /// anything between for `resolve_split`.
+    pub to_provider: i128,
+    /// Appended: the protocol fee deducted from `to_provider`.
+    pub fee: i128,
+    /// Appended: the remainder returned to the funder.
+    pub to_funder: i128,
 }
 
 #[contractevent]

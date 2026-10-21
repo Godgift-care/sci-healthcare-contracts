@@ -15,7 +15,7 @@ After the dispute window closes. Once an attester confirms delivery, the window 
 
 ## What if the patient never comes?
 
-If the voucher is never claimed, it expires and you cannot be paid on it — the funder can refund the full amount with no fee. If you claimed it but no attester ever confirms the visit, the money still goes back to the funder seven days after expiry (the claim grace period); you are not entitled to payment without an attestation.
+If the voucher is never claimed, it expires and you cannot be paid on it — the funder can refund the full amount with no fee. If the clinic is suspended before the voucher is claimed, the funder can refund immediately rather than waiting for expiry. If you claimed it but no attester ever confirms the visit, the money still goes back to the funder seven days after expiry (the claim grace period); you are not entitled to payment without an attestation.
 
 *Sources: [How a voucher works — Refunded](protocol/lifecycle.md#refunded), [Funding care — if something goes wrong](guides/funders.md#if-something-goes-wrong)*
 
@@ -33,7 +33,7 @@ The protocol fee is 1% (100 basis points), taken once at settlement. It is cappe
 
 ## Can I claim after the voucher expires?
 
-No. A voucher cannot be claimed after its `expires_at`, and a clinic that was suspended after the voucher was funded cannot claim it at all. If the patient turns up after expiry, the funder refunds the money instead.
+No. A voucher cannot be claimed after its `expires_at`, and a clinic that was suspended after the voucher was funded cannot claim it at all. If the patient turns up after expiry, the funder refunds the money instead. If the clinic is suspended before the voucher is claimed, the funder can refund immediately.
 
 *Sources: [How a voucher works — Claimed](protocol/lifecycle.md#claimed), [Contract reference — claim](developers/contracts.md#claim)*
 

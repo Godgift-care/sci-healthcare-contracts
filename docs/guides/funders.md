@@ -54,7 +54,7 @@ Watch it under **My vouchers**.
 
 ## If something goes wrong
 
-**The patient never went.** Wait for the expiry date, then press **Refund me**. You get the full amount back, no fee. Anyone can trigger this, so you are not dependent on us.
+**The patient never went.** Wait for the expiry date, then press **Refund me**. You get the full amount back, no fee. Anyone can trigger this, so you are not dependent on us. If the clinic is suspended before the voucher is claimed, you can refund immediately instead of waiting for expiry.
 
 **The clinic claimed, but nobody ever confirmed the visit.** You can dispute straight away. If you do nothing, the voucher becomes refundable seven days after its expiry date and **Refund me** appears again.
 

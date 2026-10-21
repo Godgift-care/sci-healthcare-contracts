@@ -68,7 +68,7 @@ The USDC held by the voucher contract between funding and settlement or refund. 
 Used in: [How a voucher works — Funded](protocol/lifecycle.md#funded), [Trust model](protocol/trust.md).
 
 ### Expiry (`expires_at`)
-The deadline after which a voucher can no longer be claimed. An unclaimed expired voucher can be refunded in full by anyone; a claimed but unattested one becomes refundable seven days after expiry (the claim grace).
+The deadline after which a voucher can no longer be claimed. An unclaimed expired voucher can be refunded in full by anyone; if the clinic is no longer active, it can be refunded before expiry. A claimed but unattested one becomes refundable seven days after expiry (the claim grace).
 
 Used in: [How a voucher works — Claimed](protocol/lifecycle.md#claimed), [Contract reference — create_voucher](developers/contracts.md#create_voucher).
 

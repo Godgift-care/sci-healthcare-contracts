@@ -6,12 +6,13 @@ use soroban_sdk::{contracterror, contracttype, Address, BytesN};
 ///                  claim            attest          settle
 ///   Funded ──────────────> Claimed ────────> Attested ──────> Settled
 ///     │                       │                  │
-///     │ refund (past expiry)  │ dispute          │ dispute
-///     ▼                       ▼                  ▼
-///  Refunded  <──────────  Disputed  ────────────────> (resolve)
-///     ▲                       │
-///     └───────────────────────┘
-///       refund (claimed, never attested, past expiry + claim grace)
+///     │ refund                │ dispute          │ dispute
+///     │ (expired or           ▼                  ▼
+///     │  clinic inactive)  Disputed <────────────┘
+///     ▼                       │
+///  Refunded  <──── resolve ───┴──── resolve ────> Settled
+///     ▲
+///     └── refund (claimed, never attested, past expiry + claim grace)
 /// ```
 ///
 /// `Settled` and `Refunded` are terminal.
@@ -80,6 +81,10 @@ pub enum DataKey {
     /// Attestations made by an attester on a UTC day (`timestamp / 86400`).
     /// Temporary storage: it only has to outlive the day it counts.
     Attestations(Address, u64),
+    /// Total amount held in escrow by vouchers that are not yet settled or
+    /// refunded. Kept in instance storage and updated on every movement of
+    /// funds, so `escrow_summary` can report it without scanning vouchers.
+    OpenEscrow,
 }
 
 #[contracterror]

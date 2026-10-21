@@ -58,6 +58,37 @@ pub(crate) fn write_voucher(env: &Env, voucher: &Voucher) {
     extend_instance(env);
 }
 
+/// Total amount currently held in escrow; 0 if nothing has ever been funded.
+pub(crate) fn read_open_escrow(env: &Env) -> i128 {
+    env.storage()
+        .instance()
+        .get(&DataKey::OpenEscrow)
+        .unwrap_or(0)
+}
+
+fn write_open_escrow(env: &Env, total: i128) {
+    env.storage().instance().set(&DataKey::OpenEscrow, &total);
+    extend_instance(env);
+}
+
+/// Adds newly escrowed funds to the running total.
+pub(crate) fn increase_open_escrow(env: &Env, amount: i128) -> Result<(), VoucherError> {
+    let total = read_open_escrow(env)
+        .checked_add(amount)
+        .ok_or(VoucherError::MathOverflow)?;
+    write_open_escrow(env, total);
+    Ok(())
+}
+
+/// Removes funds that have left escrow, either to the provider or the funder.
+pub(crate) fn decrease_open_escrow(env: &Env, amount: i128) -> Result<(), VoucherError> {
+    let total = read_open_escrow(env)
+        .checked_sub(amount)
+        .ok_or(VoucherError::MathOverflow)?;
+    write_open_escrow(env, total);
+    Ok(())
+}
+
 pub(crate) fn read_attestation_cap(env: &Env) -> u32 {
     env.storage()
         .instance()

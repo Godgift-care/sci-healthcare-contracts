@@ -11,8 +11,9 @@
 //! settlement token, without a server holding the issuer key.
 //!
 //! The token's Stellar Asset Contract names this contract as its admin, so
-//! `drip` can mint. Each address may drip once per cooldown, and the amount
-//! is fixed by the faucet admin. The admin can hand token administration
+//! `drip` can mint. Each address may drip once per cooldown, the amount is
+//! fixed by the faucet admin, and an optional lifetime cap stops one address
+//! draining the faucet slowly forever. The admin can hand token administration
 //! back at any time with `release_token_admin`.
 //!
 //! **Never deploy this against a real asset.** Admin rights over a real
@@ -31,6 +32,9 @@ const INSTANCE_TTL_EXTEND: u32 = 30 * DAY_IN_LEDGERS;
 /// Drip records only need to outlive the longest sensible cooldown.
 const DRIP_TTL_THRESHOLD: u32 = DAY_IN_LEDGERS;
 const DRIP_TTL_EXTEND: u32 = 7 * DAY_IN_LEDGERS;
+/// Lifetime drip totals are kept for as long as the faucet holds token admin.
+const LIFETIME_TTL_THRESHOLD: u32 = 30 * DAY_IN_LEDGERS;
+const LIFETIME_TTL_EXTEND: u32 = 90 * DAY_IN_LEDGERS;
 /// Seconds in a UTC day: buckets the shared daily-cap counter.
 const SECONDS_PER_DAY: u64 = 24 * 60 * 60;
 
@@ -47,6 +51,9 @@ pub struct FaucetConfig {
     /// Base units the faucet may mint per UTC day, across all addresses
     /// combined. Resets when the day changes.
     pub daily_cap: i128,
+    /// Base units one address may ever receive from the faucet. Zero means
+    /// unlimited; any other value is a hard lifetime cap.
+    pub lifetime_cap: i128,
     /// While true, `drip` is rejected for everyone. Toggled with
     /// `set_paused`; pausing does not give up the token admin role.
     pub paused: bool,
@@ -61,6 +68,8 @@ pub enum DataKey {
     /// (`day`, `minted`) running total for the current UTC day, shared by
     /// every address. Reset when the day changes.
     DailyCap,
+    /// Total base units an address has ever received; never reset.
+    LifetimeDripped(Address),
 }
 
 #[contracterror]
@@ -76,6 +85,8 @@ pub enum FaucetError {
     DailyCapReached = 6,
     /// The faucet is paused; `drip` is rejected until the admin unpauses.
     Paused = 7,
+    /// This address has received its lifetime allowance.
+    LifetimeCapReached = 8,
 }
 
 #[contractevent]
@@ -98,11 +109,13 @@ pub struct Faucet;
 
 #[contractimpl]
 impl Faucet {
-    /// Sets the admin, token, drip amount, cooldown and daily cap. Callable once.
+    /// Sets the admin, token, drip amount, cooldown, daily cap and lifetime
+    /// cap per address. Callable once.
     ///
     /// `daily_cap` is the maximum number of base units the faucet may mint per
     /// UTC day across all addresses combined. The per-address cooldown still
-    /// applies on top of it.
+    /// applies on top of it. `lifetime_cap` is the maximum number of base units
+    /// one address may ever receive; `0` means unlimited.
     pub fn initialize(
         env: Env,
         admin: Address,
@@ -110,11 +123,12 @@ impl Faucet {
         amount: i128,
         cooldown: u64,
         daily_cap: i128,
+        lifetime_cap: i128,
     ) -> Result<(), FaucetError> {
         if env.storage().instance().has(&DataKey::Config) {
             return Err(FaucetError::AlreadyInitialized);
         }
-        if amount <= 0 || daily_cap <= 0 {
+        if amount <= 0 || daily_cap <= 0 || lifetime_cap < 0 {
             return Err(FaucetError::InvalidAmount);
         }
         Self::write_config(
@@ -125,14 +139,16 @@ impl Faucet {
                 amount,
                 cooldown,
                 daily_cap,
+                lifetime_cap,
                 paused: false,
             },
         );
         Ok(())
     }
 
-    /// Mints the drip amount to `to`, at most once per cooldown, and only
-    /// while the shared daily cap has not been reached.
+    /// Mints the drip amount to `to`, at most once per cooldown, while the
+    /// shared daily cap has not been reached and `to` is under its lifetime
+    /// cap (if one is configured).
     ///
     /// `to` must sign, so one wallet cannot drain the faucet on behalf of
     /// many addresses it does not control. A classic account also needs a
@@ -153,6 +169,15 @@ impl Faucet {
             }
         }
 
+        // A lifetime cap is per address and never resets. Zero means the
+        // admin did not set one.
+        let lifetime_dripped = Self::read_lifetime_dripped(&env, &to);
+        if config.lifetime_cap > 0
+            && lifetime_dripped.saturating_add(config.amount) > config.lifetime_cap
+        {
+            return Err(FaucetError::LifetimeCapReached);
+        }
+
         // Daily cap is shared by every address and resets at day boundaries.
         let day = now / SECONDS_PER_DAY;
         let cap_key = DataKey::DailyCap;
@@ -170,6 +195,7 @@ impl Faucet {
         env.storage()
             .temporary()
             .extend_ttl(&key, DRIP_TTL_THRESHOLD, DRIP_TTL_EXTEND);
+        Self::write_lifetime_dripped(&env, &to, lifetime_dripped.saturating_add(config.amount));
         state.1 = state.1.saturating_add(config.amount);
         env.storage().instance().set(&cap_key, &state);
         Self::extend_instance(&env);
@@ -248,6 +274,25 @@ impl Faucet {
     }
 
     // ----- internal -----
+
+    /// Base units `to` has ever received. Extends the persistent entry when
+    /// it exists, so a lifetime total does not lapse while the faucet is live.
+    fn read_lifetime_dripped(env: &Env, to: &Address) -> i128 {
+        let key = DataKey::LifetimeDripped(to.clone());
+        let storage = env.storage().persistent();
+        if !storage.has(&key) {
+            return 0;
+        }
+        storage.extend_ttl(&key, LIFETIME_TTL_THRESHOLD, LIFETIME_TTL_EXTEND);
+        storage.get(&key).unwrap_or(0)
+    }
+
+    fn write_lifetime_dripped(env: &Env, to: &Address, total: i128) {
+        let key = DataKey::LifetimeDripped(to.clone());
+        let storage = env.storage().persistent();
+        storage.set(&key, &total);
+        storage.extend_ttl(&key, LIFETIME_TTL_THRESHOLD, LIFETIME_TTL_EXTEND);
+    }
 
     fn read_config(env: &Env) -> Result<FaucetConfig, FaucetError> {
         env.storage()
