@@ -5,7 +5,7 @@ nav_order: 6
 
 # Funding care for someone
 
-🇫🇷 [Lire ce guide en français](../fr/funders.md)
+🇫🇷 [Lire ce guide en français](../fr/funders.md) · 🇰🇪🇹🇿 [Soma mwongozo huu kwa Kiswahili](../sw/funders.md)
 
 You are paying for a specific treatment at a specific clinic, for yourself or for someone else.
 

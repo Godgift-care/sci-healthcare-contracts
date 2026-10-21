@@ -50,6 +50,12 @@ Out of scope:
 - Missing rate limits on read-only endpoints already behind a rate limiter
 - Testnet-only misconfiguration
 
+## If an incident is underway
+
+The [incident response runbook](docs/developers/incident-response.md) is the
+procedure for a live bug or a compromised key: triage, containment with the
+exact contract calls, admin rotation, communication and the post-mortem.
+
 ## Known trust assumptions
 
 These are design decisions, documented so they are not mistaken for bugs:

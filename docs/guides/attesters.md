@@ -5,7 +5,7 @@ nav_order: 8
 
 # Attesting delivery
 
-🇫🇷 [Lire ce guide en français](../fr/attesters.md)
+🇫🇷 [Lire ce guide en français](../fr/attesters.md) · 🇰🇪🇹🇿 [Soma mwongozo huu kwa Kiswahili](../sw/attesters.md)
 
 An attester confirms that care actually happened. This is the most important role in the protocol and the one carrying the most responsibility.
 
@@ -38,6 +38,10 @@ The point is independence. If the attester's income depends on the clinic being 
 That you are telling the truth. This is the protocol's central trust assumption, documented plainly in the [trust model](../protocol/trust.md).
 
 What it does do: your attestation is signed by your address and recorded on chain permanently. Every voucher you have ever confirmed is public and attributable. There is no anonymous attestation.
+
+## Before you attest
+
+Work through the [attester evidence checklist and code of conduct](attester-checklist.md) every time: what to confirm before you press **Confirm care delivered**, and when you must step aside.
 
 ## If you are unsure
 

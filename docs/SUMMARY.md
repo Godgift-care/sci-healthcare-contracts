@@ -16,6 +16,7 @@
 * [Running a clinic](guides/clinics.md)
 * [Clinic FAQ](guides/clinics-faq.md)
 * [Attesting delivery](guides/attesters.md)
+* [Attester checklist and code of conduct](guides/attester-checklist.md)
 
 ## Developers
 
@@ -24,5 +25,6 @@
 * [Integrating from another app](developers/integration.md)
 * [Using a multisig admin](developers/multisig-admin.md)
 * [Mainnet launch checklist](developers/mainnet-checklist.md)
+* [Incident response runbook](developers/incident-response.md)
 * [API reference](developers/api.md)
 * [Contributing](developers/contributing.md)

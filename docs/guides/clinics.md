@@ -5,6 +5,8 @@ nav_order: 7
 
 # Running a clinic
 
+🇫🇷 [Lire ce guide en français](../fr/clinics.md) · 🇰🇪🇹🇿 [Soma mwongozo huu kwa Kiswahili](../sw/clinics.md)
+
 You are a clinic, pharmacy or lab that wants to be paid through the protocol.
 
 ## Getting verified

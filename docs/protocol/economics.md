@@ -27,6 +27,29 @@ All integer arithmetic. There are no floating point numbers anywhere in this pro
 
 Verified on testnet: a $3.00 voucher settled to exactly `29700000` stroops for the clinic and `300000` for the fee account.
 
+### Settlement examples in stroops
+
+What `quote` returns, and what a settlement pays, at the production fee of 100 bps. USDC on Stellar has 7 decimals, so 1 USDC is `10,000,000` stroops; the contract works in stroops throughout.
+
+| Voucher | Amount (stroops) | Fee (stroops) | Clinic receives (stroops) |
+| --- | --- | --- | --- |
+| 1 USDC | 10,000,000 | 100,000 | 9,900,000 |
+| 3 USDC | 30,000,000 | 300,000 | 29,700,000 |
+| 10 USDC | 100,000,000 | 1,000,000 | 99,000,000 |
+| 100 USDC | 1,000,000,000 | 10,000,000 | 990,000,000 |
+| 1.2345678 USDC | 12,345,678 | 123,456 | 12,222,222 |
+| 0.0000099 USDC | 99 | 0 | 99 |
+
+The last two rows show the truncation: `12,345,678 × 100 / 10,000` is `123,456.78`, and the `.78` stays with the clinic; on a 99-stroop voucher the fee rounds down to nothing. A funder who pays more than the listed price is quoted on what they actually pay.
+
+Both tables on this page are checked against the contract: `settlement_examples_table_matches_quote` and `worked_numbers_table_matches_quote` in `contracts/voucher/src/economics_test.rs` recompute every row with `quote` and fail if a number here is wrong. To check one by hand on a deployment:
+
+```bash
+stellar contract invoke --id "$VOUCHER_CONTRACT_ID" --source-account sci-admin \
+  --network testnet --send=no -- quote --amount 30000000
+# ["300000","29700000"]
+```
+
 ### What is not charged
 
 - **Refunds are free.** An expired or successfully disputed voucher returns the full amount. No fee is taken on care that did not happen.
