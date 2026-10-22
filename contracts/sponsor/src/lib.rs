@@ -34,7 +34,7 @@
 //! its own: the money is only ever spent when the clinic delivers and an
 //! attester confirms it, exactly as for any other voucher. The abuse cases
 //! this design has to answer are written up in
-//! `docs/protocol/sponsorship.md`.
+//! the `sponsor` section of `docs/developers/contracts.md`.
 
 mod events;
 mod interfaces;
@@ -55,7 +55,9 @@ pub use events::{
     AdminChanged, AdminProposed, BudgetDeposited, BudgetWithdrawn, Initialized, MatchCreated,
     MatchRefunded, MatchSettled, RulesSet,
 };
-pub use types::{Config, DataKey, MatchRecord, OpenMatch, Rules, SponsorAccount, SponsorError, Totals};
+pub use types::{
+    Config, DataKey, MatchRecord, OpenMatch, Rules, SponsorAccount, SponsorError, Totals,
+};
 
 use interfaces::{RegistryClient, VoucherClient, VoucherError};
 use storage::{
@@ -200,11 +202,7 @@ impl SponsorDesk {
     /// - `MatchBelowPrice` — the match is worth less than the service, and
     ///   a voucher cannot be funded below the price of the care it pays for.
     /// - `BudgetExhausted` — the sponsor's budget cannot cover the match.
-    pub fn match_voucher(
-        env: Env,
-        sponsor: Address,
-        voucher_id: u64,
-    ) -> Result<u64, SponsorError> {
+    pub fn match_voucher(env: Env, sponsor: Address, voucher_id: u64) -> Result<u64, SponsorError> {
         let config = Self::read_config(&env)?;
         if config.paused {
             return Err(SponsorError::Paused);
@@ -267,14 +265,14 @@ impl SponsorDesk {
         // when it creates the matching voucher, and its answer comes back
         // as a typed error.
         if !rules.eligible_countries.is_empty() {
-            let country = RegistryClient::new(&env, &config.registry)
-                .get_provider_country(&provider);
+            let country =
+                RegistryClient::new(&env, &config.registry).get_provider_country(&provider);
             if !rules.eligible_countries.contains(&country) {
                 return Err(SponsorError::CountryNotEligible);
             }
         }
         if !rules.eligible_service_codes.is_empty()
-            && !rules.eligible_service_codes.contains(&service_code)
+            && !rules.eligible_service_codes.contains(service_code)
         {
             return Err(SponsorError::ServiceNotEligible);
         }
@@ -284,13 +282,7 @@ impl SponsorDesk {
             return Err(SponsorError::MatchTooSmall);
         }
 
-        let available = Self::budget_for(
-            &env,
-            &config,
-            &mut account,
-            &mut totals,
-            match_amount,
-        )?;
+        let available = Self::budget_for(&env, &config, &mut account, &mut totals, match_amount)?;
         if available < match_amount {
             return Err(SponsorError::BudgetExhausted);
         }
@@ -322,12 +314,10 @@ impl SponsorDesk {
         write_match(&env, &record);
         write_original_of(&env, matched_id, voucher_id);
 
-        account
-            .open_matches
-            .push_back(OpenMatch {
-                matched_voucher_id: matched_id,
-                amount: match_amount,
-            });
+        account.open_matches.push_back(OpenMatch {
+            matched_voucher_id: matched_id,
+            amount: match_amount,
+        });
         record_movement(&mut account, &mut totals, 0, match_amount, 0, 0)?;
         write_account(&env, &account);
         write_totals(&env, &totals);
@@ -408,11 +398,7 @@ impl SponsorDesk {
 
     /// Nominates a new admin. The nominee has to accept before the role
     /// moves, so a typo cannot hand it to an address nobody controls.
-    pub fn propose_admin(
-        env: Env,
-        admin: Address,
-        new_admin: Address,
-    ) -> Result<(), SponsorError> {
+    pub fn propose_admin(env: Env, admin: Address, new_admin: Address) -> Result<(), SponsorError> {
         Self::require_admin(&env, &admin)?;
         common::propose_admin(&env, &DataKey::PendingAdmin, &new_admin);
         AdminProposed {
@@ -476,7 +462,10 @@ impl SponsorDesk {
     }
 
     /// The match a voucher received, if any.
-    pub fn get_match(env: Env, original_voucher_id: u64) -> Result<Option<MatchRecord>, SponsorError> {
+    pub fn get_match(
+        env: Env,
+        original_voucher_id: u64,
+    ) -> Result<Option<MatchRecord>, SponsorError> {
         Ok(read_match(&env, original_voucher_id))
     }
 

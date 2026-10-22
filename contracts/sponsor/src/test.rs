@@ -2,7 +2,10 @@
 extern crate std;
 
 use soroban_sdk::{
-    testutils::{Address as _, Events as _, Ledger as _},
+    testutils::{
+        storage::{Instance as _, Persistent as _},
+        Address as _, Events as _, Ledger as _,
+    },
     token, vec, Address, BytesN, Env, String, Vec,
 };
 
@@ -260,7 +263,8 @@ fn rules_outside_what_the_desk_accepts_are_rejected() {
 fn a_match_creates_a_linked_voucher_for_the_same_care() {
     let f = setup();
     f.desk.deposit(&f.sponsor, &BUDGET);
-    f.desk.set_rules(&f.sponsor, &rules(&f.env, ONE_FOR_ONE, CAP));
+    f.desk
+        .set_rules(&f.sponsor, &rules(&f.env, ONE_FOR_ONE, CAP));
 
     let original = fund(&f);
     let matched = f.desk.match_voucher(&f.sponsor, &original);
@@ -292,7 +296,8 @@ fn a_match_creates_a_linked_voucher_for_the_same_care() {
 fn a_match_spends_the_budget_and_not_a_penny_more() {
     let f = setup();
     f.desk.deposit(&f.sponsor, &BUDGET);
-    f.desk.set_rules(&f.sponsor, &rules(&f.env, ONE_FOR_ONE, CAP));
+    f.desk
+        .set_rules(&f.sponsor, &rules(&f.env, ONE_FOR_ONE, CAP));
 
     let original = fund(&f);
     f.desk.match_voucher(&f.sponsor, &original);
@@ -309,7 +314,8 @@ fn the_cap_limits_what_one_voucher_costs() {
     let f = setup();
     f.desk.deposit(&f.sponsor, &BUDGET);
     // Ten times the voucher's amount, but only 4_000_000 is allowed.
-    f.desk.set_rules(&f.sponsor, &rules(&f.env, 100_000, 4_000_000));
+    f.desk
+        .set_rules(&f.sponsor, &rules(&f.env, 100_000, 4_000_000));
 
     let original = fund(&f);
     let matched = f.desk.match_voucher(&f.sponsor, &original);
@@ -350,7 +356,8 @@ fn a_match_below_the_service_price_is_refused() {
 fn a_sponsor_cannot_match_its_own_voucher() {
     let f = setup();
     f.desk.deposit(&f.sponsor, &BUDGET);
-    f.desk.set_rules(&f.sponsor, &rules(&f.env, ONE_FOR_ONE, CAP));
+    f.desk
+        .set_rules(&f.sponsor, &rules(&f.env, ONE_FOR_ONE, CAP));
 
     let own = f.voucher.create_voucher(
         &f.sponsor,
@@ -370,7 +377,8 @@ fn a_sponsor_cannot_match_its_own_voucher() {
 fn a_voucher_can_only_be_matched_once() {
     let f = setup();
     f.desk.deposit(&f.sponsor, &BUDGET);
-    f.desk.set_rules(&f.sponsor, &rules(&f.env, ONE_FOR_ONE, CAP));
+    f.desk
+        .set_rules(&f.sponsor, &rules(&f.env, ONE_FOR_ONE, CAP));
 
     let original = fund(&f);
     f.desk.match_voucher(&f.sponsor, &original);
@@ -384,7 +392,8 @@ fn a_voucher_can_only_be_matched_once() {
 fn a_voucher_that_does_not_exist_cannot_be_matched() {
     let f = setup();
     f.desk.deposit(&f.sponsor, &BUDGET);
-    f.desk.set_rules(&f.sponsor, &rules(&f.env, ONE_FOR_ONE, CAP));
+    f.desk
+        .set_rules(&f.sponsor, &rules(&f.env, ONE_FOR_ONE, CAP));
 
     assert_eq!(
         f.desk.try_match_voucher(&f.sponsor, &999),
@@ -396,7 +405,8 @@ fn a_voucher_that_does_not_exist_cannot_be_matched() {
 fn a_claimed_voucher_cannot_be_matched() {
     let f = setup();
     f.desk.deposit(&f.sponsor, &BUDGET);
-    f.desk.set_rules(&f.sponsor, &rules(&f.env, ONE_FOR_ONE, CAP));
+    f.desk
+        .set_rules(&f.sponsor, &rules(&f.env, ONE_FOR_ONE, CAP));
 
     let original = fund(&f);
     f.voucher.claim(&f.provider, &original);
@@ -410,7 +420,8 @@ fn a_claimed_voucher_cannot_be_matched() {
 fn an_expired_voucher_cannot_be_matched() {
     let f = setup();
     f.desk.deposit(&f.sponsor, &BUDGET);
-    f.desk.set_rules(&f.sponsor, &rules(&f.env, ONE_FOR_ONE, CAP));
+    f.desk
+        .set_rules(&f.sponsor, &rules(&f.env, ONE_FOR_ONE, CAP));
 
     let original = f.voucher.create_voucher(
         &f.funder,
@@ -481,7 +492,11 @@ fn a_clinic_in_one_of_the_sponsors_countries_qualifies() {
     let f = setup();
     f.desk.deposit(&f.sponsor, &BUDGET);
     let mut rules = rules(&f.env, ONE_FOR_ONE, CAP);
-    rules.eligible_countries = vec![&f.env, String::from_str(&f.env, "KE"), String::from_str(&f.env, "NG")];
+    rules.eligible_countries = vec![
+        &f.env,
+        String::from_str(&f.env, "KE"),
+        String::from_str(&f.env, "NG"),
+    ];
     f.desk.set_rules(&f.sponsor, &rules);
 
     let original = fund(&f);
@@ -531,7 +546,8 @@ fn a_sponsor_without_rules_matches_nothing() {
 fn a_sponsor_cannot_match_a_voucher_the_desk_funded() {
     let f = setup();
     f.desk.deposit(&f.sponsor, &BUDGET);
-    f.desk.set_rules(&f.sponsor, &rules(&f.env, ONE_FOR_ONE, CAP));
+    f.desk
+        .set_rules(&f.sponsor, &rules(&f.env, ONE_FOR_ONE, CAP));
 
     let original = fund(&f);
     let matched = f.desk.match_voucher(&f.sponsor, &original);
@@ -548,7 +564,8 @@ fn a_sponsor_cannot_match_a_voucher_the_desk_funded() {
 fn a_clinic_that_is_no_longer_active_cannot_be_matched() {
     let f = setup();
     f.desk.deposit(&f.sponsor, &BUDGET);
-    f.desk.set_rules(&f.sponsor, &rules(&f.env, ONE_FOR_ONE, CAP));
+    f.desk
+        .set_rules(&f.sponsor, &rules(&f.env, ONE_FOR_ONE, CAP));
 
     let original = fund(&f);
     f.registry
@@ -563,10 +580,12 @@ fn a_clinic_that_is_no_longer_active_cannot_be_matched() {
 fn a_paused_service_cannot_be_matched() {
     let f = setup();
     f.desk.deposit(&f.sponsor, &BUDGET);
-    f.desk.set_rules(&f.sponsor, &rules(&f.env, ONE_FOR_ONE, CAP));
+    f.desk
+        .set_rules(&f.sponsor, &rules(&f.env, ONE_FOR_ONE, CAP));
 
     let original = fund(&f);
-    f.registry.set_service_available(&f.provider, &CONSULT, &false);
+    f.registry
+        .set_service_available(&f.provider, &CONSULT, &false);
     assert_eq!(
         f.desk.try_match_voucher(&f.sponsor, &original),
         Err(Ok(SponsorError::ServiceUnavailable))
@@ -577,7 +596,8 @@ fn a_paused_service_cannot_be_matched() {
 fn a_service_the_clinic_delisted_cannot_be_matched() {
     let f = setup();
     f.desk.deposit(&f.sponsor, &BUDGET);
-    f.desk.set_rules(&f.sponsor, &rules(&f.env, ONE_FOR_ONE, CAP));
+    f.desk
+        .set_rules(&f.sponsor, &rules(&f.env, ONE_FOR_ONE, CAP));
 
     let original = fund(&f);
     f.registry.remove_service(&f.provider, &CONSULT);
@@ -614,7 +634,8 @@ fn a_match_of_nothing_is_refused() {
 fn the_budget_runs_out() {
     let f = setup();
     f.desk.deposit(&f.sponsor, &CONSULT_PRICE);
-    f.desk.set_rules(&f.sponsor, &rules(&f.env, ONE_FOR_ONE, CAP));
+    f.desk
+        .set_rules(&f.sponsor, &rules(&f.env, ONE_FOR_ONE, CAP));
 
     let first = fund(&f);
     f.desk.match_voucher(&f.sponsor, &first);
@@ -631,7 +652,8 @@ fn the_budget_runs_out() {
 fn a_sponsor_cannot_match_more_than_its_budget() {
     let f = setup();
     f.desk.deposit(&f.sponsor, &(CONSULT_PRICE - 1));
-    f.desk.set_rules(&f.sponsor, &rules(&f.env, ONE_FOR_ONE, CAP));
+    f.desk
+        .set_rules(&f.sponsor, &rules(&f.env, ONE_FOR_ONE, CAP));
 
     let original = fund(&f);
     assert_eq!(
@@ -644,7 +666,8 @@ fn a_sponsor_cannot_match_more_than_its_budget() {
 fn too_many_open_matches_are_refused() {
     let f = setup();
     f.desk.deposit(&f.sponsor, &1_000_000_000);
-    f.desk.set_rules(&f.sponsor, &rules(&f.env, ONE_FOR_ONE, CAP));
+    f.desk
+        .set_rules(&f.sponsor, &rules(&f.env, ONE_FOR_ONE, CAP));
 
     for _ in 0..MAX_OPEN_MATCHES {
         let original = fund(&f);
@@ -663,7 +686,8 @@ fn too_many_open_matches_are_refused() {
 fn a_sponsor_withdraws_its_unused_budget() {
     let f = setup();
     f.desk.deposit(&f.sponsor, &BUDGET);
-    f.desk.set_rules(&f.sponsor, &rules(&f.env, ONE_FOR_ONE, CAP));
+    f.desk
+        .set_rules(&f.sponsor, &rules(&f.env, ONE_FOR_ONE, CAP));
 
     let original = fund(&f);
     f.desk.match_voucher(&f.sponsor, &original);
@@ -681,7 +705,8 @@ fn a_sponsor_withdraws_its_unused_budget() {
 fn a_sponsor_cannot_withdraw_money_it_matched() {
     let f = setup();
     f.desk.deposit(&f.sponsor, &BUDGET);
-    f.desk.set_rules(&f.sponsor, &rules(&f.env, ONE_FOR_ONE, CAP));
+    f.desk
+        .set_rules(&f.sponsor, &rules(&f.env, ONE_FOR_ONE, CAP));
 
     let original = fund(&f);
     f.desk.match_voucher(&f.sponsor, &original);
@@ -708,14 +733,12 @@ fn a_withdrawal_of_nothing_is_refused() {
 fn a_refunded_match_gives_the_budget_back() {
     let f = setup();
     f.desk.deposit(&f.sponsor, &BUDGET);
-    f.desk.set_rules(&f.sponsor, &rules(&f.env, ONE_FOR_ONE, CAP));
+    f.desk
+        .set_rules(&f.sponsor, &rules(&f.env, ONE_FOR_ONE, CAP));
 
     let original = fund(&f);
     let matched = f.desk.match_voucher(&f.sponsor, &original);
-    assert_eq!(
-        f.desk.available_budget(&f.sponsor),
-        BUDGET - CONSULT_PRICE
-    );
+    assert_eq!(f.desk.available_budget(&f.sponsor), BUDGET - CONSULT_PRICE);
 
     // The care never happened, so the matching voucher is refunded and the
     // money comes back to the desk.
@@ -734,7 +757,8 @@ fn a_refunded_match_gives_the_budget_back() {
 fn a_settled_match_stays_spent() {
     let f = setup();
     f.desk.deposit(&f.sponsor, &BUDGET);
-    f.desk.set_rules(&f.sponsor, &rules(&f.env, ONE_FOR_ONE, CAP));
+    f.desk
+        .set_rules(&f.sponsor, &rules(&f.env, ONE_FOR_ONE, CAP));
 
     let original = fund(&f);
     let matched = f.desk.match_voucher(&f.sponsor, &original);
@@ -747,10 +771,7 @@ fn a_settled_match_stays_spent() {
     f.voucher.settle(&matched);
 
     f.desk.reconcile_sponsor(&f.sponsor);
-    assert_eq!(
-        f.desk.available_budget(&f.sponsor),
-        BUDGET - CONSULT_PRICE
-    );
+    assert_eq!(f.desk.available_budget(&f.sponsor), BUDGET - CONSULT_PRICE);
     let account = f.desk.get_sponsor(&f.sponsor);
     assert_eq!(account.refunded, 0);
     assert!(account.open_matches.is_empty());
@@ -762,7 +783,8 @@ fn a_settled_match_stays_spent() {
 fn the_desk_can_be_paused_and_unpaused() {
     let f = setup();
     f.desk.deposit(&f.sponsor, &1_000);
-    f.desk.set_rules(&f.sponsor, &rules(&f.env, ONE_FOR_ONE, CAP));
+    f.desk
+        .set_rules(&f.sponsor, &rules(&f.env, ONE_FOR_ONE, CAP));
     f.desk.set_paused(&f.admin, &true);
 
     assert_eq!(
@@ -834,12 +856,8 @@ fn there_is_no_admin_to_accept_without_a_nomination() {
 fn a_desk_cannot_be_initialised_twice() {
     let f = setup();
     assert_eq!(
-        f.desk.try_initialize(
-            &f.admin,
-            &f.registry_addr,
-            &f.voucher_addr,
-            &f.token_addr,
-        ),
+        f.desk
+            .try_initialize(&f.admin, &f.registry_addr, &f.voucher_addr, &f.token_addr,),
         Err(Ok(SponsorError::AlreadyInitialized))
     );
 }
@@ -1375,7 +1393,8 @@ fn budget_deposited_event_snapshot() {
 #[test]
 fn rules_set_event_snapshot() {
     let f = setup();
-    f.desk.set_rules(&f.sponsor, &rules(&f.env, ONE_FOR_ONE, CAP));
+    f.desk
+        .set_rules(&f.sponsor, &rules(&f.env, ONE_FOR_ONE, CAP));
 
     let list = desk_events(&f);
     assert_eq!(list.len(), 1, "set_rules publishes one event");
@@ -1402,7 +1421,8 @@ fn rules_set_event_snapshot() {
 fn match_created_event_snapshot() {
     let f = setup();
     f.desk.deposit(&f.sponsor, &BUDGET);
-    f.desk.set_rules(&f.sponsor, &rules(&f.env, ONE_FOR_ONE, CAP));
+    f.desk
+        .set_rules(&f.sponsor, &rules(&f.env, ONE_FOR_ONE, CAP));
     let original = fund(&f);
     let matched = f.desk.match_voucher(&f.sponsor, &original);
 
@@ -1413,10 +1433,7 @@ fn match_created_event_snapshot() {
     assert_layout(
         &e,
         "match_created",
-        &[
-            ScVal::from(&f.sponsor),
-            ScVal::U64(original.into()),
-        ],
+        &[ScVal::from(&f.sponsor), ScVal::U64(original)],
         &[
             "matched_voucher_id",
             "provider",
@@ -1436,7 +1453,8 @@ fn match_created_event_snapshot() {
 fn match_settled_and_refunded_event_snapshots() {
     let f = setup();
     f.desk.deposit(&f.sponsor, &BUDGET);
-    f.desk.set_rules(&f.sponsor, &rules(&f.env, ONE_FOR_ONE, CAP));
+    f.desk
+        .set_rules(&f.sponsor, &rules(&f.env, ONE_FOR_ONE, CAP));
     let original = fund(&f);
     let matched = f.desk.match_voucher(&f.sponsor, &original);
 
@@ -1463,7 +1481,8 @@ fn match_settled_and_refunded_event_snapshots() {
     // A settled match publishes the other event.
     let f = setup();
     f.desk.deposit(&f.sponsor, &BUDGET);
-    f.desk.set_rules(&f.sponsor, &rules(&f.env, ONE_FOR_ONE, CAP));
+    f.desk
+        .set_rules(&f.sponsor, &rules(&f.env, ONE_FOR_ONE, CAP));
     let original = fund(&f);
     let matched = f.desk.match_voucher(&f.sponsor, &original);
     f.voucher.claim(&f.provider, &matched);
@@ -1533,7 +1552,7 @@ fn admin_events_snapshot() {
         .iter()
         .find(|e| symbol(&topics(e)[0]) == Some("admin_changed"))
         .expect("the handover publishes an event");
-    assert_layout(&changed, "admin_changed", &[], &["new_admin"]);
+    assert_layout(changed, "admin_changed", &[], &["new_admin"]);
     assert_eq!(field_address(&f.env, changed, "new_admin"), new_admin);
 }
 
@@ -1573,16 +1592,20 @@ fn sponsor_ttl(f: &Fixture) -> u32 {
 fn a_sponsor_account_survives_sixty_days_of_activity() {
     let f = setup();
     f.desk.deposit(&f.sponsor, &BUDGET);
-    f.desk.set_rules(&f.sponsor, &rules(&f.env, ONE_FOR_ONE, CAP));
+    f.desk
+        .set_rules(&f.sponsor, &rules(&f.env, ONE_FOR_ONE, CAP));
 
     // Ten days at a time, the way a wallet or the indexer polls.
     for day in 1..=6 {
         advance_days(&f, 10);
         assert_eq!(f.desk.available_budget(&f.sponsor), BUDGET);
-        assert_eq!(
-            sponsor_ttl(&f),
-            NINETY_DAYS,
-            "the sponsor's account was not pushed back out on day {}",
+        // Reads extend the entry once it falls below the 30-day threshold,
+        // so it never gets close to lapsing (see "Storage lifetime" in
+        // docs/developers/contracts.md).
+        let ttl = sponsor_ttl(&f);
+        assert!(
+            (THIRTY_DAYS..=NINETY_DAYS).contains(&ttl),
+            "the sponsor's account had {ttl} ledgers left on day {}",
             day * 10,
         );
     }
@@ -1627,8 +1650,16 @@ fn a_desk_pointed_at_the_wrong_token_cannot_match() {
     let other = f.env.register_stellar_asset_contract_v2(issuer);
     let desk_addr = f.env.register(SponsorDesk, ());
     let desk = SponsorDeskClient::new(&f.env, &desk_addr);
-    desk.initialize(&f.admin, &f.registry_addr, &f.voucher_addr, &other.address());
+    desk.initialize(
+        &f.admin,
+        &f.registry_addr,
+        &f.voucher_addr,
+        &other.address(),
+    );
 
+    // The sponsor holds the other token, so the deposit succeeds and the
+    // failure comes from the voucher contract, where it belongs.
+    token::StellarAssetClient::new(&f.env, &other.address()).mint(&f.sponsor, &BUDGET);
     desk.deposit(&f.sponsor, &BUDGET);
     desk.set_rules(&f.sponsor, &rules(&f.env, ONE_FOR_ONE, CAP));
     let original = fund(&f);

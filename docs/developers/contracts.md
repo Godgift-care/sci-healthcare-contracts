@@ -439,6 +439,108 @@ On testnet the faucet drips 50 USDC once a day: [`CCB25WG7DQ2CSNXPTOHZO2PDZ324FQ
 
 ---
 
+## sponsor
+
+`contracts/sponsor` - the sponsorship desk. A sponsor deposits a budget and
+sets rules; whenever a voucher qualifies, the desk funds a **second voucher**
+for the same care, through the voucher contract. The match is an ordinary
+voucher: the clinic claims it, an attester confirms it, the funder can dispute
+it, and it settles or refunds through the same code as every other voucher.
+The desk only decides *whether* a match happens and what it costs the sponsor.
+
+The sponsor's available budget is what it deposited, minus what is committed
+to open matches, plus what came back from refunded matches, minus what it
+withdrew. `reconcile_sponsor` (permissionless) brings a sponsor's open matches
+up to date with the voucher contract, so settled matches stop counting as
+open and refunded ones return to the budget.
+
+### Rules
+
+| Field | Meaning |
+| --- | --- |
+| `match_bps` | The match as a share of the voucher's amount: `10_000` is one-for-one, `20_000` two-for-one. At most `MAX_MATCH_BPS` (200,000). |
+| `cap_per_voucher` | The most the sponsor adds to any one voucher. |
+| `min_voucher_amount` | The least a voucher must be worth to qualify. Zero means no minimum. |
+| `min_voucher_age_secs` | How long a voucher must have been funded before it qualifies (the anti-farming wait). |
+| `eligible_countries` | ISO 3166-1 alpha-2 codes the clinic must be registered in. Empty means any country. |
+| `eligible_service_codes` | Service codes that qualify. Empty means any service. |
+
+**`match_voucher`** - caller is the sponsor. The desk is not paused; the
+sponsor has rules; the voucher exists, is `Funded`, is not expired and has not
+been matched; the sponsor did not fund it and neither did the desk (no
+self-matching, no matching a match); it is old enough and large enough; the
+clinic's country (`registry.get_provider_country`) and the service code are
+eligible; the match (`amount * match_bps / 10_000`, capped at
+`cap_per_voucher`) is not zero and fits the available budget; and the sponsor
+has fewer than `MAX_OPEN_MATCHES` (20) open matches. The voucher contract then
+creates the matching voucher and applies its own checks (clinic active,
+service listed and not paused, amount at least the service price); a refusal
+comes back as `VoucherCallFailed`. The voucher contract exposes
+`voucher_summary` for this check, declared over primitives so the two
+contracts share no types.
+
+### Authorisation matrix
+
+Every public function, with the exact signer it demands. `AUTH_MATRIX` in `contracts/sponsor/src/test.rs` drives both `authorisation_matrix_matches_every_public_function` and this table, through `authorisation_table_in_the_docs_matches_the_matrix`.
+
+| Function | Signer required |
+| --- | --- |
+| `initialize` | none (one-shot) |
+| `deposit` | `sponsor` |
+| `set_rules` | `sponsor` |
+| `match_voucher` | `sponsor` |
+| `withdraw` | `sponsor` |
+| `reconcile_sponsor` | none (permissionless) |
+| `propose_admin` | `admin` |
+| `accept_admin` | `new_admin` |
+| `set_paused` | `admin` |
+| `get_config` | none (view) |
+| `get_sponsor` | none (view) |
+| `get_rules` | none (view) |
+| `available_budget` | none (view) |
+| `get_match` | none (view) |
+| `get_match_of` | none (view) |
+| `budget_summary` | none (view) |
+| `get_pending_admin` | none (view) |
+| `version` | none (view) |
+
+### Errors
+
+| Code | Name | Code | Name |
+| --- | --- | --- | --- |
+| 1 | `AlreadyInitialized` | 14 | `VoucherTooNew` |
+| 2 | `NotInitialized` | 15 | `VoucherTooSmall` |
+| 3 | `NotAuthorized` | 16 | `MatchBelowPrice` |
+| 4 | `InvalidAmount` | 17 | `BudgetExhausted` |
+| 5 | `InvalidRules` | 18 | `WithdrawExceedsBudget` |
+| 6 | `RulesNotSet` | 19 | `TooManyOpenMatches` |
+| 7 | `VoucherNotFound` | 20 | `Paused` |
+| 8 | `VoucherNotFunded` | 21 | `VoucherCallFailed` |
+| 9 | `VoucherExpired` | 22 | `ProviderNotEligible` |
+| 10 | `AlreadyMatched` | 23 | `ServiceUnavailable` |
+| 11 | `SelfMatchNotAllowed` | 24 | `MatchTooSmall` |
+| 12 | `CountryNotEligible` | 25 | `MathOverflow` |
+| 13 | `ServiceNotEligible` | 26 | `NoPendingAdmin` |
+
+### Events
+
+| Event | Topics | Data |
+| --- | --- | --- |
+| `initialized` | - | `admin` |
+| `budget_deposited` | `sponsor` | `amount`, `available` |
+| `rules_set` | `sponsor` | `match_bps`, `cap_per_voucher`, `min_voucher_amount`, `min_voucher_age_secs` |
+| `match_created` | `sponsor`, `original_voucher_id` | `matched_voucher_id`, `provider`, `service_code`, `amount`, `matched_at` |
+| `match_settled` | `sponsor` | `matched_voucher_id`, `amount` |
+| `match_refunded` | `sponsor` | `matched_voucher_id`, `amount` |
+| `budget_withdrawn` | `sponsor` | `amount`, `available` |
+| `admin_proposed` | `admin` | `pending_admin` |
+| `admin_changed` | - | `new_admin` |
+
+These events are new to the indexer: `sci-healthcare-backend` decodes them
+once their topic names are added to `TOPIC_FIELDS` in `src/stellar/events.ts`.
+
+---
+
 ## Storage lifetime (TTL)
 
 Soroban does not keep an entry forever. Every persistent entry carries a
@@ -456,6 +558,7 @@ stays in the live ledger. These are the numbers, all in ledgers:
 | `Provider`, `Service`, `Attester` | persistent | every read and write | 30 days | 90 days |
 | `Receipt(id)`, `Count(beneficiary_ref)` | persistent | every read and write | 30 days | 90 days |
 | `ProviderCount(provider)`, `ProviderReceipt(provider, index)` | persistent | every mint and `receipts_of_provider` read | 30 days | 90 days |
+| Sponsor `Sponsor(address)`, `Match(id)`, `OriginalOf(id)` | persistent | every read and write | 30 days | 90 days |
 | Faucet `LastDrip(address)` | temporary | every drip | 1 day | 7 days |
 | Faucet `LifetimeDripped(address)` | persistent | every drip and lifetime-cap read | 30 days | 90 days |
 

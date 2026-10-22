@@ -26,6 +26,7 @@ pub trait VoucherInterface {
     /// `VoucherStatus` as a number: 0 `Funded`, 1 `Claimed`, 2 `Attested`,
     /// 3 `Settled`, 4 `Disputed`, 5 `Refunded`. `None` when the voucher
     /// does not exist.
+    #[allow(clippy::type_complexity)]
     fn voucher_summary(
         env: Env,
         voucher_id: u64,

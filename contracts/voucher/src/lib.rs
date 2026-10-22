@@ -667,6 +667,7 @@ impl VoucherEscrow {
     ///
     /// Declared over primitives so the two contracts share no types and can
     /// be upgraded independently.
+    #[allow(clippy::type_complexity)]
     pub fn voucher_summary(
         env: Env,
         voucher_id: u64,
