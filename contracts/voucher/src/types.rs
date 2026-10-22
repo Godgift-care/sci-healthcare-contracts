@@ -66,6 +66,9 @@ pub struct Config {
     pub receipt_book: Address,
     /// Settlement token. USDC on Stellar in production.
     pub token: Address,
+    /// Maximum amount accepted for one voucher, in the settlement token's
+    /// smallest unit.
+    pub max_amount: i128,
     /// Seconds a funder has to dispute after attestation.
     pub dispute_window: u64,
     /// Protocol fee in basis points. 100 = 1%.
@@ -89,6 +92,8 @@ pub enum DataKey {
     Voucher(u64),
     /// Address nominated by `propose_admin`, awaiting `accept_admin`.
     PendingAdmin,
+    /// The pending voucher amount cap and the earliest time it may be activated.
+    PendingMaxAmount,
     /// Most attestations one attester may make per UTC day. Unset means
     /// `DEFAULT_MAX_ATTESTATIONS_PER_DAY`.
     AttestationCap,
@@ -143,6 +148,16 @@ pub enum VoucherError {
     /// (deauthorized) the escrow or the recipient. Nothing moved; the voucher
     /// is unchanged and the call can be retried once the freeze is lifted.
     TokenTransferFailed = 24,
+    /// The configured maximum voucher amount must be positive.
+    InvalidMaxAmount = 25,
+    /// The requested voucher amount exceeds the configured maximum.
+    AmountExceedsMax = 26,
+    /// A maximum amount change must be scheduled at least 24 hours ahead.
+    MaxAmountNoticeTooShort = 27,
+    /// There is no scheduled maximum amount change to activate.
+    NoPendingMaxAmount = 28,
+    /// The scheduled maximum amount change is not ready to activate.
+    MaxAmountChangeNotReady = 29,
 }
 
 /// Maps the shared helpers' failures onto this contract's error numbers, so

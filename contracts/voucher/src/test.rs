@@ -7,7 +7,7 @@ use soroban_sdk::{
 
 use crate::{
     VoucherError, VoucherEscrow, VoucherEscrowClient, VoucherStatus,
-    DEFAULT_MAX_ATTESTATIONS_PER_DAY,
+    DEFAULT_MAX_ATTESTATIONS_PER_DAY, DEFAULT_MAX_VOUCHER_AMOUNT, MAX_AMOUNT_CHANGE_DELAY_SECS,
 };
 use sci_receipt::{ReceiptBook, ReceiptBookClient};
 use sci_registry::{ProviderStatus, Registry, RegistryClient, MIN_PRICE_NOTICE_SECS};
@@ -79,6 +79,7 @@ fn setup_with(fee_bps: u32, attester_share_bps: u32) -> Fixture {
         &registry_addr,
         &receipt_addr,
         &token_addr,
+        &DEFAULT_MAX_VOUCHER_AMOUNT,
         &DISPUTE_WINDOW,
         &fee_bps,
         &attester_share_bps,
@@ -234,6 +235,36 @@ fn create_voucher_escrows_funds() {
     assert_eq!(v.amount, CONSULT_PRICE);
     assert_eq!(v.provider, f.provider);
     assert_eq!(v.funder, f.funder);
+}
+
+#[test]
+fn maximum_voucher_amount_is_inclusive() {
+    let f = setup();
+    let id = fund_overpaid(&f, DEFAULT_MAX_VOUCHER_AMOUNT);
+    assert_eq!(
+        f.voucher.get_voucher(&id).amount,
+        DEFAULT_MAX_VOUCHER_AMOUNT
+    );
+}
+
+#[test]
+fn amount_above_maximum_is_rejected_before_escrow() {
+    let f = setup();
+    let err = f
+        .voucher
+        .try_create_voucher(
+            &f.funder,
+            &patient(&f.env),
+            &f.provider,
+            &CONSULT,
+            &(DEFAULT_MAX_VOUCHER_AMOUNT + 1),
+            &(START_TIME + 30 * 24 * 60 * 60),
+        )
+        .err()
+        .unwrap()
+        .unwrap();
+    assert_eq!(err, VoucherError::AmountExceedsMax);
+    assert_escrow(&f, 0);
 }
 
 #[test]
@@ -1553,6 +1584,7 @@ fn initialize_is_single_shot() {
             &a,
             &a,
             &a,
+            &DEFAULT_MAX_VOUCHER_AMOUNT,
             &DISPUTE_WINDOW,
             &FEE_BPS,
             &ATTESTER_SHARE_BPS,
@@ -1573,7 +1605,17 @@ fn excessive_fee_rejected_at_init() {
     let client = VoucherEscrowClient::new(&env, &addr);
 
     let err = client
-        .try_initialize(&a, &a, &a, &a, &DISPUTE_WINDOW, &1_001u32, &0u32, &a)
+        .try_initialize(
+            &a,
+            &a,
+            &a,
+            &a,
+            &DEFAULT_MAX_VOUCHER_AMOUNT,
+            &DISPUTE_WINDOW,
+            &1_001u32,
+            &0u32,
+            &a,
+        )
         .err()
         .unwrap()
         .unwrap();
@@ -1596,6 +1638,7 @@ fn excessive_attester_share_rejected_at_init() {
             &a,
             &a,
             &a,
+            &DEFAULT_MAX_VOUCHER_AMOUNT,
             &DISPUTE_WINDOW,
             &FEE_BPS,
             &(FEE_BPS + 1),
@@ -1605,6 +1648,100 @@ fn excessive_attester_share_rejected_at_init() {
         .unwrap()
         .unwrap();
     assert_eq!(err, VoucherError::InvalidAttesterShare);
+}
+
+#[test]
+fn zero_maximum_rejected_at_init() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let a = Address::generate(&env);
+    let address = env.register(VoucherEscrow, ());
+    let err = VoucherEscrowClient::new(&env, &address)
+        .try_initialize(
+            &a,
+            &a,
+            &a,
+            &a,
+            &0i128,
+            &DISPUTE_WINDOW,
+            &FEE_BPS,
+            &ATTESTER_SHARE_BPS,
+            &a,
+        )
+        .err()
+        .unwrap()
+        .unwrap();
+    assert_eq!(err, VoucherError::InvalidMaxAmount);
+}
+
+#[test]
+fn max_amount_change_obeys_its_notice_period() {
+    let f = setup();
+    let new_max = CONSULT_PRICE * 2;
+    let effective_at = START_TIME + MAX_AMOUNT_CHANGE_DELAY_SECS;
+    f.voucher
+        .schedule_max_amount(&f.admin, &new_max, &effective_at);
+
+    assert_eq!(
+        f.voucher.get_config().max_amount,
+        DEFAULT_MAX_VOUCHER_AMOUNT
+    );
+    assert_eq!(
+        f.voucher.get_pending_max_amount(),
+        Some((new_max, effective_at))
+    );
+    let early_err = f.voucher.try_activate_max_amount().err().unwrap().unwrap();
+    assert_eq!(early_err, VoucherError::MaxAmountChangeNotReady);
+
+    advance(&f.env, MAX_AMOUNT_CHANGE_DELAY_SECS);
+    f.voucher.activate_max_amount();
+    assert_eq!(f.voucher.get_config().max_amount, new_max);
+    assert_eq!(f.voucher.get_pending_max_amount(), None);
+
+    let id = fund_overpaid(&f, new_max);
+    assert_eq!(f.voucher.get_voucher(&id).amount, new_max);
+    let err = f
+        .voucher
+        .try_create_voucher(
+            &f.funder,
+            &patient(&f.env),
+            &f.provider,
+            &CONSULT,
+            &(new_max + 1),
+            &(START_TIME + 30 * 24 * 60 * 60),
+        )
+        .err()
+        .unwrap()
+        .unwrap();
+    assert_eq!(err, VoucherError::AmountExceedsMax);
+}
+
+#[test]
+fn invalid_or_missing_max_amount_changes_are_rejected() {
+    let f = setup();
+    let now = START_TIME;
+    let invalid_amount = f
+        .voucher
+        .try_schedule_max_amount(&f.admin, &0i128, &(now + MAX_AMOUNT_CHANGE_DELAY_SECS))
+        .err()
+        .unwrap()
+        .unwrap();
+    assert_eq!(invalid_amount, VoucherError::InvalidMaxAmount);
+
+    let too_soon = f
+        .voucher
+        .try_schedule_max_amount(
+            &f.admin,
+            &CONSULT_PRICE,
+            &(now + MAX_AMOUNT_CHANGE_DELAY_SECS - 1),
+        )
+        .err()
+        .unwrap()
+        .unwrap();
+    assert_eq!(too_soon, VoucherError::MaxAmountNoticeTooShort);
+
+    let no_pending = f.voucher.try_activate_max_amount().err().unwrap().unwrap();
+    assert_eq!(no_pending, VoucherError::NoPendingMaxAmount);
 }
 
 #[test]
@@ -2307,6 +2444,14 @@ const AUTH_MATRIX: &[AuthCase] = &[
         auth: signer("`admin`", admin_addr),
     },
     AuthCase {
+        function: "schedule_max_amount",
+        auth: signer("`admin`", admin_addr),
+    },
+    AuthCase {
+        function: "activate_max_amount",
+        auth: Auth::Free("none (permissionless)"),
+    },
+    AuthCase {
         function: "propose_admin",
         auth: signer("`admin`", admin_addr),
     },
@@ -2324,6 +2469,10 @@ const AUTH_MATRIX: &[AuthCase] = &[
     },
     AuthCase {
         function: "get_pending_admin",
+        auth: Auth::Free("none (view)"),
+    },
+    AuthCase {
+        function: "get_pending_max_amount",
         auth: Auth::Free("none (view)"),
     },
     AuthCase {
@@ -2384,6 +2533,7 @@ fn run_case(f: &AuthFixture, function: &str) -> std::vec::Vec<Address> {
                 &a,
                 &a,
                 &a,
+                &DEFAULT_MAX_VOUCHER_AMOUNT,
                 &DISPUTE_WINDOW,
                 &FEE_BPS,
                 &ATTESTER_SHARE_BPS,
@@ -2439,6 +2589,22 @@ fn run_case(f: &AuthFixture, function: &str) -> std::vec::Vec<Address> {
         "set_attestation_cap" => {
             voucher.set_attestation_cap(&f.f.admin, &10);
         }
+        "schedule_max_amount" => {
+            voucher.schedule_max_amount(
+                &f.f.admin,
+                &(CONSULT_PRICE * 2),
+                &(START_TIME + MAX_AMOUNT_CHANGE_DELAY_SECS),
+            );
+        }
+        "activate_max_amount" => {
+            voucher.schedule_max_amount(
+                &f.f.admin,
+                &(CONSULT_PRICE * 2),
+                &(START_TIME + MAX_AMOUNT_CHANGE_DELAY_SECS),
+            );
+            advance(env, MAX_AMOUNT_CHANGE_DELAY_SECS);
+            voucher.activate_max_amount();
+        }
         "get_attestation_cap" => {
             voucher.get_attestation_cap();
         }
@@ -2454,6 +2620,9 @@ fn run_case(f: &AuthFixture, function: &str) -> std::vec::Vec<Address> {
         }
         "get_pending_admin" => {
             voucher.get_pending_admin();
+        }
+        "get_pending_max_amount" => {
+            voucher.get_pending_max_amount();
         }
         "refundable_at" => {
             let id = fund(&f.f);
@@ -2840,6 +3009,7 @@ fn initialized_event_snapshot() {
         &a,
         &a,
         &a,
+        &DEFAULT_MAX_VOUCHER_AMOUNT,
         &DISPUTE_WINDOW,
         &FEE_BPS,
         &ATTESTER_SHARE_BPS,
@@ -3110,6 +3280,7 @@ fn math_overflow_in_fee_calculation() {
         &registry_addr,
         &receipt_addr,
         &token_addr,
+        &i128::MAX,
         &DISPUTE_WINDOW,
         &1_000u32,
         &0u32,

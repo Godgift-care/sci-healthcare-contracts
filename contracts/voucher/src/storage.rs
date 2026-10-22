@@ -24,6 +24,20 @@ pub(crate) fn write_config(env: &Env, config: &Config) {
     env.storage().instance().set(&DataKey::Config, config);
 }
 
+pub(crate) fn read_pending_max_amount(env: &Env) -> Option<(i128, u64)> {
+    env.storage().instance().get(&DataKey::PendingMaxAmount)
+}
+
+pub(crate) fn write_pending_max_amount(env: &Env, pending: Option<(i128, u64)>) {
+    match pending {
+        Some(value) => env
+            .storage()
+            .instance()
+            .set(&DataKey::PendingMaxAmount, &value),
+        None => env.storage().instance().remove(&DataKey::PendingMaxAmount),
+    }
+}
+
 /// Returns the next voucher id and advances the counter.
 pub(crate) fn bump_next_id(env: &Env) -> u64 {
     let id: u64 = env.storage().instance().get(&DataKey::NextId).unwrap_or(1);

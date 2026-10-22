@@ -123,6 +123,8 @@ grep -q '^RECEIPT_CONTRACT_ID=CRECEIPTCONTRACTID$' "$env_file" ||
   fail "env file has the wrong receipt id"
 grep -q '^USDC_CONTRACT_ID=CUSDCCONTRACTID$' "$env_file" ||
   fail "env file has the wrong token id"
+grep -q -- '--max_amount 1000000000' "$STELLAR_LOG" ||
+  fail "voucher initialization did not receive the default maximum amount"
 grep -q 'Saved to ' "$TMP/first.out" || fail "first run has no summary"
 pass "first run deploys and writes the env file"
 
