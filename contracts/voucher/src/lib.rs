@@ -657,6 +657,33 @@ impl VoucherEscrow {
         read_voucher(&env, voucher_id)
     }
 
+    /// The fields `sponsor` needs to match this voucher, in one call.
+    ///
+    /// `(beneficiary_ref, funder, provider, service_code, amount, status,
+    /// created_at, expires_at)`, where `status` is the voucher's
+    /// `VoucherStatus` as a number: 0 `Funded`, 1 `Claimed`, 2 `Attested`,
+    /// 3 `Settled`, 4 `Disputed`, 5 `Refunded`. `None` when the voucher
+    /// does not exist.
+    ///
+    /// Declared over primitives so the two contracts share no types and can
+    /// be upgraded independently.
+    pub fn voucher_summary(
+        env: Env,
+        voucher_id: u64,
+    ) -> Option<(BytesN<32>, Address, Address, u32, i128, u32, u64, u64)> {
+        let voucher = read_voucher(&env, voucher_id).ok()?;
+        Some((
+            voucher.beneficiary_ref,
+            voucher.funder,
+            voucher.provider,
+            voucher.service_code,
+            voucher.amount,
+            voucher.status as u32,
+            voucher.created_at,
+            voucher.expires_at,
+        ))
+    }
+
     pub fn get_config(env: Env) -> Result<Config, VoucherError> {
         read_config(&env)
     }

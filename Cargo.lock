@@ -1397,6 +1397,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "sci-sponsor"
+version = "0.2.0"
+dependencies = [
+ "sci-common",
+ "sci-receipt",
+ "sci-registry",
+ "sci-voucher",
+ "soroban-sdk",
+]
+
+[[package]]
 name = "sci-voucher"
 version = "0.2.0"
 dependencies = [

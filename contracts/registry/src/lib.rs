@@ -361,6 +361,19 @@ impl Registry {
         }
     }
 
+    /// The country a provider is registered in, as an ISO 3166-1 alpha-2
+    /// code. Empty when the provider is not registered.
+    ///
+    /// The check `sponsor` relies on before matching a voucher for a clinic
+    /// in one of its countries. Declared over primitives so the two
+    /// contracts share no types.
+    pub fn get_provider_country(env: Env, provider_addr: Address) -> String {
+        match read_provider(&env, &provider_addr) {
+            Ok(p) => p.country,
+            Err(_) => String::from_str(&env, ""),
+        }
+    }
+
     pub fn get_service(
         env: Env,
         provider_addr: Address,

@@ -6,6 +6,7 @@ members = [
     "contracts/receipt",
     "contracts/voucher",
     "contracts/faucet",
+    "contracts/sponsor",
 ]
 
 [workspace.package]
@@ -22,6 +23,7 @@ soroban-sdk = "27.0.6"
 sci-common = { path = "contracts/common", version = "0.2.0" }
 sci-registry = { path = "contracts/registry", version = "0.2.0" }
 sci-receipt = { path = "contracts/receipt", version = "0.2.0" }
+sci-voucher = { path = "contracts/voucher", version = "0.2.0" }
 
 [profile.release]
 opt-level = "z"
