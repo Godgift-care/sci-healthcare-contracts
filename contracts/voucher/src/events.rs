@@ -44,6 +44,17 @@ pub struct VoucherClaimed {
 
 #[contractevent]
 #[derive(Clone, Debug, Eq, PartialEq)]
+pub struct VoucherDeclined {
+    #[topic]
+    pub provider: Address,
+    pub voucher_id: u64,
+    pub reason_code: u32,
+    pub service_code: u32,
+    pub amount: i128,
+}
+
+#[contractevent]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct VoucherAttested {
     #[topic]
     pub attester: Address,

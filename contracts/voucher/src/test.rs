@@ -188,6 +188,57 @@ fn escrow_summary_tracks_a_refund() {
 }
 
 #[test]
+fn provider_declines_funded_voucher_and_refunds_funder() {
+    let f = setup();
+    let before = f.token.balance(&f.funder);
+    let id = fund(&f);
+
+    f.voucher.decline(&f.provider, &id, &7u32);
+
+    assert_eq!(f.token.balance(&f.funder), before);
+    assert_eq!(f.token.balance(&f.provider), 0);
+    assert_eq!(f.token.balance(&f.fee_account), 0);
+    assert_eq!(f.voucher.get_voucher(&id).status, VoucherStatus::Refunded);
+    assert_escrow(&f, 0);
+}
+
+#[test]
+fn another_provider_cannot_decline_voucher() {
+    let f = setup();
+    let id = fund(&f);
+    let other_provider = Address::generate(&f.env);
+
+    let err = f
+        .voucher
+        .try_decline(&other_provider, &id, &7u32)
+        .err()
+        .unwrap()
+        .unwrap();
+
+    assert_eq!(err, VoucherError::NotAuthorized);
+    assert_eq!(f.voucher.get_voucher(&id).status, VoucherStatus::Funded);
+    assert_escrow(&f, CONSULT_PRICE);
+}
+
+#[test]
+fn claimed_voucher_cannot_be_declined() {
+    let f = setup();
+    let id = fund(&f);
+    f.voucher.claim(&f.provider, &id);
+
+    let err = f
+        .voucher
+        .try_decline(&f.provider, &id, &7u32)
+        .err()
+        .unwrap()
+        .unwrap();
+
+    assert_eq!(err, VoucherError::InvalidStatus);
+    assert_eq!(f.voucher.get_voucher(&id).status, VoucherStatus::Claimed);
+    assert_escrow(&f, CONSULT_PRICE);
+}
+
+#[test]
 fn escrow_summary_tracks_each_voucher_and_dispute_resolution() {
     let f = setup();
     let first = fund(&f);
@@ -2051,6 +2102,29 @@ fn claim_event_snapshot_carries_service_and_amount() {
 }
 
 #[test]
+fn decline_event_snapshot_carries_reason_and_amount() {
+    let f = setup();
+    let id = fund(&f);
+
+    f.voucher.decline(&f.provider, &id, &7u32);
+
+    let events = f.env.events().all().filter_by_contract(&f.voucher.address);
+    let published = events.events();
+    assert_eq!(published.len(), 2, "decline publishes refund and decline events");
+    let e = published[1].clone();
+    assert_layout(
+        &e,
+        "voucher_declined",
+        &[ScVal::from(&f.provider)],
+        &["voucher_id", "reason_code", "service_code", "amount"],
+    );
+    assert_eq!(field_u64(&e, "voucher_id"), id);
+    assert_eq!(field_u32(&e, "reason_code"), 7);
+    assert_eq!(field_u32(&e, "service_code"), CONSULT);
+    assert_eq!(field_i128(&e, "amount"), CONSULT_PRICE);
+}
+
+#[test]
 fn attest_event_snapshot_carries_service_and_amount() {
     let f = setup();
     let id = fund(&f);
@@ -2279,6 +2353,10 @@ const AUTH_MATRIX: &[AuthCase] = &[
         auth: signer("`provider`", provider_addr),
     },
     AuthCase {
+        function: "decline",
+        auth: signer("`provider`", provider_addr),
+    },
+    AuthCase {
         function: "attest",
         auth: signer("`attester`", attester_addr),
     },
@@ -2401,6 +2479,10 @@ fn run_case(f: &AuthFixture, function: &str) -> std::vec::Vec<Address> {
         "claim" => {
             let id = fund(&f.f);
             voucher.claim(&f.f.provider, &id);
+        }
+        "decline" => {
+            let id = fund(&f.f);
+            voucher.decline(&f.f.provider, &id, &7u32);
         }
         "attest" => {
             let id = fund(&f.f);

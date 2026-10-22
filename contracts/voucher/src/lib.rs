@@ -53,8 +53,8 @@ use soroban_sdk::{contract, contractimpl, token, Address, BytesN, Env, String};
 #[allow(unused_imports)]
 pub use events::{
     AdminChanged, AdminProposed, AttestationCapChanged, DisputeResolved, Initialized,
-    VoucherAmountReduced, VoucherAttested, VoucherClaimed, VoucherCreated, VoucherDisputed,
-    VoucherRefunded, VoucherSettled,
+    VoucherAmountReduced, VoucherAttested, VoucherClaimed, VoucherCreated, VoucherDeclined,
+    VoucherDisputed, VoucherRefunded, VoucherSettled,
 };
 pub use interfaces::{ReceiptClient, RegistryClient};
 pub use types::{Config, DataKey, Voucher, VoucherError, VoucherStatus};
@@ -337,6 +337,38 @@ impl VoucherEscrow {
             provider,
             voucher_id,
             claimed_at: now,
+            service_code: voucher.service_code,
+            amount: voucher.amount,
+        }
+        .publish(&env);
+        Ok(())
+    }
+
+    /// Declines a funded voucher the clinic cannot provide and returns the
+    /// full amount to the funder.
+    pub fn decline(
+        env: Env,
+        provider: Address,
+        voucher_id: u64,
+        reason_code: u32,
+    ) -> Result<(), VoucherError> {
+        provider.require_auth();
+
+        let mut voucher = read_voucher(&env, voucher_id)?;
+        if voucher.provider != provider {
+            return Err(VoucherError::NotAuthorized);
+        }
+        if voucher.status != VoucherStatus::Funded {
+            return Err(VoucherError::InvalidStatus);
+        }
+
+        let config = read_config(&env)?;
+        Self::pay_back(&env, &config, &mut voucher)?;
+
+        VoucherDeclined {
+            provider,
+            voucher_id,
+            reason_code,
             service_code: voucher.service_code,
             amount: voucher.amount,
         }
