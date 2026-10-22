@@ -237,6 +237,30 @@ fn create_voucher_escrows_funds() {
 }
 
 #[test]
+fn clinic_cannot_fund_its_own_voucher() {
+    let f = setup();
+    let funder_balance = f.token.balance(&f.provider);
+
+    let err = f
+        .voucher
+        .try_create_voucher(
+            &f.provider,
+            &patient(&f.env),
+            &f.provider,
+            &CONSULT,
+            &CONSULT_PRICE,
+            &(START_TIME + 1000),
+        )
+        .err()
+        .unwrap()
+        .unwrap();
+
+    assert_eq!(err, VoucherError::SelfFunded);
+    assert_eq!(f.token.balance(&f.provider), funder_balance);
+    assert_eq!(f.voucher.next_voucher_id(), 1);
+}
+
+#[test]
 fn voucher_ids_increment() {
     let f = setup();
     assert_eq!(fund(&f), 1);
