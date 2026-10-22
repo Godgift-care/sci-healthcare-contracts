@@ -814,6 +814,14 @@
                   },
                   {
                     "key": {
+                      "symbol": "disputed_at"
+                    },
+                    "val": {
+                      "u64": "1700000000"
+                    }
+                  },
+                  {
+                    "key": {
                       "symbol": "expires_at"
                     },
                     "val": {

@@ -1186,6 +1186,14 @@
                   },
                   {
                     "key": {
+                      "symbol": "disputed_at"
+                    },
+                    "val": {
+                      "u64": "0"
+                    }
+                  },
+                  {
+                    "key": {
                       "symbol": "expires_at"
                     },
                     "val": {
@@ -1318,6 +1326,14 @@
                   },
                   {
                     "key": {
+                      "symbol": "disputed_at"
+                    },
+                    "val": {
+                      "u64": "0"
+                    }
+                  },
+                  {
+                    "key": {
                       "symbol": "expires_at"
                     },
                     "val": {
@@ -1446,6 +1462,14 @@
                     },
                     "val": {
                       "u64": "1700265600"
+                    }
+                  },
+                  {
+                    "key": {
+                      "symbol": "disputed_at"
+                    },
+                    "val": {
+                      "u64": "0"
                     }
                   },
                   {

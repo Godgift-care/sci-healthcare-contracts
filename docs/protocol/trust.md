@@ -22,9 +22,10 @@ These hold regardless of who behaves badly:
 3. **A clinic cannot be paid without an attestation.** No path exists from `Funded` or `Claimed` straight to `Settled`.
 4. **Money cannot be released early.** `settle` fails while the dispute window is open.
 5. **An unattested voucher always returns to the funder.** Unclaimed, it is refundable at expiry — or immediately if the clinic is no longer active. Claimed but never attested, seven days after expiry. Nobody can prevent that — `refund` needs no authorisation.
-6. **The full amount is refunded.** No fee is taken on care that did not happen.
-7. **A settled voucher cannot be settled or refunded again.** Terminal states are terminal.
-8. **Admin rights cannot be handed to a mistyped address.** Every contract transfers administration in two steps — `propose_admin`, then `accept_admin` signed by the new address.
+6. **A stale dispute cannot lock funds forever.** If the admin has not resolved a dispute within 30 days, anyone can call `refund` and return the full amount to the funder.
+7. **The full amount is refunded.** No fee is taken on care that did not happen.
+8. **A settled voucher cannot be settled or refunded again.** Terminal states are terminal.
+9. **Admin rights cannot be handed to a mistyped address.** Every contract transfers administration in two steps — `propose_admin`, then `accept_admin` signed by the new address.
 
 ## What you are trusting
 
@@ -42,9 +43,9 @@ What would improve it: an attester quorum for high-value vouchers, so one compro
 
 The admin can activate and suspend clinics, appoint and revoke attesters, and resolve disputes.
 
-What limits it: on a disputed voucher the admin's only choice is *which of the two parties* receives the escrowed funds. There is no call that lets the admin move money to a third address, mint vouchers, or take funds from a settled voucher. The admin cannot touch a voucher that is not in `Disputed`.
+What limits it: on a disputed voucher the admin's only choice is *which of the two parties* receives the escrowed funds. There is no call that lets the admin move money to a third address, mint vouchers, or take funds from a settled voucher. The admin cannot touch a voucher that is not in `Disputed`. If the admin does not act within 30 days of the dispute, anyone may return the full escrow to the funder with `refund`.
 
-The admin key is a single point of failure today. Moving it to a multisig is a deployment decision, and mainnet should not launch without it.
+The admin key is still a point of failure during the 30-day resolution period. Moving it to a multisig is a deployment decision, and mainnet should not launch without it.
 
 ### The registry
 

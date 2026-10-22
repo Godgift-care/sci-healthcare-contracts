@@ -9,10 +9,10 @@ use soroban_sdk::{contracterror, contracttype, Address, BytesN};
 ///     │ refund                │ dispute          │ dispute
 ///     │ (expired or           ▼                  ▼
 ///     │  clinic inactive)  Disputed <────────────┘
-///     ▼                       │
+///     ▼                       │                       │
 ///  Refunded  <──── resolve ───┴──── resolve ────> Settled
-///     ▲
-///     └── refund (claimed, never attested, past expiry + claim grace)
+///     ▲                       │
+///     └── refund (claimed grace or disputed for 30 days)
 /// ```
 ///
 /// `Settled` and `Refunded` are terminal.
@@ -49,6 +49,9 @@ pub struct Voucher {
     pub attested_at: u64,
     /// Earliest ledger time at which `settle` may run. Zero until attested.
     pub dispute_deadline: u64,
+    /// Ledger time when `dispute` moved this voucher to `Disputed`. Zero
+    /// until disputed.
+    pub disputed_at: u64,
     /// Attester who confirmed delivery, recorded by `attest`.
     ///
     /// `None` until attestation. Settlement pays this address its share of

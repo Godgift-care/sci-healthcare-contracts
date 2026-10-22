@@ -7,7 +7,7 @@ use soroban_sdk::{
 
 use crate::{
     VoucherError, VoucherEscrow, VoucherEscrowClient, VoucherStatus,
-    DEFAULT_MAX_ATTESTATIONS_PER_DAY,
+    DEFAULT_MAX_ATTESTATIONS_PER_DAY, DISPUTE_RESOLUTION_SECS,
 };
 use sci_receipt::{ReceiptBook, ReceiptBookClient};
 use sci_registry::{ProviderStatus, Registry, RegistryClient, MIN_PRICE_NOTICE_SECS};
@@ -1291,6 +1291,44 @@ fn funder_disputes_claimed_but_undelivered_care() {
 
     f.voucher.dispute(&f.funder, &id, &1u32);
     assert_eq!(f.voucher.get_voucher(&id).status, VoucherStatus::Disputed);
+    assert_eq!(f.voucher.get_voucher(&id).disputed_at, START_TIME);
+}
+
+#[test]
+fn disputed_voucher_cannot_be_refunded_before_resolution_deadline() {
+    let f = setup();
+    let before = f.token.balance(&f.funder);
+    let id = fund(&f);
+    f.voucher.claim(&f.provider, &id);
+    f.voucher.dispute(&f.funder, &id, &1u32);
+
+    let refundable_at = START_TIME + DISPUTE_RESOLUTION_SECS;
+    assert_eq!(f.voucher.refundable_at(&id), refundable_at);
+    f.env
+        .ledger()
+        .with_mut(|li| li.timestamp = refundable_at - 1);
+
+    let err = f.voucher.try_refund(&id).err().unwrap().unwrap();
+    assert_eq!(err, VoucherError::NotYetExpired);
+    assert_eq!(f.token.balance(&f.funder), before - CONSULT_PRICE);
+    assert_eq!(f.voucher.get_voucher(&id).status, VoucherStatus::Disputed);
+}
+
+#[test]
+fn disputed_voucher_refunds_to_funder_after_resolution_deadline() {
+    let f = setup();
+    let before = f.token.balance(&f.funder);
+    let id = fund(&f);
+    f.voucher.claim(&f.provider, &id);
+    f.voucher.dispute(&f.funder, &id, &1u32);
+    advance(&f.env, DISPUTE_RESOLUTION_SECS);
+
+    f.voucher.refund(&id);
+
+    assert_eq!(f.token.balance(&f.funder), before);
+    assert_eq!(f.token.balance(&f.provider), 0);
+    assert_eq!(f.token.balance(&f.fee_account), 0);
+    assert_eq!(f.voucher.get_voucher(&id).status, VoucherStatus::Refunded);
 }
 
 #[test]
@@ -1303,6 +1341,10 @@ fn funder_disputes_within_window() {
 
     f.voucher.dispute(&f.funder, &id, &2u32);
     assert_eq!(f.voucher.get_voucher(&id).status, VoucherStatus::Disputed);
+    assert_eq!(
+        f.voucher.get_voucher(&id).disputed_at,
+        START_TIME + DISPUTE_WINDOW - 10
+    );
 }
 
 #[test]
@@ -1345,6 +1387,7 @@ fn resolving_for_funder_refunds() {
     let id = fund(&f);
     f.voucher.claim(&f.provider, &id);
     f.voucher.dispute(&f.funder, &id, &1u32);
+    advance(&f.env, DISPUTE_RESOLUTION_SECS - 1);
 
     f.voucher.resolve_dispute(&f.admin, &id, &true);
 

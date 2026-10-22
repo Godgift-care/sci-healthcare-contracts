@@ -1053,6 +1053,14 @@
                   },
                   {
                     "key": {
+                      "symbol": "disputed_at"
+                    },
+                    "val": {
+                      "u64": "0"
+                    }
+                  },
+                  {
+                    "key": {
                       "symbol": "expires_at"
                     },
                     "val": {
@@ -1176,6 +1184,14 @@
                   {
                     "key": {
                       "symbol": "dispute_deadline"
+                    },
+                    "val": {
+                      "u64": "0"
+                    }
+                  },
+                  {
+                    "key": {
+                      "symbol": "disputed_at"
                     },
                     "val": {
                       "u64": "0"
