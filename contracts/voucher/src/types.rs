@@ -143,6 +143,8 @@ pub enum VoucherError {
     /// (deauthorized) the escrow or the recipient. Nothing moved; the voucher
     /// is unchanged and the call can be retried once the freeze is lifted.
     TokenTransferFailed = 24,
+    /// The amount is more than `MAX_OVERPAY_BPS` above the listed service price.
+    AmountAboveMaxPrice = 25,
 }
 
 /// Maps the shared helpers' failures onto this contract's error numbers, so

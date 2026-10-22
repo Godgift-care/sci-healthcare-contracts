@@ -5,6 +5,12 @@ nav_order: 3
 
 # Economics
 
+## Funding overpayments
+
+`create_voucher` accepts an amount from the listed service price up to **20% above it** (`MAX_OVERPAY_BPS = 2,000`). This allows small quote or rounding differences while preventing a mistyped amount from sending an arbitrarily large extra payment to the clinic. An amount exactly at the cap is accepted; one smallest token unit above it is rejected with `AmountAboveMaxPrice` (#25). The cap is calculated with checked integer arithmetic; an overflow returns `MathOverflow`.
+
+For example, a service listed at 30,000,000 stroops can be funded for at most 36,000,000 stroops. If a funder does overpay within that limit, `reduce_amount` can still return the difference before the clinic claims the voucher.
+
 ## The fee
 
 The protocol takes a fee in basis points on settlement only. The production configuration is **100 basis points — 1%**. The contract caps it at 1000 bps (10%) and this ceiling is enforced at initialisation, so a misconfigured deployment cannot charge more.

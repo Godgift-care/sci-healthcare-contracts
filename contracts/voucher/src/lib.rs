@@ -68,6 +68,8 @@ use storage::{
 const BPS_DENOMINATOR: i128 = 10_000;
 /// Ceiling on the protocol fee, enforced at initialization. 10%.
 const MAX_FEE_BPS: u32 = 1_000;
+/// Maximum funding overpayment above the listed service price. 20%.
+pub const MAX_OVERPAY_BPS: u32 = 2_000;
 /// How long past expiry a claimed-but-never-attested voucher stays locked
 /// before the funder can take the money back. Seven days.
 ///
@@ -174,6 +176,15 @@ impl VoucherEscrow {
         }
         if amount < price {
             return Err(VoucherError::AmountBelowPrice);
+        }
+        let max_amount = price
+            .checked_mul(i128::from(MAX_OVERPAY_BPS))
+            .and_then(|overpayment| {
+                price.checked_add(overpayment / BPS_DENOMINATOR)
+            })
+            .ok_or(VoucherError::MathOverflow)?;
+        if amount > max_amount {
+            return Err(VoucherError::AmountAboveMaxPrice);
         }
         // Listed, but paused by the clinic (e.g. out of test kits).
         if !registry.is_service_available(&provider, &service_code) {
