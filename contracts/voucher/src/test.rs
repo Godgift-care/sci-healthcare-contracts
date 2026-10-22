@@ -1903,6 +1903,107 @@ fn multisig_admin_can_act_on_all_three_contracts() {
     assert_eq!(f.voucher.get_voucher(&id).status, VoucherStatus::Refunded);
 }
 
+// ----- reassigning a funded voucher to another patient -----
+//
+// A funder who typed the wrong patient reference should not have to wait
+// for expiry or fund the voucher twice. `reassign` repoints a voucher that
+// is still `Funded`; once the clinic has claimed it the reference is
+// settled and cannot move.
+
+/// A second, different patient reference.
+fn other_patient(env: &Env) -> BytesN<32> {
+    BytesN::from_array(env, &[7u8; 32])
+}
+
+#[test]
+fn funder_reassigns_a_funded_voucher() {
+    let f = setup();
+    let id = fund(&f);
+    let new_ref = other_patient(&f.env);
+
+    f.voucher.reassign(&f.funder, &id, &new_ref);
+
+    let voucher = f.voucher.get_voucher(&id);
+    assert_eq!(voucher.beneficiary_ref, new_ref);
+    // Nothing else about the voucher moved.
+    assert_eq!(voucher.status, VoucherStatus::Funded);
+    assert_eq!(voucher.amount, CONSULT_PRICE);
+    assert_eq!(voucher.provider, f.provider);
+    assert_eq!(voucher.service_code, CONSULT);
+    // And no money moved: reassigning is not a refund and not a new funding.
+    assert_eq!(f.token.balance(&f.voucher.address), CONSULT_PRICE);
+    assert_escrow(&f, CONSULT_PRICE);
+}
+
+#[test]
+fn a_stranger_cannot_reassign_someone_elses_voucher() {
+    let f = setup();
+    let id = fund(&f);
+    let stranger = Address::generate(&f.env);
+
+    let err = f
+        .voucher
+        .try_reassign(&stranger, &id, &other_patient(&f.env))
+        .err()
+        .unwrap()
+        .unwrap();
+    assert_eq!(err, VoucherError::NotAuthorized);
+
+    // The reference is untouched.
+    assert_eq!(f.voucher.get_voucher(&id).beneficiary_ref, patient(&f.env));
+}
+
+#[test]
+fn cannot_reassign_after_the_voucher_is_claimed() {
+    let f = setup();
+    let id = fund(&f);
+    f.voucher.claim(&f.provider, &id);
+
+    let err = f
+        .voucher
+        .try_reassign(&f.funder, &id, &other_patient(&f.env))
+        .err()
+        .unwrap()
+        .unwrap();
+    assert_eq!(err, VoucherError::InvalidStatus);
+    assert_eq!(f.voucher.get_voucher(&id).beneficiary_ref, patient(&f.env));
+}
+
+#[test]
+fn cannot_reassign_after_the_voucher_is_settled() {
+    let f = setup();
+    let id = fund(&f);
+    f.voucher.claim(&f.provider, &id);
+    f.voucher.attest(&f.attester, &id);
+    advance(&f.env, DISPUTE_WINDOW + 1);
+    f.voucher.settle(&id);
+
+    let err = f
+        .voucher
+        .try_reassign(&f.funder, &id, &other_patient(&f.env))
+        .err()
+        .unwrap()
+        .unwrap();
+    assert_eq!(err, VoucherError::InvalidStatus);
+    assert_eq!(f.voucher.get_voucher(&id).beneficiary_ref, patient(&f.env));
+}
+
+#[test]
+fn reassign_event_snapshot_carries_the_old_and_the_new_reference() {
+    let f = setup();
+    let id = fund(&f);
+    let new_ref = other_patient(&f.env);
+
+    f.voucher.reassign(&f.funder, &id, &new_ref);
+
+    let e = one_event(&f);
+    assert_name_and_topic(&e, "voucher_reassigned");
+    assert_eq!(field_u64(&e, "voucher_id"), id);
+    assert_eq!(field_names(&e), ["new_ref", "old_ref", "voucher_id"]);
+    // The two references differ, so the event really carries the change.
+    assert_ne!(field(&e, "old_ref"), field(&e, "new_ref"));
+}
+
 // ----- event snapshots -----
 //
 // Every lifecycle event must carry what was paid for — `service_code` and
@@ -2271,6 +2372,10 @@ const AUTH_MATRIX: &[AuthCase] = &[
         auth: signer("`funder`", funder_addr),
     },
     AuthCase {
+        function: "reassign",
+        auth: signer("`funder`", funder_addr),
+    },
+    AuthCase {
         function: "reduce_amount",
         auth: signer("`funder`", funder_addr),
     },
@@ -2393,6 +2498,10 @@ fn run_case(f: &AuthFixture, function: &str) -> std::vec::Vec<Address> {
         }
         "create_voucher" => {
             fund(&f.f);
+        }
+        "reassign" => {
+            let id = fund(&f.f);
+            voucher.reassign(&f.f.funder, &id, &other_patient(env));
         }
         "reduce_amount" => {
             let id = fund_overpaid(&f.f, CONSULT_PRICE * 2);

@@ -54,7 +54,7 @@ use soroban_sdk::{contract, contractimpl, token, Address, BytesN, Env, String};
 pub use events::{
     AdminChanged, AdminProposed, AttestationCapChanged, DisputeResolved, Initialized,
     VoucherAmountReduced, VoucherAttested, VoucherClaimed, VoucherCreated, VoucherDisputed,
-    VoucherRefunded, VoucherSettled,
+    VoucherReassigned, VoucherRefunded, VoucherSettled,
 };
 pub use interfaces::{ReceiptClient, RegistryClient};
 pub use types::{Config, DataKey, Voucher, VoucherError, VoucherStatus};
@@ -217,6 +217,56 @@ impl VoucherEscrow {
         }
         .publish(&env);
         Ok(id)
+    }
+
+    /// Points a still-funded voucher at a different patient reference.
+    ///
+    /// A funder who typed the wrong patient reference should not have to
+    /// wait for expiry or cancel the voucher and fund it again. While the
+    /// voucher is still `Funded` the funder may repoint it at another
+    /// reference.
+    ///
+    /// Only the funder of the voucher may do this, and only while it is
+    /// `Funded`: once the clinic has claimed the voucher the care it covers
+    /// has begun, so the reference it was funded for is settled and cannot
+    /// be moved. Nothing else changes: the amount, the provider, the service
+    /// and the expiry stay exactly as they were, and no money moves.
+    ///
+    /// Both references are opaque salted hashes, so the event carries no
+    /// patient identity — only the old and the new reference.
+    ///
+    /// Errors:
+    ///
+    /// - `NotAuthorized` — the caller is not the voucher's funder.
+    /// - `InvalidStatus` — the voucher is no longer `Funded`.
+    pub fn reassign(
+        env: Env,
+        funder: Address,
+        voucher_id: u64,
+        new_ref: BytesN<32>,
+    ) -> Result<(), VoucherError> {
+        funder.require_auth();
+
+        let mut voucher = read_voucher(&env, voucher_id)?;
+        if voucher.funder != funder {
+            return Err(VoucherError::NotAuthorized);
+        }
+        if voucher.status != VoucherStatus::Funded {
+            return Err(VoucherError::InvalidStatus);
+        }
+
+        let old_ref = voucher.beneficiary_ref.clone();
+        voucher.beneficiary_ref = new_ref.clone();
+        write_voucher(&env, &voucher);
+
+        VoucherReassigned {
+            funder,
+            voucher_id,
+            old_ref,
+            new_ref,
+        }
+        .publish(&env);
+        Ok(())
     }
 
     /// Gives back an overpayment without giving up the voucher.
