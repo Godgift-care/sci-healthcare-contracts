@@ -43,7 +43,7 @@ jobs:
     steps:
       - name: Resolve the pull request
         id: pr
-        uses: actions/github-script@v8
+        uses: actions/github-script@v9
         env:
           PR_INPUT: ${{ inputs.pr }}
         with:
@@ -84,7 +84,7 @@ jobs:
           chmod +x "$RUNNER_TEMP/osv-scanner"
 
       - name: Scan
-        uses: actions/github-script@v8
+        uses: actions/github-script@v9
         env:
           TRUSTED_DIR: ${{ github.workspace }}/trusted
           OSV_SCANNER: ${{ runner.temp }}/osv-scanner
@@ -99,7 +99,7 @@ jobs:
       # or missing status behind.
       - name: Report a scan error
         if: (failure() || cancelled()) && steps.pr.outputs.sha
-        uses: actions/github-script@v8
+        uses: actions/github-script@v9
         env:
           SHA: ${{ steps.pr.outputs.sha }}
         with:
