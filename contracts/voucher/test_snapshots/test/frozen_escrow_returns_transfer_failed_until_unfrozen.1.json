@@ -276,6 +276,7 @@
     ],
     [],
     [],
+    [],
     [
       [
         "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAMDR4",
@@ -299,7 +300,6 @@
       ]
     ],
     [],
-    [],
     []
   ],
   "ledger": {
@@ -322,7 +322,7 @@
               "seq_num": "0",
               "num_sub_entries": 0,
               "inflation_dest": null,
-              "flags": 2,
+              "flags": 10,
               "home_domain": "",
               "thresholds": "01010101",
               "signers": [],
@@ -839,6 +839,14 @@
                   },
                   {
                     "key": {
+                      "symbol": "attester"
+                    },
+                    "val": {
+                      "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAITA4"
+                    }
+                  },
+                  {
+                    "key": {
                       "symbol": "beneficiary_ref"
                     },
                     "val": {
@@ -960,6 +968,14 @@
                           },
                           {
                             "key": {
+                              "symbol": "attester_share_bps"
+                            },
+                            "val": {
+                              "u32": 50
+                            }
+                          },
+                          {
+                            "key": {
                               "symbol": "dispute_window"
                             },
                             "val": {
@@ -1019,6 +1035,18 @@
                       },
                       "val": {
                         "u64": "2"
+                      }
+                    },
+                    {
+                      "key": {
+                        "vec": [
+                          {
+                            "symbol": "OpenEscrow"
+                          }
+                        ]
+                      },
+                      "val": {
+                        "i128": "0"
                       }
                     }
                   ]
@@ -1331,7 +1359,59 @@
                       "symbol": "clawback"
                     },
                     "val": {
-                      "bool": false
+                      "bool": true
+                    }
+                  }
+                ]
+              }
+            }
+          },
+          "ext": "v0"
+        },
+        "live_until": 518400
+      },
+      {
+        "entry": {
+          "last_modified_ledger_seq": 0,
+          "data": {
+            "contract_data": {
+              "ext": "v0",
+              "contract": "CDS3FDGQ4JA2V3F26Y4BMWWJEC5TT26RJBN7KIQKUMVO2MAOCMDTSZ7A",
+              "key": {
+                "vec": [
+                  {
+                    "symbol": "Balance"
+                  },
+                  {
+                    "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAITA4"
+                  }
+                ]
+              },
+              "durability": "persistent",
+              "val": {
+                "map": [
+                  {
+                    "key": {
+                      "symbol": "amount"
+                    },
+                    "val": {
+                      "i128": "150000"
+                    }
+                  },
+                  {
+                    "key": {
+                      "symbol": "authorized"
+                    },
+                    "val": {
+                      "bool": true
+                    }
+                  },
+                  {
+                    "key": {
+                      "symbol": "clawback"
+                    },
+                    "val": {
+                      "bool": true
                     }
                   }
                 ]
@@ -1367,7 +1447,7 @@
                       "symbol": "amount"
                     },
                     "val": {
-                      "i128": "300000"
+                      "i128": "150000"
                     }
                   },
                   {
@@ -1383,7 +1463,7 @@
                       "symbol": "clawback"
                     },
                     "val": {
-                      "bool": false
+                      "bool": true
                     }
                   }
                 ]
@@ -1435,7 +1515,7 @@
                       "symbol": "clawback"
                     },
                     "val": {
-                      "bool": false
+                      "bool": true
                     }
                   }
                 ]

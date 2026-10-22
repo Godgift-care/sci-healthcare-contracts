@@ -601,6 +601,119 @@ fn non_admin_cannot_add_attester() {
 }
 
 #[test]
+fn verifier_lifecycle() {
+    let f = setup();
+    let verifier = Address::generate(&f.env);
+    assert!(!f.client.is_verifier(&verifier));
+
+    f.client.add_verifier(&f.admin, &verifier);
+    assert!(f.client.is_verifier(&verifier));
+
+    f.client.remove_verifier(&f.admin, &verifier);
+    assert!(!f.client.is_verifier(&verifier));
+}
+
+#[test]
+fn non_admin_cannot_add_or_remove_verifier() {
+    let f = setup();
+    let impostor = Address::generate(&f.env);
+    let verifier = Address::generate(&f.env);
+
+    let err = f
+        .client
+        .try_add_verifier(&impostor, &verifier)
+        .err()
+        .unwrap()
+        .unwrap();
+    assert_eq!(err, RegistryError::NotAuthorized);
+
+    f.client.add_verifier(&f.admin, &verifier);
+    let err = f
+        .client
+        .try_remove_verifier(&impostor, &verifier)
+        .err()
+        .unwrap()
+        .unwrap();
+    assert_eq!(err, RegistryError::NotAuthorized);
+}
+
+#[test]
+fn verifier_can_change_provider_status_and_role_boundaries() {
+    let f = setup();
+    let verifier = Address::generate(&f.env);
+    f.client.add_verifier(&f.admin, &verifier);
+
+    let provider = Address::generate(&f.env);
+    f.client.register_provider(
+        &provider,
+        &String::from_str(&f.env, "Verifier Clinic"),
+        &String::from_str(&f.env, "NG"),
+    );
+
+    // Verifier activates provider
+    f.client
+        .set_provider_status(&verifier, &provider, &ProviderStatus::Active);
+    assert!(f.client.is_active_provider(&provider));
+
+    // Verifier suspends provider
+    f.client
+        .set_provider_status(&verifier, &provider, &ProviderStatus::Suspended);
+    assert!(!f.client.is_active_provider(&provider));
+
+    // Verifier cannot add or remove attesters
+    let other = Address::generate(&f.env);
+    let err = f
+        .client
+        .try_add_attester(&verifier, &other)
+        .err()
+        .unwrap()
+        .unwrap();
+    assert_eq!(err, RegistryError::NotAuthorized);
+    let err = f
+        .client
+        .try_remove_attester(&verifier, &other)
+        .err()
+        .unwrap()
+        .unwrap();
+    assert_eq!(err, RegistryError::NotAuthorized);
+
+    // Verifier cannot add or remove verifiers
+    let err = f
+        .client
+        .try_add_verifier(&verifier, &other)
+        .err()
+        .unwrap()
+        .unwrap();
+    assert_eq!(err, RegistryError::NotAuthorized);
+    let err = f
+        .client
+        .try_remove_verifier(&verifier, &other)
+        .err()
+        .unwrap()
+        .unwrap();
+    assert_eq!(err, RegistryError::NotAuthorized);
+
+    // Verifier cannot propose admin
+    let err = f
+        .client
+        .try_propose_admin(&verifier, &other)
+        .err()
+        .unwrap()
+        .unwrap();
+    assert_eq!(err, RegistryError::NotAuthorized);
+
+    // Removed verifier loses access to change status
+    f.client.remove_verifier(&f.admin, &verifier);
+    let err = f
+        .client
+        .try_set_provider_status(&verifier, &provider, &ProviderStatus::Active)
+        .err()
+        .unwrap()
+        .unwrap();
+    assert_eq!(err, RegistryError::NotAuthorized);
+}
+
+#[test]
 fn admin_can_be_transferred() {
     let f = setup();
     let new_admin = Address::generate(&f.env);
@@ -816,7 +929,7 @@ const AUTH_MATRIX: &[AuthCase] = &[
     },
     AuthCase {
         function: "set_provider_status",
-        auth: signer("`admin`", admin_addr),
+        auth: signer("`caller`", admin_addr),
     },
     AuthCase {
         function: "upsert_service",
@@ -840,6 +953,14 @@ const AUTH_MATRIX: &[AuthCase] = &[
     },
     AuthCase {
         function: "remove_attester",
+        auth: signer("`admin`", admin_addr),
+    },
+    AuthCase {
+        function: "add_verifier",
+        auth: signer("`admin`", admin_addr),
+    },
+    AuthCase {
+        function: "remove_verifier",
         auth: signer("`admin`", admin_addr),
     },
     AuthCase {
@@ -888,6 +1009,10 @@ const AUTH_MATRIX: &[AuthCase] = &[
     },
     AuthCase {
         function: "is_attester",
+        auth: Auth::Free("none (view)"),
+    },
+    AuthCase {
+        function: "is_verifier",
         auth: Auth::Free("none (view)"),
     },
     AuthCase {
@@ -961,6 +1086,13 @@ fn run_case(f: &AuthFixture, function: &str) -> std::vec::Vec<Address> {
             client.add_attester(&f.f.admin, &f.new_provider);
             client.remove_attester(&f.f.admin, &f.new_provider);
         }
+        "add_verifier" => {
+            client.add_verifier(&f.f.admin, &f.new_provider);
+        }
+        "remove_verifier" => {
+            client.add_verifier(&f.f.admin, &f.new_provider);
+            client.remove_verifier(&f.f.admin, &f.new_provider);
+        }
         "propose_admin" => {
             client.propose_admin(&f.f.admin, &f.new_admin);
         }
@@ -1004,6 +1136,9 @@ fn run_case(f: &AuthFixture, function: &str) -> std::vec::Vec<Address> {
         }
         "is_attester" => {
             client.is_attester(&f.provider);
+        }
+        "is_verifier" => {
+            client.is_verifier(&f.provider);
         }
         "version" => {
             client.version();
@@ -1436,6 +1571,29 @@ fn attester_removed_event_snapshot() {
 
     let e = one_event(&f);
     assert_layout(&e, "attester_removed", &[ScVal::from(&attester)], &[]);
+}
+
+#[test]
+fn verifier_added_event_snapshot() {
+    let f = setup();
+    let verifier = Address::generate(&f.env);
+
+    f.client.add_verifier(&f.admin, &verifier);
+
+    let e = one_event(&f);
+    assert_layout(&e, "verifier_added", &[ScVal::from(&verifier)], &[]);
+}
+
+#[test]
+fn verifier_removed_event_snapshot() {
+    let f = setup();
+    let verifier = Address::generate(&f.env);
+    f.client.add_verifier(&f.admin, &verifier);
+
+    f.client.remove_verifier(&f.admin, &verifier);
+
+    let e = one_event(&f);
+    assert_layout(&e, "verifier_removed", &[ScVal::from(&verifier)], &[]);
 }
 
 #[test]

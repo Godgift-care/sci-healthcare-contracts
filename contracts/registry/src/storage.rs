@@ -96,3 +96,25 @@ pub(crate) fn write_attester(env: &Env, addr: &Address, enabled: bool) {
     env.storage().persistent().set(&key, &enabled);
     common::extend_persistent(env, &key);
 }
+
+/// Whether `addr` currently holds verifier rights.
+///
+/// Extends the entry on every read, like providers, services and attesters, so
+/// a verifier who keeps checking clinic credentials never has their role
+/// archived out from under them.
+pub(crate) fn read_verifier(env: &Env, addr: &Address) -> bool {
+    let key = DataKey::Verifier(addr.clone());
+    match env.storage().persistent().get::<_, bool>(&key) {
+        Some(enabled) => {
+            common::extend_persistent(env, &key);
+            enabled
+        }
+        None => false,
+    }
+}
+
+pub(crate) fn write_verifier(env: &Env, addr: &Address, enabled: bool) {
+    let key = DataKey::Verifier(addr.clone());
+    env.storage().persistent().set(&key, &enabled);
+    common::extend_persistent(env, &key);
+}

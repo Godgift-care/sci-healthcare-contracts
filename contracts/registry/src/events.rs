@@ -87,6 +87,20 @@ pub struct AttesterRemoved {
 
 #[contractevent]
 #[derive(Clone, Debug, Eq, PartialEq)]
+pub struct VerifierAdded {
+    #[topic]
+    pub verifier: Address,
+}
+
+#[contractevent]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct VerifierRemoved {
+    #[topic]
+    pub verifier: Address,
+}
+
+#[contractevent]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct AdminProposed {
     #[topic]
     pub admin: Address,

@@ -28,14 +28,14 @@ use soroban_sdk::{contract, contractimpl, Address, Env, String, Vec};
 pub use events::{
     AdminChanged, AdminProposed, AttesterAdded, AttesterRemoved, Initialized, ProviderRegistered,
     ProviderStatusChanged, ServiceAvailabilityChanged, ServicePriceScheduled, ServiceRemoved,
-    ServiceUpserted,
+    ServiceUpserted, VerifierAdded, VerifierRemoved,
 };
 pub use types::{DataKey, Provider, ProviderStatus, RegistryError, ServiceItem};
 
 use storage::{
     extend_instance, has_admin, has_provider, read_admin, read_attester, read_pending_admin,
-    read_provider, read_service, remove_service as storage_remove_service, write_admin,
-    write_attester, write_provider, write_service,
+    read_provider, read_service, read_verifier, remove_service as storage_remove_service,
+    write_admin, write_attester, write_provider, write_service, write_verifier,
 };
 
 /// Least notice a clinic must give before a scheduled price takes effect.
@@ -102,14 +102,14 @@ impl Registry {
         Ok(())
     }
 
-    /// Moves a provider between lifecycle states. Admin only.
+    /// Moves a provider between lifecycle states. Admin or verifier.
     pub fn set_provider_status(
         env: Env,
-        admin: Address,
+        caller: Address,
         provider_addr: Address,
         status: ProviderStatus,
     ) -> Result<(), RegistryError> {
-        Self::require_admin(&env, &admin)?;
+        Self::require_admin_or_verifier(&env, &caller)?;
 
         let mut provider = read_provider(&env, &provider_addr)?;
         provider.status = status;
@@ -312,6 +312,28 @@ impl Registry {
         Ok(())
     }
 
+    /// Grants verifier rights. Admin only.
+    pub fn add_verifier(env: Env, admin: Address, verifier: Address) -> Result<(), RegistryError> {
+        Self::require_admin(&env, &admin)?;
+        write_verifier(&env, &verifier, true);
+        extend_instance(&env);
+        VerifierAdded { verifier }.publish(&env);
+        Ok(())
+    }
+
+    /// Revokes verifier rights. Admin only.
+    pub fn remove_verifier(
+        env: Env,
+        admin: Address,
+        verifier: Address,
+    ) -> Result<(), RegistryError> {
+        Self::require_admin(&env, &admin)?;
+        write_verifier(&env, &verifier, false);
+        extend_instance(&env);
+        VerifierRemoved { verifier }.publish(&env);
+        Ok(())
+    }
+
     /// Nominates a new admin. Takes effect only once they accept.
     ///
     /// Two steps so a typo in the new address cannot permanently strand
@@ -439,6 +461,10 @@ impl Registry {
         read_attester(&env, &addr)
     }
 
+    pub fn is_verifier(env: Env, addr: Address) -> bool {
+        read_verifier(&env, &addr)
+    }
+
     /// Crate version this contract was built from, e.g. `"0.2.0"`.
     ///
     /// Lets integrators and the indexer tell deployments apart without
@@ -452,6 +478,17 @@ impl Registry {
     fn require_admin(env: &Env, admin: &Address) -> Result<(), RegistryError> {
         let stored = read_admin(env)?;
         common::require_admin(&stored, admin)?;
+        Ok(())
+    }
+
+    fn require_admin_or_verifier(env: &Env, caller: &Address) -> Result<(), RegistryError> {
+        let admin = read_admin(env)?;
+        let is_admin = &admin == caller;
+        let is_verifier = read_verifier(env, caller);
+        if !is_admin && !is_verifier {
+            return Err(RegistryError::NotAuthorized);
+        }
+        caller.require_auth();
         Ok(())
     }
 }

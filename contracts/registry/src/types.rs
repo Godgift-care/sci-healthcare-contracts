@@ -75,6 +75,7 @@ pub enum DataKey {
     Attester(Address),
     /// Address nominated by `propose_admin`, awaiting `accept_admin`.
     PendingAdmin,
+    Verifier(Address),
 }
 
 #[contracterror]

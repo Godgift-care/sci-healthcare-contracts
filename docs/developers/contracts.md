@@ -49,13 +49,15 @@ pub struct ServiceItem {
 | --- | --- | --- | --- | --- |
 | `initialize` | `admin: Address` | `()` | once | `AlreadyInitialized` |
 | `register_provider` | `owner, name, country` | `()` | `owner` | `EmptyName`, `InvalidCountry`, `ProviderExists` |
-| `set_provider_status` | `admin, provider_addr, status` | `()` | `admin` | `NotAuthorized`, `ProviderNotFound` |
+| `set_provider_status` | `caller, provider_addr, status` | `()` | `caller` | `NotAuthorized`, `ProviderNotFound` |
 | `upsert_service` | `provider_addr, code, label, price` | `()` | `provider_addr` | `InvalidPrice`, `EmptyName`, `ProviderNotActive`, `PriceIncreaseNeedsNotice` |
 | `schedule_service_price` | `provider_addr, code, price, effective_at` | `()` | `provider_addr` | `InvalidPrice`, `ProviderNotActive`, `ServiceNotFound`, `PriceNoticeTooShort` |
 | `remove_service` | `provider_addr, code` | `()` | `provider_addr` | `ServiceNotFound` |
 | `set_service_available` | `provider_addr, code, available: bool` | `()` | `provider_addr` | `ServiceNotFound` |
 | `add_attester` | `admin, attester` | `()` | `admin` | `NotAuthorized` |
 | `remove_attester` | `admin, attester` | `()` | `admin` | `NotAuthorized` |
+| `add_verifier` | `admin, verifier` | `()` | `admin` | `NotAuthorized` |
+| `remove_verifier` | `admin, verifier` | `()` | `admin` | `NotAuthorized` |
 | `propose_admin` | `admin, new_admin` | `()` | `admin` | `NotAuthorized` |
 | `accept_admin` | `new_admin` | `()` | `new_admin` | `NoPendingAdmin`, `NotAuthorized` |
 | `get_pending_admin` | — | `Option<Address>` | view | — |
@@ -67,6 +69,7 @@ pub struct ServiceItem {
 | `get_upcoming_price` | `provider_addr, code` | `(i128, u64)` | view | `ServiceNotFound` |
 | `is_service_available` | `provider_addr, code` | `bool` | view | — |
 | `is_attester` | `addr` | `bool` | view | — |
+| `is_verifier` | `addr` | `bool` | view | — |
 | `get_admin` | — | `Address` | view | `NotInitialized` |
 | `version` | — | `String` | view | — |
 
@@ -86,13 +89,15 @@ Every public function, with the exact signer it demands — no signature that is
 | --- | --- |
 | `initialize` | none (one-shot) |
 | `register_provider` | `owner` |
-| `set_provider_status` | `admin` |
+| `set_provider_status` | `caller` |
 | `upsert_service` | `provider_addr` |
 | `schedule_service_price` | `provider_addr` |
 | `remove_service` | `provider_addr` |
 | `set_service_available` | `provider_addr` |
 | `add_attester` | `admin` |
 | `remove_attester` | `admin` |
+| `add_verifier` | `admin` |
+| `remove_verifier` | `admin` |
 | `propose_admin` | `admin` |
 | `accept_admin` | `new_admin` |
 | `get_admin` | none (view) |
@@ -105,6 +110,7 @@ Every public function, with the exact signer it demands — no signature that is
 | `get_upcoming_price` | none (view) |
 | `is_service_available` | none (view) |
 | `is_attester` | none (view) |
+| `is_verifier` | none (view) |
 | `version` | none (view) |
 
 A signer is not the same as a role: `admin` must be the stored admin **and** sign, and the two checks are ordered so a wrong `admin` argument fails before any signature is requested.
@@ -129,7 +135,7 @@ A signer is not the same as a role: `admin` must be the stored admin **and** sig
 
 ### Events
 
-`provider_registered`, `provider_status_changed`, `service_upserted`, `service_removed`, `service_price_scheduled` (topics `provider`, `code`; data `price`, `effective_at`), `service_availability_changed` (topics `provider`, `code`; data `available`), `attester_added`, `attester_removed`, `admin_changed`, `initialized`
+`provider_registered`, `provider_status_changed`, `service_upserted`, `service_removed`, `service_price_scheduled` (topics `provider`, `code`; data `price`, `effective_at`), `service_availability_changed` (topics `provider`, `code`; data `available`), `attester_added`, `attester_removed`, `verifier_added`, `verifier_removed`, `admin_changed`, `initialized`
 
 ---
 
@@ -563,7 +569,7 @@ stays in the live ledger. These are the numbers, all in ledgers:
 | --- | --- | --- | --- | --- |
 | Contract instance (config, admin, id counter) — all contracts | instance | every write | 7 days | 30 days |
 | `Voucher(id)` | persistent | every read and write | 30 days | 90 days |
-| `Provider`, `Service`, `Attester` | persistent | every read and write | 30 days | 90 days |
+| `Provider`, `Service`, `Attester`, `Verifier` | persistent | every read and write | 30 days | 90 days |
 | `Receipt(id)`, `Count(beneficiary_ref)` | persistent | every read and write | 30 days | 90 days |
 | `ProviderCount(provider)`, `ProviderReceipt(provider, index)` | persistent | every mint and `receipts_of_provider` read | 30 days | 90 days |
 | Sponsor `Sponsor(address)`, `Match(id)`, `OriginalOf(id)` | persistent | every read and write | 30 days | 90 days |
