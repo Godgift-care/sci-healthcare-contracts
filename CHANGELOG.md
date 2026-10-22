@@ -63,6 +63,7 @@
 - **voucher:** `voucher_claimed`, `voucher_attested`, `voucher_disputed`, `voucher_settled` and `voucher_refunded` now carry `service_code` and `amount` in their data, appended after the fields each event already had. Only `voucher_created` used to say what the voucher was for, so an indexer or wallet reading a single lifecycle event had to load the voucher to show what was paid for. `voucher_refunded` already carried `amount`; it gains `service_code` only. Topics are unchanged and the data map is keyed by name, so the indexer in `sci-healthcare-backend` decodes the new layout without a breaking change (its matching decoder change is linked from the pull request). Covered by five event snapshot tests in `contracts/voucher/src/test.rs` that read the decoded XDR event and the regenerated `test_snapshots`.
 
 Tests: 222 (was 195).
+- `examples/lifecycle.ts`: a runnable TypeScript walkthrough of the full voucher lifecycle (fund → claim → attest → settle) using `@stellar/stellar-sdk` and local keys, with a README section and a CI type-check job. See "Run the lifecycle in TypeScript".
 
 ## 0.2.0 — 2026-10-09
 

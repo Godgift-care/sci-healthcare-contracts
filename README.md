@@ -205,6 +205,25 @@ today, and any future one has to carry a reason.
 `SHA256SUMS` file and notes that explain how to compare the hash with a
 deployed contract.
 
+### Run the lifecycle in TypeScript
+
+[`examples/lifecycle.ts`](examples/lifecycle.ts) is the same journey as `seed.sh` — fund, claim, attest, settle — written with [`@stellar/stellar-sdk`](https://github.com/stellar/js-stellar-sdk) and local keys instead of the CLI, and it finishes the story: it waits out the dispute window, calls `settle`, and prints the receipt the contract minted.
+
+```bash
+# from the repository root — a short window lets one run reach settle
+DISPUTE_WINDOW=60 ./scripts/deploy.sh testnet
+cd examples && npm install
+export ADMIN_SECRET=…                            # the seed of your deployment's admin
+npm run lifecycle                                # fund → claim → attest → settle
+npm run lifecycle -- settle <voucher-id>         # finish a voucher later, if the window is long
+```
+
+- Contract ids come from `deployments/testnet.env` (written by `deploy.sh`); `REGISTRY_CONTRACT_ID` and friends override it.
+- `CLINIC_SECRET`, `ATTESTER_SECRET` and `FUNDER_SECRET` are optional — a missing one is generated, printed and friendbotted, so only `ADMIN_SECRET` is required. `ISSUER_SECRET` is needed only when the deployment has no faucet.
+- Activation and attestation are admin-gated, so a full run needs a deployment you control; the shared ids in the table above belong to the maintainer's deployment.
+- Node 18+ is required; the script polyfills the Web Crypto global that older Node versions hide from `tsx`.
+- CI type-checks the example, so it stays working.
+
 ## Contract reference
 
 ### `registry`

@@ -1,7 +1,7 @@
 #![cfg(test)]
 
 use soroban_sdk::{
-    testutils::{Address as _, Ledger as _},
+    testutils::{Address as _, IssuerFlags, Ledger as _, StellarAssetContract},
     token, Address, BytesN, Env, String,
 };
 
@@ -27,6 +27,8 @@ struct Fixture {
     registry: RegistryClient<'static>,
     receipts: ReceiptBookClient<'static>,
     token: token::Client<'static>,
+    /// The settlement token's issuer side, for clawback and freeze tests.
+    sac: StellarAssetContract,
     admin: Address,
     funder: Address,
     provider: Address,
@@ -104,6 +106,7 @@ fn setup_with(fee_bps: u32, attester_share_bps: u32) -> Fixture {
         registry,
         receipts,
         token: token_client,
+        sac,
         admin,
         funder,
         provider,
@@ -3127,4 +3130,175 @@ fn math_overflow_in_fee_calculation() {
     advance(&env, DISPUTE_WINDOW + 1);
     let err = voucher.try_settle(&id).err().unwrap().unwrap();
     assert_eq!(err, VoucherError::MathOverflow);
+}
+
+// ----- clawback and frozen settlement token -----
+//
+// USDC's issuer can claw funds back from any balance and freeze
+// (deauthorize) one. Escrow is one shared balance, so these tests check that
+// every payout path fails with a named error and reverts cleanly instead of
+// panicking inside the token or paying out part of a voucher.
+
+/// The issuer-side client of the settlement token, with clawback and
+/// revocation enabled. Call before funding: a balance records whether it can
+/// be clawed back when it is created.
+fn issuer_with_clawback(f: &Fixture) -> token::StellarAssetClient<'static> {
+    let issuer = f.sac.issuer();
+    issuer.set_flag(IssuerFlags::RevocableFlag);
+    issuer.set_flag(IssuerFlags::ClawbackEnabledFlag);
+    token::StellarAssetClient::new(&f.env, &f.sac.address())
+}
+
+fn attested(f: &Fixture) -> u64 {
+    let id = claimed(f);
+    f.voucher.attest(&f.attester, &id);
+    advance(&f.env, DISPUTE_WINDOW + 1);
+    id
+}
+
+#[test]
+fn clawback_then_settle_returns_escrow_shortfall() {
+    let f = setup();
+    let issuer = issuer_with_clawback(&f);
+    let id = attested(&f);
+    issuer.clawback(&f.voucher.address, &1);
+
+    let err = f.voucher.try_settle(&id).err().unwrap().unwrap();
+    assert_eq!(err, VoucherError::EscrowShortfall);
+    // Nothing moved and nothing was recorded.
+    assert_eq!(f.voucher.get_voucher(&id).status, VoucherStatus::Attested);
+    assert_eq!(f.token.balance(&f.provider), 0);
+    assert_eq!(f.receipts.count_for(&patient(&f.env)), 0);
+}
+
+#[test]
+fn clawback_then_refund_returns_escrow_shortfall() {
+    let f = setup();
+    let issuer = issuer_with_clawback(&f);
+    let id = fund(&f);
+    issuer.clawback(&f.voucher.address, &1);
+    advance(&f.env, 31 * 24 * 60 * 60);
+
+    let err = f.voucher.try_refund(&id).err().unwrap().unwrap();
+    assert_eq!(err, VoucherError::EscrowShortfall);
+    assert_eq!(f.voucher.get_voucher(&id).status, VoucherStatus::Funded);
+}
+
+#[test]
+fn clawback_then_resolving_a_dispute_returns_escrow_shortfall() {
+    let f = setup();
+    let issuer = issuer_with_clawback(&f);
+    let id = claimed(&f);
+    f.voucher.dispute(&f.funder, &id, &1u32);
+    issuer.clawback(&f.voucher.address, &1);
+
+    for refund_funder in [true, false] {
+        let err = f
+            .voucher
+            .try_resolve_dispute(&f.admin, &id, &refund_funder)
+            .err()
+            .unwrap()
+            .unwrap();
+        assert_eq!(err, VoucherError::EscrowShortfall);
+    }
+    let err = f
+        .voucher
+        .try_resolve_split(&f.admin, &id, &(CONSULT_PRICE / 2))
+        .err()
+        .unwrap()
+        .unwrap();
+    assert_eq!(err, VoucherError::EscrowShortfall);
+    assert_eq!(f.voucher.get_voucher(&id).status, VoucherStatus::Disputed);
+}
+
+#[test]
+fn clawback_then_reducing_the_amount_returns_escrow_shortfall() {
+    let f = setup();
+    let issuer = issuer_with_clawback(&f);
+    let id = fund_overpaid(&f, CONSULT_PRICE * 2);
+    issuer.clawback(&f.voucher.address, &1);
+
+    let err = f
+        .voucher
+        .try_reduce_amount(&f.funder, &id, &CONSULT_PRICE)
+        .err()
+        .unwrap()
+        .unwrap();
+    assert_eq!(err, VoucherError::EscrowShortfall);
+    assert_eq!(f.voucher.get_voucher(&id).amount, CONSULT_PRICE * 2);
+}
+
+#[test]
+fn partial_clawback_falls_on_the_last_voucher_out() {
+    let f = setup();
+    let issuer = issuer_with_clawback(&f);
+    let first = claimed(&f);
+    let second = claimed(&f);
+    f.voucher.attest(&f.attester, &first);
+    f.voucher.attest(&f.attester, &second);
+    advance(&f.env, DISPUTE_WINDOW + 1);
+    issuer.clawback(&f.voucher.address, &1);
+
+    // The shared balance still covers one voucher in full...
+    f.voucher.settle(&first);
+    assert_eq!(f.voucher.get_voucher(&first).status, VoucherStatus::Settled);
+    // ...and not the second, which keeps its status until the balance is restored.
+    let err = f.voucher.try_settle(&second).err().unwrap().unwrap();
+    assert_eq!(err, VoucherError::EscrowShortfall);
+    assert_eq!(
+        f.voucher.get_voucher(&second).status,
+        VoucherStatus::Attested
+    );
+
+    issuer.mint(&f.voucher.address, &1);
+    f.voucher.settle(&second);
+    assert_eq!(
+        f.voucher.get_voucher(&second).status,
+        VoucherStatus::Settled
+    );
+}
+
+#[test]
+fn frozen_escrow_returns_transfer_failed_until_unfrozen() {
+    let f = setup();
+    let issuer = issuer_with_clawback(&f);
+    let id = attested(&f);
+    issuer.set_authorized(&f.voucher.address, &false);
+
+    let err = f.voucher.try_settle(&id).err().unwrap().unwrap();
+    assert_eq!(err, VoucherError::TokenTransferFailed);
+    assert_eq!(f.voucher.get_voucher(&id).status, VoucherStatus::Attested);
+    assert_eq!(f.token.balance(&f.voucher.address), CONSULT_PRICE);
+
+    issuer.set_authorized(&f.voucher.address, &true);
+    f.voucher.settle(&id);
+    assert_eq!(f.voucher.get_voucher(&id).status, VoucherStatus::Settled);
+}
+
+#[test]
+fn frozen_provider_returns_transfer_failed() {
+    let f = setup();
+    let issuer = issuer_with_clawback(&f);
+    let id = attested(&f);
+    issuer.set_authorized(&f.provider, &false);
+
+    let err = f.voucher.try_settle(&id).err().unwrap().unwrap();
+    assert_eq!(err, VoucherError::TokenTransferFailed);
+    // The whole call reverted: nobody was paid, not even the fee.
+    assert_eq!(f.token.balance(&f.fee_account), 0);
+    assert_eq!(f.token.balance(&f.attester), 0);
+    assert_eq!(f.voucher.get_voucher(&id).status, VoucherStatus::Attested);
+}
+
+#[test]
+fn frozen_funder_returns_transfer_failed_on_refund() {
+    let f = setup();
+    let issuer = issuer_with_clawback(&f);
+    let id = fund(&f);
+    issuer.set_authorized(&f.funder, &false);
+    advance(&f.env, 31 * 24 * 60 * 60);
+
+    let err = f.voucher.try_refund(&id).err().unwrap().unwrap();
+    assert_eq!(err, VoucherError::TokenTransferFailed);
+    assert_eq!(f.voucher.get_voucher(&id).status, VoucherStatus::Funded);
 }

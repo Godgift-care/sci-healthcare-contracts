@@ -50,6 +50,16 @@ The admin key is a single point of failure today. Moving it to a multisig is a d
 
 If a clinic is verified that should not have been, funders can send money to it. Verification is an off-chain process — checking a licence, visiting a site — and the registry only records its outcome.
 
+### The settlement token's issuer
+
+USDC is a regulated stablecoin, and its issuer can **claw back** funds from any balance and **freeze** (deauthorize) one. Escrowed vouchers sit in the voucher contract's own token balance, so the issuer can reach them; nothing in the contract can prevent that. What the contract does is behave predictably when it happens:
+
+- **Clawback.** Before paying anything out, `settle`, `refund`, `resolve_dispute`, `resolve_split` and `reduce_amount` check that the contract still holds the voucher's amount. If it does not, they fail with `EscrowShortfall` (#23) instead of a panic inside the token. Escrow is one balance shared by every open voucher, so a clawback is borne by whichever vouchers draw on it last: earlier ones settle or refund in full, and the rest fail with `EscrowShortfall` until the balance is restored.
+- **Freeze.** If the issuer has frozen the contract, the clinic or the funder, the token refuses the transfer and the call fails with `TokenTransferFailed` (#24).
+- **Nothing is half-paid.** Either error reverts the whole call: the voucher keeps its status, no receipt is minted and no fee is taken. A voucher held up by a freeze settles or refunds normally once the freeze is lifted.
+
+These are covered by the `clawback_*`, `partial_clawback_*` and `frozen_*` tests in `contracts/voucher/src/test.rs`, which run against a Stellar asset contract with clawback and revocation enabled.
+
 ## What the protocol deliberately does not claim
 
 - It does not verify that care was *good*, only that someone attested it happened.

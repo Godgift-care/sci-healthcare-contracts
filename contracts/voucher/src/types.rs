@@ -136,6 +136,13 @@ pub enum VoucherError {
     /// The new amount is not lower than the amount already escrowed, so
     /// there is nothing to give back.
     AmountNotReduced = 22,
+    /// The contract holds less of the settlement token than this voucher
+    /// escrows. Happens only if the token issuer clawed escrowed funds back.
+    EscrowShortfall = 23,
+    /// The token refused the payment, typically because the issuer froze
+    /// (deauthorized) the escrow or the recipient. Nothing moved; the voucher
+    /// is unchanged and the call can be retried once the freeze is lifted.
+    TokenTransferFailed = 24,
 }
 
 /// Maps the shared helpers' failures onto this contract's error numbers, so

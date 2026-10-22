@@ -282,8 +282,9 @@ impl VoucherEscrow {
         let difference = voucher.amount - new_amount;
         // Escrow first, record second: if the transfer fails the whole
         // invocation reverts and the escrowed amount is unchanged.
-        let escrow = env.current_contract_address();
-        token::Client::new(&env, &config.token).transfer(&escrow, &funder, &difference);
+        let token_client = token::Client::new(&env, &config.token);
+        Self::ensure_escrow_covers(&env, &token_client, voucher.amount)?;
+        Self::send(&env, &token_client, &funder, difference)?;
         // The difference has left escrow, so the running total follows it.
         decrease_open_escrow(&env, difference)?;
 
@@ -485,8 +486,7 @@ impl VoucherEscrow {
             return Err(VoucherError::NotYetExpired);
         }
 
-        Self::pay_back(&env, &config, &mut voucher)?;
-        Ok(())
+        Self::pay_back(&env, &config, &mut voucher)
     }
 
     /// Admin resolves a dispute. `refund_funder` picks the winner.
@@ -522,11 +522,10 @@ impl VoucherEscrow {
         .publish(&env);
 
         if refund_funder {
-            Self::pay_back(&env, &config, &mut voucher)?;
+            Self::pay_back(&env, &config, &mut voucher)
         } else {
-            Self::pay_out(&env, &config, &mut voucher)?;
+            Self::pay_out(&env, &config, &mut voucher)
         }
-        Ok(())
     }
 
     /// Admin resolves a dispute by splitting the escrow between the parties.
@@ -574,7 +573,7 @@ impl VoucherEscrow {
         }
         .publish(&env);
 
-        Self::pay_split(&env, &config, &mut voucher, to_provider, fee, to_funder);
+        Self::pay_split(&env, &config, &mut voucher, to_provider, fee, to_funder)?;
         Ok(())
     }
 
@@ -774,6 +773,38 @@ impl VoucherEscrow {
             .ok_or(VoucherError::MathOverflow)
     }
 
+    /// Fails with `EscrowShortfall` when the contract holds less of the token
+    /// than `amount`.
+    ///
+    /// Escrow is one token balance shared by every open voucher, so this can
+    /// only happen if the issuer clawed funds back from the contract. Checking
+    /// first turns what would be a host panic deep inside the token into a
+    /// defined error, and the whole invocation reverts: nothing is half-paid.
+    fn ensure_escrow_covers(
+        env: &Env,
+        token_client: &token::Client,
+        amount: i128,
+    ) -> Result<(), VoucherError> {
+        if token_client.balance(&env.current_contract_address()) < amount {
+            return Err(VoucherError::EscrowShortfall);
+        }
+        Ok(())
+    }
+
+    /// Moves `amount` out of escrow, turning a refused transfer — a frozen
+    /// (deauthorized) escrow or recipient — into `TokenTransferFailed`.
+    fn send(
+        env: &Env,
+        token_client: &token::Client,
+        to: &Address,
+        amount: i128,
+    ) -> Result<(), VoucherError> {
+        match token_client.try_transfer(&env.current_contract_address(), to, &amount) {
+            Ok(Ok(())) => Ok(()),
+            _ => Err(VoucherError::TokenTransferFailed),
+        }
+    }
+
     /// Pays the provider, splits the fee between the attester and the fee
     /// account, and mints the care receipt.
     ///
@@ -801,14 +832,15 @@ impl VoucherEscrow {
         let token_client = token::Client::new(env, &config.token);
         let escrow = env.current_contract_address();
 
-        token_client.transfer(&escrow, &voucher.provider, &net);
+        Self::ensure_escrow_covers(env, &token_client, voucher.amount)?;
+        Self::send(env, &token_client, &voucher.provider, net)?;
         if let Some(attester) = &voucher.attester {
             if attester_share > 0 {
-                token_client.transfer(&escrow, attester, &attester_share);
+                Self::send(env, &token_client, attester, attester_share)?;
             }
         }
         if fee_account_share > 0 {
-            token_client.transfer(&escrow, &config.fee_account, &fee_account_share);
+            Self::send(env, &token_client, &config.fee_account, fee_account_share)?;
         }
         decrease_open_escrow(env, voucher.amount)?;
 
@@ -847,19 +879,20 @@ impl VoucherEscrow {
         to_provider: i128,
         fee: i128,
         to_funder: i128,
-    ) {
+    ) -> Result<(), VoucherError> {
         let net = to_provider - fee;
         let token_client = token::Client::new(env, &config.token);
         let escrow = env.current_contract_address();
 
+        Self::ensure_escrow_covers(env, &token_client, voucher.amount)?;
         if net > 0 {
-            token_client.transfer(&escrow, &voucher.provider, &net);
+            Self::send(env, &token_client, &voucher.provider, net)?;
         }
         if fee > 0 {
-            token_client.transfer(&escrow, &config.fee_account, &fee);
+            Self::send(env, &token_client, &config.fee_account, fee)?;
         }
         if to_funder > 0 {
-            token_client.transfer(&escrow, &voucher.funder, &to_funder);
+            Self::send(env, &token_client, &voucher.funder, to_funder)?;
         }
 
         voucher.status = if to_provider == 0 {
@@ -881,16 +914,15 @@ impl VoucherEscrow {
                 &to_provider,
             );
         }
+        Ok(())
     }
 
     /// Returns the full escrowed amount to the funder. No fee is taken on
     /// care that never happened.
     fn pay_back(env: &Env, config: &Config, voucher: &mut Voucher) -> Result<(), VoucherError> {
-        token::Client::new(env, &config.token).transfer(
-            &env.current_contract_address(),
-            &voucher.funder,
-            &voucher.amount,
-        );
+        let token_client = token::Client::new(env, &config.token);
+        Self::ensure_escrow_covers(env, &token_client, voucher.amount)?;
+        Self::send(env, &token_client, &voucher.funder, voucher.amount)?;
         decrease_open_escrow(env, voucher.amount)?;
 
         voucher.status = VoucherStatus::Refunded;
