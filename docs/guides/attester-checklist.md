@@ -37,7 +37,7 @@ Keep a note of the evidence you relied on for each voucher — date, what you ch
 
 **Never attest on someone else's say-so.** "The clinic told me" and "the patient's relative said so" are not evidence. If you could not confirm the checklist yourself, the answer is to wait.
 
-**Never accept anything for an attestation.** No payment, gift or favour from a clinic, a patient or a funder, whether before or after. Report any offer to an administrator.
+**Never accept anything for an attestation.** No payment, gift or favour from a clinic, a patient or a funder, whether before or after. The protocol's configured attester share is the only compensation you may receive for attesting. Report any offer to an administrator.
 
 **Never share your key.** Your attester key is your signature. If someone else holds it, they can release money in your name — the daily attestation cap only limits how much before the administrator removes it. If you think your key is exposed, tell an administrator immediately so it can be removed from the registry.
 

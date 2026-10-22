@@ -53,8 +53,8 @@ use soroban_sdk::{contract, contractimpl, token, Address, BytesN, Env, String};
 #[allow(unused_imports)]
 pub use events::{
     AdminChanged, AdminProposed, AttestationCapChanged, DisputeResolved, Initialized,
-    VoucherAttested, VoucherClaimed, VoucherCreated, VoucherDisputed, VoucherRefunded,
-    VoucherSettled,
+    VoucherAmountReduced, VoucherAttested, VoucherClaimed, VoucherCreated, VoucherDisputed,
+    VoucherRefunded, VoucherSettled,
 };
 pub use interfaces::{ReceiptClient, RegistryClient};
 pub use types::{Config, DataKey, Voucher, VoucherError, VoucherStatus};
@@ -102,6 +102,7 @@ impl VoucherEscrow {
         token: Address,
         dispute_window: u64,
         fee_bps: u32,
+        attester_share_bps: u32,
         fee_account: Address,
     ) -> Result<(), VoucherError> {
         if has_config(&env) {
@@ -109,6 +110,11 @@ impl VoucherEscrow {
         }
         if fee_bps > MAX_FEE_BPS {
             return Err(VoucherError::InvalidFee);
+        }
+        // The attester's share is carved out of the protocol fee, so it can
+        // never be larger than the fee itself.
+        if attester_share_bps > fee_bps {
+            return Err(VoucherError::InvalidAttesterShare);
         }
 
         write_config(
@@ -120,6 +126,7 @@ impl VoucherEscrow {
                 token,
                 dispute_window,
                 fee_bps,
+                attester_share_bps,
                 fee_account,
             },
         );
@@ -194,6 +201,7 @@ impl VoucherEscrow {
             claimed_at: 0,
             attested_at: 0,
             dispute_deadline: 0,
+            attester: None,
         };
         write_voucher(&env, &voucher);
 
@@ -209,6 +217,91 @@ impl VoucherEscrow {
         }
         .publish(&env);
         Ok(id)
+    }
+
+    /// Gives back an overpayment without giving up the voucher.
+    ///
+    /// A funder who paid more than the listed price can bring the
+    /// escrowed amount down to the service price and keep the voucher.
+    /// The difference goes straight back to the funder, and no fee is
+    /// taken on money that never became care.
+    ///
+    /// The floor is the price the registry lists **at call time**, so a
+    /// clinic that has raised its price cannot have a funded voucher
+    /// reduced below that price, and a clinic that has lowered it frees
+    /// the funder to reduce further. Only a `Funded` voucher can be
+    /// reduced: once the clinic has claimed it, the escrowed amount is
+    /// what the clinic is expecting to be paid.
+    ///
+    /// Errors:
+    ///
+    /// - `NotAuthorized` — the caller is not the voucher's funder.
+    /// - `InvalidStatus` — the voucher is no longer `Funded`.
+    /// - `InvalidAmount` — `new_amount` is not positive.
+    /// - `AmountNotReduced` — `new_amount` is not below the escrowed amount.
+    /// - `ServiceNotOffered` — the service is no longer listed, so there is
+    ///   no price to reduce towards.
+    /// - `AmountBelowPrice` — `new_amount` is below the current listed price.
+    pub fn reduce_amount(
+        env: Env,
+        funder: Address,
+        voucher_id: u64,
+        new_amount: i128,
+    ) -> Result<(), VoucherError> {
+        funder.require_auth();
+
+        let mut voucher = read_voucher(&env, voucher_id)?;
+        if voucher.funder != funder {
+            return Err(VoucherError::NotAuthorized);
+        }
+        if voucher.status != VoucherStatus::Funded {
+            return Err(VoucherError::InvalidStatus);
+        }
+        if new_amount <= 0 {
+            return Err(VoucherError::InvalidAmount);
+        }
+        if new_amount >= voucher.amount {
+            return Err(VoucherError::AmountNotReduced);
+        }
+
+        let config = read_config(&env)?;
+        // The price at call time is the floor: whatever is left in escrow
+        // must still cover the service.
+        let price = RegistryClient::new(&env, &config.registry)
+            .get_service_price(&voucher.provider, &voucher.service_code);
+        if price == 0 {
+            // The service is no longer listed, so there is no price to
+            // reduce towards. The funder can still refund the voucher at
+            // expiry.
+            return Err(VoucherError::ServiceNotOffered);
+        }
+        if new_amount < price {
+            return Err(VoucherError::AmountBelowPrice);
+        }
+
+        let difference = voucher.amount - new_amount;
+        // Escrow first, record second: if the transfer fails the whole
+        // invocation reverts and the escrowed amount is unchanged.
+        let token_client = token::Client::new(&env, &config.token);
+        Self::ensure_escrow_covers(&env, &token_client, voucher.amount)?;
+        Self::send(&env, &token_client, &funder, difference)?;
+        // The difference has left escrow, so the running total follows it.
+        decrease_open_escrow(&env, difference)?;
+
+        let previous_amount = voucher.amount;
+        voucher.amount = new_amount;
+        write_voucher(&env, &voucher);
+
+        VoucherAmountReduced {
+            funder,
+            voucher_id,
+            service_code: voucher.service_code,
+            previous_amount,
+            amount: new_amount,
+            refunded: difference,
+        }
+        .publish(&env);
+        Ok(())
     }
 
     /// Provider marks the patient as presented and the service as begun.
@@ -290,6 +383,7 @@ impl VoucherEscrow {
 
         voucher.status = VoucherStatus::Attested;
         voucher.attested_at = now;
+        voucher.attester = Some(attester.clone());
         voucher.dispute_deadline = now
             .checked_add(config.dispute_window)
             .ok_or(VoucherError::MathOverflow)?;
@@ -479,7 +573,7 @@ impl VoucherEscrow {
         }
         .publish(&env);
 
-        Self::pay_split(&env, &config, &mut voucher, to_provider, fee, to_funder);
+        Self::pay_split(&env, &config, &mut voucher, to_provider, fee, to_funder)?;
         Ok(())
     }
 
@@ -639,8 +733,13 @@ impl VoucherEscrow {
     /// Basis-point fee. Integer math throughout; truncation favours the
     /// provider, never the protocol.
     fn fee_for(amount: i128, fee_bps: u32) -> Result<i128, VoucherError> {
+        Self::bps_of(amount, fee_bps)
+    }
+
+    /// Share of `amount` in basis points, rounded down.
+    fn bps_of(amount: i128, bps: u32) -> Result<i128, VoucherError> {
         amount
-            .checked_mul(fee_bps as i128)
+            .checked_mul(bps as i128)
             .ok_or(VoucherError::MathOverflow)?
             .checked_div(BPS_DENOMINATOR)
             .ok_or(VoucherError::MathOverflow)
@@ -678,18 +777,42 @@ impl VoucherEscrow {
         }
     }
 
-    /// Pays the provider, takes the fee, and mints the care receipt.
+    /// Pays the provider, splits the fee between the attester and the fee
+    /// account, and mints the care receipt.
+    ///
+    /// `Config` guarantees `attester_share_bps <= fee_bps`, so the attester
+    /// share can never exceed the fee and the three payouts always sum to the
+    /// voucher amount exactly:
+    ///
+    /// ```text
+    /// net             = amount - fee
+    /// attester_share  = amount * attester_share_bps / 10_000
+    /// fee_account     = fee - attester_share
+    /// ```
+    ///
+    /// A voucher attested before attesters were stored has no attester to pay,
+    /// so the whole fee goes to the fee account, as it did before.
     fn pay_out(env: &Env, config: &Config, voucher: &mut Voucher) -> Result<(), VoucherError> {
         let fee = Self::fee_for(voucher.amount, config.fee_bps)?;
         let net = voucher.amount - fee;
+        let attester_share = match &voucher.attester {
+            Some(_) => Self::bps_of(voucher.amount, config.attester_share_bps)?,
+            None => 0,
+        };
+        let fee_account_share = fee - attester_share;
 
         let token_client = token::Client::new(env, &config.token);
         let escrow = env.current_contract_address();
 
         Self::ensure_escrow_covers(env, &token_client, voucher.amount)?;
         Self::send(env, &token_client, &voucher.provider, net)?;
-        if fee > 0 {
-            Self::send(env, &token_client, &config.fee_account, fee)?;
+        if let Some(attester) = &voucher.attester {
+            if attester_share > 0 {
+                Self::send(env, &token_client, attester, attester_share)?;
+            }
+        }
+        if fee_account_share > 0 {
+            Self::send(env, &token_client, &config.fee_account, fee_account_share)?;
         }
         decrease_open_escrow(env, voucher.amount)?;
 
@@ -710,6 +833,7 @@ impl VoucherEscrow {
             voucher_id: voucher.id,
             net,
             fee,
+            attester_share,
             service_code: voucher.service_code,
             amount: voucher.amount,
         }
@@ -727,19 +851,20 @@ impl VoucherEscrow {
         to_provider: i128,
         fee: i128,
         to_funder: i128,
-    ) {
+    ) -> Result<(), VoucherError> {
         let net = to_provider - fee;
         let token_client = token::Client::new(env, &config.token);
         let escrow = env.current_contract_address();
 
+        Self::ensure_escrow_covers(env, &token_client, voucher.amount)?;
         if net > 0 {
-            token_client.transfer(&escrow, &voucher.provider, &net);
+            Self::send(env, &token_client, &voucher.provider, net)?;
         }
         if fee > 0 {
-            token_client.transfer(&escrow, &config.fee_account, &fee);
+            Self::send(env, &token_client, &config.fee_account, fee)?;
         }
         if to_funder > 0 {
-            token_client.transfer(&escrow, &voucher.funder, &to_funder);
+            Self::send(env, &token_client, &voucher.funder, to_funder)?;
         }
 
         voucher.status = if to_provider == 0 {
@@ -761,6 +886,7 @@ impl VoucherEscrow {
                 &to_provider,
             );
         }
+        Ok(())
     }
 
     /// Returns the full escrowed amount to the funder. No fee is taken on
@@ -769,6 +895,7 @@ impl VoucherEscrow {
         let token_client = token::Client::new(env, &config.token);
         Self::ensure_escrow_covers(env, &token_client, voucher.amount)?;
         Self::send(env, &token_client, &voucher.funder, voucher.amount)?;
+        decrease_open_escrow(env, voucher.amount)?;
 
         voucher.status = VoucherStatus::Refunded;
         write_voucher(env, voucher);

@@ -11,7 +11,7 @@ An attester confirms that care actually happened. This is the most important rol
 
 ## What you are doing
 
-When you attest, you start a 72-hour clock. When it runs out, the clinic is paid automatically and irreversibly.
+When you attest, you start a 72-hour clock. When it runs out, the clinic is paid automatically and irreversibly, and you receive your configured share of the protocol fee.
 
 You are not approving a payment request. You are asserting a fact about the world: this patient received this service at this clinic.
 
@@ -20,6 +20,12 @@ You are not approving a payment request. You are asserting a fact about the worl
 Attesters are appointed by an administrator. In practice they are people already present in the care pathway and not employed by the clinic being paid — community health workers, supervising nurses at a different facility, NGO field staff, district health officers.
 
 The point is independence. If the attester's income depends on the clinic being paid, the safeguard does not work.
+
+## What you earn
+
+The protocol pays the attester who confirmed delivery a configured share of its fee. The deployment sets `attester_share_bps` at initialisation (50 bps, half of the 1% fee, in the current configuration). It is carved out of the protocol fee, not out of the clinic's net, and it is paid at settlement by the contract.
+
+That payment is fixed by configuration and the contract. A clinic cannot set it, vary it, or offer more for a favourable decision. Treat it as protocol compensation for the attestation, never as a payment from the clinic, the patient or the funder.
 
 ## How
 

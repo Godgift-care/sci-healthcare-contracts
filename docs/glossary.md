@@ -17,7 +17,12 @@ Used in: [How a voucher works](protocol/lifecycle.md#attested), [Trust model —
 ### Attestation
 The on-chain statement that a specific patient received a specific service at a specific clinic. It is signed by the attester's address and recorded permanently; it is an assertion about the physical world, not a guarantee the care was good.
 
-Used in: [How a voucher works](protocol/lifecycle.md#attested), [Trust model](protocol/trust.md).
+Used in: [How a voucher works — Attested](protocol/lifecycle.md#attested), [Trust model](protocol/trust.md).
+
+### Attester share (`attester_share_bps`)
+The part of the voucher amount paid to the attester who confirmed delivery, in basis points and set at initialisation. It is carved out of the protocol fee and can never exceed `fee_bps`; the clinic's net is unchanged. Zero means the fee account receives the whole fee.
+
+Used in: [Economics — the attester share](protocol/economics.md#the-attester-share), [Contract reference — initialize](developers/contracts.md#initialize).
 
 ## B
 
@@ -75,7 +80,7 @@ Used in: [How a voucher works — Claimed](protocol/lifecycle.md#claimed), [Cont
 ## F
 
 ### Fee (protocol fee)
-The percentage the protocol takes at settlement, expressed in basis points and capped at 1000 bps (10%) at initialisation. Production is 100 bps (1%). Refunds and funding carry no fee.
+The percentage the protocol takes at settlement, expressed in basis points and capped at 1000 bps (10%) at initialisation. Production is 100 bps (1%). Part of the fee is routed to the attester through `attester_share_bps`; the rest goes to the fee account. Refunds and funding carry no fee.
 
 Used in: [Economics](protocol/economics.md), [Contract reference — settle](developers/contracts.md#settle).
 
@@ -119,7 +124,7 @@ A coarse number identifying a service category, e.g. `101` for "outpatient consu
 Used in: [Privacy — service codes](protocol/privacy.md#service-codes-stay-coarse-on-purpose), [Listing services](guides/clinics.md#listing-services).
 
 ### Settle / Settlement
-The call that releases escrow to the clinic once the dispute window has closed, takes the protocol fee, and mints a care receipt. It is permissionless and irreversible; a settled voucher cannot be settled or refunded again.
+The call that releases escrow to the clinic once the dispute window has closed, splits the protocol fee between the attester and the fee account, and mints a care receipt. It is permissionless and irreversible; a settled voucher cannot be settled or refunded again.
 
 Used in: [How a voucher works — Settled](protocol/lifecycle.md#settled), [Contract reference — settle](developers/contracts.md#settle).
 

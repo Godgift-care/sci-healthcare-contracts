@@ -44,7 +44,7 @@ The grace period exists so that a claim on its own can never hold the funder's m
 
 ### Attested
 
-An attester has confirmed the care was delivered. This starts the dispute window — 72 hours in the production configuration.
+An attester has confirmed the care was delivered. This starts the dispute window — 72 hours in the production configuration. The voucher records that attester, because settlement pays them a share of the protocol fee.
 
 The contract refuses this call from the clinic that is going to be paid.
 
@@ -52,7 +52,7 @@ The contract refuses this call from the clinic that is going to be paid.
 
 ### Settled
 
-The dispute window closed and `settle` ran. The clinic received the amount less the protocol fee, the fee went to the fee account, and a care receipt was minted.
+The dispute window closed and `settle` ran. The clinic received the amount less the protocol fee, the attester received its configured share of the fee, the rest of the fee went to the fee account, and a care receipt was minted. The clinic's net is the same whether or not an attester share is configured, and the three payouts sum exactly to the voucher amount.
 
 `settle` takes no authorisation. This is deliberate: a clinic that has delivered care and been attested should never have to chase the funder, or us, to be paid.
 

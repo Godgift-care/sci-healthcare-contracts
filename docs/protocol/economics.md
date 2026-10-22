@@ -16,6 +16,23 @@ net = amount - fee
 
 All integer arithmetic. There are no floating point numbers anywhere in this protocol. Division truncates, and truncation always favours the clinic rather than the protocol.
 
+### The attester share
+
+Attesters do the work that makes the protocol trustworthy, so settlement pays them a configurable part of the fee. `attester_share_bps` is set once at initialisation alongside `fee_bps`, and the contract rejects any value above `fee_bps`: the share is carved out of the fee, never charged on top of it.
+
+```
+attester_share = amount * attester_share_bps / 10_000
+fee_account    = fee - attester_share
+```
+
+The clinic's `net` does not change. The three payouts always sum to the voucher amount exactly:
+
+```
+net + attester_share + fee_account = amount
+```
+
+The production deployment sets `fee_bps = 100` and `attester_share_bps = 50`, so half the fee goes to the attester who confirmed delivery and half to the fee account. `attester_share_bps = 0` pays the fee account in full, exactly as the contract behaved before the attester share existed. A disputed claim that the admin resolves for the clinic without an attestation has no attester of record, so that settlement also pays the whole fee to the fee account.
+
 ### Worked numbers at 1%
 
 | Voucher | Fee | Clinic receives |
@@ -25,7 +42,7 @@ All integer arithmetic. There are no floating point numbers anywhere in this pro
 | $5.00 (antenatal visit) | $0.05 | $4.95 |
 | $25.00 (minor procedure) | $0.25 | $24.75 |
 
-Verified on testnet: a $3.00 voucher settled to exactly `29700000` stroops for the clinic and `300000` for the fee account.
+Before the attester share was introduced, a $3.00 voucher settled to exactly `29700000` stroops for the clinic and `300000` for the fee account. With the production split above, that `300000` fee becomes `150000` for the attester and `150000` for the fee account; the clinic still receives `29700000`.
 
 ### Settlement examples in stroops
 
@@ -42,7 +59,22 @@ What `quote` returns, and what a settlement pays, at the production fee of 100 b
 
 The last two rows show the truncation: `12,345,678 × 100 / 10,000` is `123,456.78`, and the `.78` stays with the clinic; on a 99-stroop voucher the fee rounds down to nothing. A funder who pays more than the listed price is quoted on what they actually pay.
 
-Both tables on this page are checked against the contract: `settlement_examples_table_matches_quote` and `worked_numbers_table_matches_quote` in `contracts/voucher/src/economics_test.rs` recompute every row with `quote` and fail if a number here is wrong. To check one by hand on a deployment:
+### Attester share at 50 bps
+
+How the production fee splits at settlement: the clinic still receives `amount - fee`, the attester receives its share of the amount, and the fee account receives the rest. The attester share is part of the fee, not an extra deduction.
+
+| Voucher | Amount (stroops) | Attester receives (stroops) | Fee account receives (stroops) |
+| --- | --- | --- | --- |
+| 1 USDC | 10,000,000 | 50,000 | 50,000 |
+| 3 USDC | 30,000,000 | 150,000 | 150,000 |
+| 10 USDC | 100,000,000 | 500,000 | 500,000 |
+| 100 USDC | 1,000,000,000 | 5,000,000 | 5,000,000 |
+| 1.2345678 USDC | 12,345,678 | 61,728 | 61,728 |
+| 0.0000099 USDC | 99 | 0 | 0 |
+
+The last row is the same truncation in miniature: a 99-stroop voucher has no fee to split, so neither the attester nor the fee account receives anything.
+
+All three tables on this page are checked against the contract: `settlement_examples_table_matches_quote`, `worked_numbers_table_matches_quote` and `attester_share_table_matches_the_settlement_split` in `contracts/voucher/src/economics_test.rs` recompute every row and fail if a number here is wrong. To check one by hand on a deployment:
 
 ```bash
 stellar contract invoke --id "$VOUCHER_CONTRACT_ID" --source-account sci-admin \
@@ -53,7 +85,9 @@ stellar contract invoke --id "$VOUCHER_CONTRACT_ID" --source-account sci-admin \
 ### What is not charged
 
 - **Refunds are free.** An expired or successfully disputed voucher returns the full amount. No fee is taken on care that did not happen.
+- **Reducing an overpayment is free.** `reduce_amount` returns the difference between what was escrowed and the clinic's listed price to the funder. No fee is taken on money that never became care.
 - **Funding is free.** The fee is taken once, at settlement.
+- **The attester share is part of the fee.** It comes out of the protocol fee, not out of the clinic's net, so configuring it never reduces what the clinic receives.
 - **No spread.** The protocol does not convert currency and takes no exchange margin.
 
 ## Network costs
@@ -67,6 +101,7 @@ This matters more than it sounds. A voucher's whole lifecycle is four transactio
 | Action | Who submits | Who pays the network fee |
 | --- | --- | --- |
 | `create_voucher` | Funder | Funder |
+| `reduce_amount` | Funder | Funder |
 | `claim` | Clinic | Clinic |
 | `attest` | Attester | Attester |
 | `settle` | Anyone | Whoever submits |

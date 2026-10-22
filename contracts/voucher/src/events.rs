@@ -82,6 +82,9 @@ pub struct VoucherSettled {
     /// beside the `net` and `fee` that were paid out.
     pub service_code: u32,
     pub amount: i128,
+    /// Appended: the part of `fee` routed to the attester. The fee account
+    /// received `fee - attester_share`, so `net + fee == amount`.
+    pub attester_share: i128,
 }
 
 #[contractevent]
@@ -95,6 +98,22 @@ pub struct VoucherRefunded {
     pub amount: i128,
     /// Appended, after the original fields; see `VoucherClaimed`.
     pub service_code: u32,
+}
+
+#[contractevent]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct VoucherAmountReduced {
+    #[topic]
+    pub funder: Address,
+    pub voucher_id: u64,
+    /// Appended, after the original fields; see `VoucherClaimed`.
+    pub service_code: u32,
+    /// The amount escrowed before this call.
+    pub previous_amount: i128,
+    /// The amount escrowed now.
+    pub amount: i128,
+    /// What went back to the funder: `previous_amount - amount`.
+    pub refunded: i128,
 }
 
 #[contractevent]

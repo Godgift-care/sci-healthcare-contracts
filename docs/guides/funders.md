@@ -54,6 +54,8 @@ Watch it under **My vouchers**.
 
 ## If something goes wrong
 
+**You paid more than the price by mistake.** While the voucher is still `Funded` you can get the extra back without giving up the voucher: `reduce_amount` brings the escrowed amount down to the clinic's listed price and returns the difference to you. It never goes below the listed price, and it is closed once the clinic claims the voucher. The web app does not offer this button yet — a wallet or an integrator can call the contract directly.
+
 **The patient never went.** Wait for the expiry date, then press **Refund me**. You get the full amount back, no fee. Anyone can trigger this, so you are not dependent on us. If the clinic is suspended before the voucher is claimed, you can refund immediately instead of waiting for expiry.
 
 **The clinic claimed, but nobody ever confirmed the visit.** You can dispute straight away. If you do nothing, the voucher becomes refundable seven days after its expiry date and **Refund me** appears again.

@@ -55,6 +55,7 @@ ADMIN="${ADMIN:-sci-admin}"
 ISSUER="${ISSUER:-sci-issuer}"
 DISPUTE_WINDOW="${DISPUTE_WINDOW:-259200}"   # 72 hours, in seconds
 FEE_BPS="${FEE_BPS:-100}"                    # 1%
+ATTESTER_SHARE_BPS="${ATTESTER_SHARE_BPS:-50}" # half the fee, in bps of the amount
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 WASM_DIR="$ROOT/dist"
@@ -177,6 +178,7 @@ run stellar contract invoke --id "$VOUCHER_ID" --source-account "$ADMIN" \
   --token "$USDC_ID" \
   --dispute_window "$DISPUTE_WINDOW" \
   --fee_bps "$FEE_BPS" \
+  --attester_share_bps "$ATTESTER_SHARE_BPS" \
   --fee_account "$ADMIN_ADDR"
 
 if [ "$DRY_RUN" -eq 1 ]; then

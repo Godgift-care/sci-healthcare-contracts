@@ -14,6 +14,9 @@ const DOCS: &str = include_str!("../../../docs/protocol/economics.md");
 /// The production fee the tables are written for; `scripts/deploy.sh`
 /// deploys with it.
 const FEE_BPS: u32 = 100;
+/// The attester's slice of the voucher amount in the production deployment:
+/// half of the 100 bps fee.
+const ATTESTER_SHARE_BPS: u32 = 50;
 const STROOPS_PER_USDC: i128 = 10_000_000;
 
 fn quoting_contract(env: &Env) -> VoucherEscrowClient<'_> {
@@ -21,7 +24,16 @@ fn quoting_contract(env: &Env) -> VoucherEscrowClient<'_> {
     let a = Address::generate(env);
     let address = env.register(VoucherEscrow, ());
     let client = VoucherEscrowClient::new(env, &address);
-    client.initialize(&a, &a, &a, &a, &(72 * 60 * 60), &FEE_BPS, &a);
+    client.initialize(
+        &a,
+        &a,
+        &a,
+        &a,
+        &(72 * 60 * 60),
+        &FEE_BPS,
+        &ATTESTER_SHARE_BPS,
+        &a,
+    );
     client
 }
 
@@ -86,6 +98,35 @@ fn settlement_examples_table_matches_quote() {
             row[3],
         );
         assert_eq!(fee + net, amount, "fee and net must add up to the voucher");
+    }
+}
+
+#[test]
+fn attester_share_table_matches_the_settlement_split() {
+    let env = Env::default();
+    let voucher = quoting_contract(&env);
+
+    let rows = table_rows("### Attester share at 50 bps");
+    assert!(!rows.is_empty(), "the attester share table lost its rows");
+    for row in rows {
+        let amount = stroops(row[1]);
+        let (fee, _) = voucher.quote(&amount);
+        let attester_share = amount * ATTESTER_SHARE_BPS as i128 / 10_000;
+        let fee_account_share = fee - attester_share;
+        assert_eq!(
+            (stroops(row[2]), stroops(row[3])),
+            (attester_share, fee_account_share),
+            "economics.md attester share row is wrong",
+        );
+        assert_eq!(
+            attester_share + fee_account_share,
+            fee,
+            "attester share and fee account share must add up to the fee",
+        );
+        assert!(
+            attester_share <= fee,
+            "attester share cannot exceed the fee",
+        );
     }
 }
 

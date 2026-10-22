@@ -373,13 +373,16 @@ console.log({
   listedPrice: price,
   amount,
   feeBps: config.fee_bps,
+  attesterShareBps: config.attester_share_bps,
   fee,
   clinicReceives: net,
 });
 ```
 
 `quote` returns `[fee, net]` as `BigInt`. Fees are basis points, rounded down in
-the clinic's favour. Display the quoted clinic amount beside the amount the user
+the clinic's favour. `attester_share_bps` is part of `fee_bps`: it is paid to
+the attester who confirmed delivery at settlement, and it never reduces the
+clinic's `net`. Display the quoted clinic amount beside the amount the user
 will pay; never calculate it in floating point.
 
 ## 3. Fund the voucher
@@ -557,6 +560,7 @@ the common voucher errors:
 | 14 | `DisputeWindowClosed` | The funder can no longer dispute. |
 | 15 | `InvalidFee` | The deployment's fee exceeds the 10% cap; contact the operator. |
 | 18 | `ServiceUnavailable` | The clinic has paused this service for now; try again later or choose another service. |
+| 21 | `InvalidAttesterShare` | The deployment's attester share exceeds its fee; contact the operator. |
 
 Recommended handling:
 

@@ -14,6 +14,9 @@ use sci_registry::{ProviderStatus, Registry, RegistryClient, MIN_PRICE_NOTICE_SE
 
 const DISPUTE_WINDOW: u64 = 72 * 60 * 60; // 72 hours
 const FEE_BPS: u32 = 100; // 1%
+/// Half the protocol fee (50 of the 100 fee basis points) goes to the
+/// attester in the default fixture. `Fee account receives` tests allow for it.
+const ATTESTER_SHARE_BPS: u32 = 50;
 const START_TIME: u64 = 1_700_000_000;
 const CONSULT: u32 = 101;
 const CONSULT_PRICE: i128 = 30_000_000; // 3.00 USDC at 7 decimals
@@ -34,6 +37,10 @@ struct Fixture {
 }
 
 fn setup() -> Fixture {
+    setup_with(FEE_BPS, ATTESTER_SHARE_BPS)
+}
+
+fn setup_with(fee_bps: u32, attester_share_bps: u32) -> Fixture {
     let env = Env::default();
     env.mock_all_auths();
     env.ledger().with_mut(|li| li.timestamp = START_TIME);
@@ -73,7 +80,8 @@ fn setup() -> Fixture {
         &receipt_addr,
         &token_addr,
         &DISPUTE_WINDOW,
-        &FEE_BPS,
+        &fee_bps,
+        &attester_share_bps,
         &fee_account,
     );
 
@@ -122,6 +130,18 @@ fn fund(f: &Fixture) -> u64 {
         &f.provider,
         &CONSULT,
         &CONSULT_PRICE,
+        &(START_TIME + 30 * 24 * 60 * 60),
+    )
+}
+
+/// Funds a voucher above the listed price, the way a mistyped amount does.
+fn fund_overpaid(f: &Fixture, amount: i128) -> u64 {
+    f.voucher.create_voucher(
+        &f.funder,
+        &patient(&f.env),
+        &f.provider,
+        &CONSULT,
+        &amount,
         &(START_TIME + 30 * 24 * 60 * 60),
     )
 }
@@ -402,6 +422,285 @@ fn rejects_expiry_in_the_past() {
     assert_eq!(err, VoucherError::InvalidExpiry);
 }
 
+// ----- reducing an overpayment -----
+//
+// A funder who paid more than the listed price can bring the escrowed
+// amount back down to the price and keep the voucher. The difference goes
+// back to the funder, and the voucher settles at the reduced amount.
+
+#[test]
+fn reduce_to_the_listed_price_succeeds() {
+    let f = setup();
+    let before = f.token.balance(&f.funder);
+    let overpaid = CONSULT_PRICE * 2;
+    let id = fund_overpaid(&f, overpaid);
+    assert_eq!(f.token.balance(&f.funder), before - overpaid);
+
+    f.voucher.reduce_amount(&f.funder, &id, &CONSULT_PRICE);
+
+    // Exactly the difference comes back, and the escrow keeps the rest.
+    assert_eq!(f.token.balance(&f.funder), before - CONSULT_PRICE);
+    assert_eq!(f.token.balance(&f.voucher.address), CONSULT_PRICE);
+    // The difference left escrow, so the running total follows it down.
+    assert_escrow(&f, CONSULT_PRICE);
+
+    let voucher = f.voucher.get_voucher(&id);
+    assert_eq!(voucher.amount, CONSULT_PRICE);
+    assert_eq!(
+        voucher.status,
+        VoucherStatus::Funded,
+        "reducing an overpayment must not cost the funder the voucher"
+    );
+}
+
+#[test]
+fn reducing_twice_returns_the_difference_each_time() {
+    let f = setup();
+    let before = f.token.balance(&f.funder);
+    let overpaid = CONSULT_PRICE * 3;
+    let id = fund_overpaid(&f, overpaid);
+
+    f.voucher
+        .reduce_amount(&f.funder, &id, &(CONSULT_PRICE * 2));
+    assert_eq!(f.token.balance(&f.funder), before - CONSULT_PRICE * 2);
+    assert_eq!(f.voucher.get_voucher(&id).amount, CONSULT_PRICE * 2);
+
+    f.voucher.reduce_amount(&f.funder, &id, &CONSULT_PRICE);
+    // The funder recovers exactly the difference each time, and the escrow
+    // keeps what is left.
+    assert_eq!(f.token.balance(&f.funder), before - CONSULT_PRICE);
+    assert_eq!(f.token.balance(&f.voucher.address), CONSULT_PRICE);
+    assert_escrow(&f, CONSULT_PRICE);
+    assert_eq!(f.voucher.get_voucher(&id).amount, CONSULT_PRICE);
+}
+
+#[test]
+fn cannot_reduce_below_the_listed_price() {
+    let f = setup();
+    let overpaid = CONSULT_PRICE * 2;
+    let id = fund_overpaid(&f, overpaid);
+
+    let err = f
+        .voucher
+        .try_reduce_amount(&f.funder, &id, &(CONSULT_PRICE - 1))
+        .err()
+        .unwrap()
+        .unwrap();
+    assert_eq!(err, VoucherError::AmountBelowPrice);
+
+    // Nothing moved: the voucher still carries the original amount.
+    assert_eq!(f.voucher.get_voucher(&id).amount, overpaid);
+    assert_eq!(f.token.balance(&f.voucher.address), overpaid);
+}
+
+#[test]
+fn cannot_reduce_after_the_voucher_is_claimed() {
+    let f = setup();
+    let id = fund_overpaid(&f, CONSULT_PRICE * 2);
+    f.voucher.claim(&f.provider, &id);
+
+    let err = f
+        .voucher
+        .try_reduce_amount(&f.funder, &id, &CONSULT_PRICE)
+        .err()
+        .unwrap()
+        .unwrap();
+    assert_eq!(err, VoucherError::InvalidStatus);
+    assert_eq!(f.voucher.get_voucher(&id).amount, CONSULT_PRICE * 2);
+}
+
+#[test]
+fn cannot_reduce_after_the_voucher_is_settled() {
+    let f = setup();
+    let id = fund_overpaid(&f, CONSULT_PRICE * 2);
+    f.voucher.claim(&f.provider, &id);
+    f.voucher.attest(&f.attester, &id);
+    advance(&f.env, DISPUTE_WINDOW + 1);
+    f.voucher.settle(&id);
+
+    let err = f
+        .voucher
+        .try_reduce_amount(&f.funder, &id, &CONSULT_PRICE)
+        .err()
+        .unwrap()
+        .unwrap();
+    assert_eq!(err, VoucherError::InvalidStatus);
+}
+
+#[test]
+fn only_the_funder_can_reduce_the_amount() {
+    let f = setup();
+    let id = fund_overpaid(&f, CONSULT_PRICE * 2);
+    let stranger = Address::generate(&f.env);
+
+    let err = f
+        .voucher
+        .try_reduce_amount(&stranger, &id, &CONSULT_PRICE)
+        .err()
+        .unwrap()
+        .unwrap();
+    assert_eq!(err, VoucherError::NotAuthorized);
+    assert_eq!(f.voucher.get_voucher(&id).amount, CONSULT_PRICE * 2);
+}
+
+#[test]
+fn cannot_reduce_to_the_same_or_a_higher_amount() {
+    let f = setup();
+    let overpaid = CONSULT_PRICE * 2;
+    let id = fund_overpaid(&f, overpaid);
+
+    let err = f
+        .voucher
+        .try_reduce_amount(&f.funder, &id, &overpaid)
+        .err()
+        .unwrap()
+        .unwrap();
+    assert_eq!(err, VoucherError::AmountNotReduced);
+
+    let err = f
+        .voucher
+        .try_reduce_amount(&f.funder, &id, &(overpaid * 2))
+        .err()
+        .unwrap()
+        .unwrap();
+    assert_eq!(err, VoucherError::AmountNotReduced);
+    assert_eq!(f.voucher.get_voucher(&id).amount, overpaid);
+}
+
+#[test]
+fn rejects_a_non_positive_new_amount() {
+    let f = setup();
+    let id = fund_overpaid(&f, CONSULT_PRICE * 2);
+
+    let err = f
+        .voucher
+        .try_reduce_amount(&f.funder, &id, &0i128)
+        .err()
+        .unwrap()
+        .unwrap();
+    assert_eq!(err, VoucherError::InvalidAmount);
+
+    let err = f
+        .voucher
+        .try_reduce_amount(&f.funder, &id, &(-1i128))
+        .err()
+        .unwrap()
+        .unwrap();
+    assert_eq!(err, VoucherError::InvalidAmount);
+    assert_eq!(f.voucher.get_voucher(&id).amount, CONSULT_PRICE * 2);
+}
+
+#[test]
+fn cannot_reduce_when_the_service_is_no_longer_offered() {
+    // No listed price means no floor to reduce towards. The funder can
+    // still refund the voucher at expiry.
+    let f = setup();
+    let id = fund_overpaid(&f, CONSULT_PRICE * 2);
+    f.registry.remove_service(&f.provider, &CONSULT);
+
+    let err = f
+        .voucher
+        .try_reduce_amount(&f.funder, &id, &CONSULT_PRICE)
+        .err()
+        .unwrap()
+        .unwrap();
+    assert_eq!(err, VoucherError::ServiceNotOffered);
+    assert_eq!(f.voucher.get_voucher(&id).amount, CONSULT_PRICE * 2);
+}
+
+#[test]
+fn reduce_uses_the_price_at_call_time() {
+    // A clinic that lowers its price frees the funder to reduce further.
+    let f = setup();
+    let overpaid = CONSULT_PRICE * 2;
+    let id = fund_overpaid(&f, overpaid);
+    let cheaper = CONSULT_PRICE / 2;
+
+    f.registry.upsert_service(
+        &f.provider,
+        &CONSULT,
+        &String::from_str(&f.env, "Outpatient consult"),
+        &cheaper,
+    );
+
+    f.voucher.reduce_amount(&f.funder, &id, &cheaper);
+    assert_eq!(f.voucher.get_voucher(&id).amount, cheaper);
+}
+
+#[test]
+fn cannot_reduce_below_a_price_the_clinic_has_raised() {
+    // The floor is the price at call time, not the price at funding time.
+    let f = setup();
+    let overpaid = CONSULT_PRICE * 2;
+    let id = fund_overpaid(&f, overpaid);
+    let effective_at = START_TIME + MIN_PRICE_NOTICE_SECS;
+    f.registry
+        .schedule_service_price(&f.provider, &CONSULT, &(CONSULT_PRICE * 3), &effective_at);
+    f.env.ledger().with_mut(|li| li.timestamp = effective_at);
+
+    let err = f
+        .voucher
+        .try_reduce_amount(&f.funder, &id, &CONSULT_PRICE)
+        .err()
+        .unwrap()
+        .unwrap();
+    assert_eq!(err, VoucherError::AmountBelowPrice);
+    assert_eq!(f.voucher.get_voucher(&id).amount, overpaid);
+}
+
+#[test]
+fn a_reduced_voucher_settles_at_the_reduced_amount() {
+    let f = setup();
+    let id = fund_overpaid(&f, CONSULT_PRICE * 2);
+    f.voucher.reduce_amount(&f.funder, &id, &CONSULT_PRICE);
+
+    f.voucher.claim(&f.provider, &id);
+    f.voucher.attest(&f.attester, &id);
+    advance(&f.env, DISPUTE_WINDOW + 1);
+    f.voucher.settle(&id);
+
+    // The clinic is paid on what is left in escrow, and the receipt says
+    // the same thing.
+    let expected_fee = CONSULT_PRICE * FEE_BPS as i128 / 10_000;
+    let expected_attester_share = CONSULT_PRICE * ATTESTER_SHARE_BPS as i128 / 10_000;
+    assert_eq!(f.token.balance(&f.provider), CONSULT_PRICE - expected_fee);
+    assert_eq!(f.token.balance(&f.attester), expected_attester_share);
+    assert_eq!(
+        f.token.balance(&f.fee_account),
+        expected_fee - expected_attester_share
+    );
+    assert_eq!(f.token.balance(&f.voucher.address), 0);
+    assert_eq!(f.receipts.get_receipt(&id).amount, CONSULT_PRICE);
+}
+
+#[test]
+fn amount_reduced_event_snapshot() {
+    let f = setup();
+    let overpaid = CONSULT_PRICE * 2;
+    let id = fund_overpaid(&f, overpaid);
+
+    f.voucher.reduce_amount(&f.funder, &id, &CONSULT_PRICE);
+
+    let e = one_event(&f);
+    assert_layout(
+        &e,
+        "voucher_amount_reduced",
+        &[ScVal::from(&f.funder)],
+        &[
+            "voucher_id",
+            "service_code",
+            "previous_amount",
+            "amount",
+            "refunded",
+        ],
+    );
+    assert_eq!(field_u64(&e, "voucher_id"), id);
+    assert_eq!(field_u32(&e, "service_code"), CONSULT);
+    assert_eq!(field_i128(&e, "previous_amount"), overpaid);
+    assert_eq!(field_i128(&e, "amount"), CONSULT_PRICE);
+    assert_eq!(field_i128(&e, "refunded"), overpaid - CONSULT_PRICE);
+}
+
 // ----- happy path -----
 
 #[test]
@@ -419,11 +718,27 @@ fn full_lifecycle_pays_provider_and_mints_receipt() {
     f.voucher.settle(&id);
 
     let expected_fee = CONSULT_PRICE * FEE_BPS as i128 / 10_000;
+    let expected_attester_share = CONSULT_PRICE * ATTESTER_SHARE_BPS as i128 / 10_000;
     let expected_net = CONSULT_PRICE - expected_fee;
 
     assert_eq!(f.voucher.get_voucher(&id).status, VoucherStatus::Settled);
     assert_eq!(f.token.balance(&f.provider), expected_net);
-    assert_eq!(f.token.balance(&f.fee_account), expected_fee);
+    assert_eq!(f.token.balance(&f.attester), expected_attester_share);
+    assert_eq!(
+        f.token.balance(&f.fee_account),
+        expected_fee - expected_attester_share
+    );
+    assert_eq!(
+        expected_net + expected_attester_share + (expected_fee - expected_attester_share),
+        CONSULT_PRICE
+    );
+    assert_eq!(
+        f.token.balance(&f.provider)
+            + f.token.balance(&f.attester)
+            + f.token.balance(&f.fee_account),
+        CONSULT_PRICE
+    );
+    assert_eq!(f.token.balance(&f.voucher.address), 0);
 
     // Care receipt exists and carries no clinical data.
     let r = f.receipts.get_receipt(&id);
@@ -431,6 +746,74 @@ fn full_lifecycle_pays_provider_and_mints_receipt() {
     assert_eq!(r.service_code, CONSULT);
     assert_eq!(r.amount, CONSULT_PRICE);
     assert_eq!(f.receipts.count_for(&patient(&f.env)), 1);
+}
+
+#[test]
+fn attestation_stores_the_attester_on_the_voucher() {
+    let f = setup();
+    let id = fund(&f);
+
+    assert_eq!(f.voucher.get_voucher(&id).attester, None);
+    f.voucher.claim(&f.provider, &id);
+    f.voucher.attest(&f.attester, &id);
+
+    let voucher = f.voucher.get_voucher(&id);
+    assert_eq!(voucher.status, VoucherStatus::Attested);
+    assert_eq!(voucher.attester, Some(f.attester.clone()));
+}
+
+/// Funds, claims, attests and settles a fresh voucher.
+fn settle_fresh_voucher(f: &Fixture) -> u64 {
+    let id = fund(f);
+    f.voucher.claim(&f.provider, &id);
+    f.voucher.attest(&f.attester, &id);
+    advance(&f.env, DISPUTE_WINDOW + 1);
+    f.voucher.settle(&id);
+    id
+}
+
+#[test]
+fn settlement_splits_the_fee_between_attester_and_fee_account() {
+    // A quarter of the voucher amount is carved out of the 1% fee: 25 bps of
+    // the amount to the attester, 75 bps to the fee account.
+    let f = setup_with(FEE_BPS, 25);
+    let id = settle_fresh_voucher(&f);
+
+    let fee = CONSULT_PRICE * FEE_BPS as i128 / 10_000;
+    let attester_share = CONSULT_PRICE * 25 / 10_000;
+    let fee_account_share = fee - attester_share;
+    let net = CONSULT_PRICE - fee;
+
+    assert_eq!(f.token.balance(&f.provider), net);
+    assert_eq!(f.token.balance(&f.attester), attester_share);
+    assert_eq!(f.token.balance(&f.fee_account), fee_account_share);
+    assert_eq!(net + attester_share + fee_account_share, CONSULT_PRICE);
+    assert_eq!(f.token.balance(&f.voucher.address), 0);
+    assert_eq!(f.voucher.get_voucher(&id).status, VoucherStatus::Settled);
+}
+
+#[test]
+fn zero_attester_share_behaves_as_before() {
+    let f = setup_with(FEE_BPS, 0);
+    settle_fresh_voucher(&f);
+
+    let fee = CONSULT_PRICE * FEE_BPS as i128 / 10_000;
+    assert_eq!(f.token.balance(&f.provider), CONSULT_PRICE - fee);
+    assert_eq!(f.token.balance(&f.attester), 0);
+    assert_eq!(f.token.balance(&f.fee_account), fee);
+    assert_eq!(f.token.balance(&f.voucher.address), 0);
+}
+
+#[test]
+fn attester_share_equal_to_the_fee_pays_it_all_to_the_attester() {
+    let f = setup_with(FEE_BPS, FEE_BPS);
+    settle_fresh_voucher(&f);
+
+    let fee = CONSULT_PRICE * FEE_BPS as i128 / 10_000;
+    assert_eq!(f.token.balance(&f.provider), CONSULT_PRICE - fee);
+    assert_eq!(f.token.balance(&f.attester), fee);
+    assert_eq!(f.token.balance(&f.fee_account), 0);
+    assert_eq!(f.token.balance(&f.voucher.address), 0);
 }
 
 #[test]
@@ -446,7 +829,10 @@ fn quote_matches_settlement() {
     f.voucher.settle(&id);
 
     assert_eq!(f.token.balance(&f.provider), net);
-    assert_eq!(f.token.balance(&f.fee_account), fee);
+    let attester_share = CONSULT_PRICE * ATTESTER_SHARE_BPS as i128 / 10_000;
+    assert_eq!(f.token.balance(&f.attester), attester_share);
+    assert_eq!(f.token.balance(&f.fee_account), fee - attester_share);
+    assert_eq!(f.token.balance(&f.voucher.address), 0);
 }
 
 #[test]
@@ -487,6 +873,7 @@ fn quote_equals_settlement_for_every_amount() {
         );
 
         let (fee, net) = f.voucher.quote(&amount);
+        let attester_share = amount * ATTESTER_SHARE_BPS as i128 / 10_000;
         assert_eq!(fee + net, amount, "quote does not add up for {amount}");
         assert_eq!(
             fee,
@@ -497,6 +884,10 @@ fn quote_equals_settlement_for_every_amount() {
             net,
             amount - fee,
             "net is not amount minus fee for {amount}"
+        );
+        assert!(
+            attester_share <= fee,
+            "attester share exceeds the fee for {amount}"
         );
 
         let funder_before = f.token.balance(&f.funder);
@@ -524,9 +915,21 @@ fn quote_equals_settlement_for_every_amount() {
             "provider received a different net than quoted for {amount}"
         );
         assert_eq!(
+            f.token.balance(&f.attester),
+            attester_share,
+            "attester received a different share than documented for {amount}"
+        );
+        assert_eq!(
             f.token.balance(&f.fee_account),
-            fee,
+            fee - attester_share,
             "fee account received a different fee than quoted for {amount}"
+        );
+        assert_eq!(
+            f.token.balance(&f.provider)
+                + f.token.balance(&f.attester)
+                + f.token.balance(&f.fee_account),
+            amount,
+            "settlement payouts do not sum to the voucher amount for {amount}"
         );
         assert_eq!(
             f.token.balance(&f.voucher.address),
@@ -961,6 +1364,10 @@ fn resolving_for_provider_pays_out() {
 
     let expected_fee = CONSULT_PRICE * FEE_BPS as i128 / 10_000;
     assert_eq!(f.token.balance(&f.provider), CONSULT_PRICE - expected_fee);
+    // No attestation happened, so there is no attester of record to pay and
+    // the fee account keeps the whole fee.
+    assert_eq!(f.token.balance(&f.attester), 0);
+    assert_eq!(f.token.balance(&f.fee_account), expected_fee);
     assert_eq!(f.voucher.get_voucher(&id).status, VoucherStatus::Settled);
     // A settled dispute still produces a care receipt.
     assert_eq!(f.receipts.count_for(&patient(&f.env)), 1);
@@ -1141,7 +1548,16 @@ fn initialize_is_single_shot() {
     let a = Address::generate(&f.env);
     let err = f
         .voucher
-        .try_initialize(&a, &a, &a, &a, &DISPUTE_WINDOW, &FEE_BPS, &a)
+        .try_initialize(
+            &a,
+            &a,
+            &a,
+            &a,
+            &DISPUTE_WINDOW,
+            &FEE_BPS,
+            &ATTESTER_SHARE_BPS,
+            &a,
+        )
         .err()
         .unwrap()
         .unwrap();
@@ -1157,11 +1573,38 @@ fn excessive_fee_rejected_at_init() {
     let client = VoucherEscrowClient::new(&env, &addr);
 
     let err = client
-        .try_initialize(&a, &a, &a, &a, &DISPUTE_WINDOW, &1_001u32, &a)
+        .try_initialize(&a, &a, &a, &a, &DISPUTE_WINDOW, &1_001u32, &0u32, &a)
         .err()
         .unwrap()
         .unwrap();
     assert_eq!(err, VoucherError::InvalidFee);
+}
+
+#[test]
+fn excessive_attester_share_rejected_at_init() {
+    // The attester share is carved out of the fee, so a share above the fee
+    // would pay out more than was charged.
+    let env = Env::default();
+    env.mock_all_auths();
+    let a = Address::generate(&env);
+    let addr = env.register(VoucherEscrow, ());
+    let client = VoucherEscrowClient::new(&env, &addr);
+
+    let err = client
+        .try_initialize(
+            &a,
+            &a,
+            &a,
+            &a,
+            &DISPUTE_WINDOW,
+            &FEE_BPS,
+            &(FEE_BPS + 1),
+            &a,
+        )
+        .err()
+        .unwrap()
+        .unwrap();
+    assert_eq!(err, VoucherError::InvalidAttesterShare);
 }
 
 #[test]
@@ -1681,13 +2124,25 @@ fn settle_event_snapshot_carries_service_and_amount() {
     assert_eq!(field_i128(&e, "net"), net);
     assert_eq!(field_i128(&e, "fee"), fee);
     // The gross escrow sits beside the payout, so one event answers both
-    // "what was paid" and "what landed".
+    // "what was paid" and "what landed". The attester's slice is part of the
+    // fee, not an extra charge on the clinic.
     assert_eq!(field_i128(&e, "net") + field_i128(&e, "fee"), CONSULT_PRICE);
+    assert_eq!(
+        field_i128(&e, "attester_share"),
+        CONSULT_PRICE * ATTESTER_SHARE_BPS as i128 / 10_000
+    );
     assert_eq!(field_u32(&e, "service_code"), CONSULT);
     assert_eq!(field_i128(&e, "amount"), CONSULT_PRICE);
     assert_eq!(
         field_names(&e),
-        ["amount", "fee", "net", "service_code", "voucher_id"],
+        [
+            "amount",
+            "attester_share",
+            "fee",
+            "net",
+            "service_code",
+            "voucher_id",
+        ],
     );
 }
 
@@ -1816,6 +2271,10 @@ const AUTH_MATRIX: &[AuthCase] = &[
         auth: signer("`funder`", funder_addr),
     },
     AuthCase {
+        function: "reduce_amount",
+        auth: signer("`funder`", funder_addr),
+    },
+    AuthCase {
         function: "claim",
         auth: signer("`provider`", provider_addr),
     },
@@ -1927,12 +2386,17 @@ fn run_case(f: &AuthFixture, function: &str) -> std::vec::Vec<Address> {
                 &a,
                 &DISPUTE_WINDOW,
                 &FEE_BPS,
+                &ATTESTER_SHARE_BPS,
                 &a,
             );
             return recorded_auths(&env);
         }
         "create_voucher" => {
             fund(&f.f);
+        }
+        "reduce_amount" => {
+            let id = fund_overpaid(&f.f, CONSULT_PRICE * 2);
+            voucher.reduce_amount(&f.f.funder, &id, &CONSULT_PRICE);
         }
         "claim" => {
             let id = fund(&f.f);
@@ -2282,6 +2746,10 @@ fn contract_instance_survives_sixty_days_of_writes() {
     }
 
     assert_eq!(f.voucher.get_config().fee_bps, FEE_BPS);
+    assert_eq!(
+        f.voucher.get_config().attester_share_bps,
+        ATTESTER_SHARE_BPS
+    );
 }
 
 #[test]
@@ -2374,6 +2842,7 @@ fn initialized_event_snapshot() {
         &a,
         &DISPUTE_WINDOW,
         &FEE_BPS,
+        &ATTESTER_SHARE_BPS,
         &a,
     );
 
@@ -2643,6 +3112,7 @@ fn math_overflow_in_fee_calculation() {
         &token_addr,
         &DISPUTE_WINDOW,
         &1_000u32,
+        &0u32,
         &fee_account,
     );
 
@@ -2660,4 +3130,175 @@ fn math_overflow_in_fee_calculation() {
     advance(&env, DISPUTE_WINDOW + 1);
     let err = voucher.try_settle(&id).err().unwrap().unwrap();
     assert_eq!(err, VoucherError::MathOverflow);
+}
+
+// ----- clawback and frozen settlement token -----
+//
+// USDC's issuer can claw funds back from any balance and freeze
+// (deauthorize) one. Escrow is one shared balance, so these tests check that
+// every payout path fails with a named error and reverts cleanly instead of
+// panicking inside the token or paying out part of a voucher.
+
+/// The issuer-side client of the settlement token, with clawback and
+/// revocation enabled. Call before funding: a balance records whether it can
+/// be clawed back when it is created.
+fn issuer_with_clawback(f: &Fixture) -> token::StellarAssetClient<'static> {
+    let issuer = f.sac.issuer();
+    issuer.set_flag(IssuerFlags::RevocableFlag);
+    issuer.set_flag(IssuerFlags::ClawbackEnabledFlag);
+    token::StellarAssetClient::new(&f.env, &f.sac.address())
+}
+
+fn attested(f: &Fixture) -> u64 {
+    let id = claimed(f);
+    f.voucher.attest(&f.attester, &id);
+    advance(&f.env, DISPUTE_WINDOW + 1);
+    id
+}
+
+#[test]
+fn clawback_then_settle_returns_escrow_shortfall() {
+    let f = setup();
+    let issuer = issuer_with_clawback(&f);
+    let id = attested(&f);
+    issuer.clawback(&f.voucher.address, &1);
+
+    let err = f.voucher.try_settle(&id).err().unwrap().unwrap();
+    assert_eq!(err, VoucherError::EscrowShortfall);
+    // Nothing moved and nothing was recorded.
+    assert_eq!(f.voucher.get_voucher(&id).status, VoucherStatus::Attested);
+    assert_eq!(f.token.balance(&f.provider), 0);
+    assert_eq!(f.receipts.count_for(&patient(&f.env)), 0);
+}
+
+#[test]
+fn clawback_then_refund_returns_escrow_shortfall() {
+    let f = setup();
+    let issuer = issuer_with_clawback(&f);
+    let id = fund(&f);
+    issuer.clawback(&f.voucher.address, &1);
+    advance(&f.env, 31 * 24 * 60 * 60);
+
+    let err = f.voucher.try_refund(&id).err().unwrap().unwrap();
+    assert_eq!(err, VoucherError::EscrowShortfall);
+    assert_eq!(f.voucher.get_voucher(&id).status, VoucherStatus::Funded);
+}
+
+#[test]
+fn clawback_then_resolving_a_dispute_returns_escrow_shortfall() {
+    let f = setup();
+    let issuer = issuer_with_clawback(&f);
+    let id = claimed(&f);
+    f.voucher.dispute(&f.funder, &id, &1u32);
+    issuer.clawback(&f.voucher.address, &1);
+
+    for refund_funder in [true, false] {
+        let err = f
+            .voucher
+            .try_resolve_dispute(&f.admin, &id, &refund_funder)
+            .err()
+            .unwrap()
+            .unwrap();
+        assert_eq!(err, VoucherError::EscrowShortfall);
+    }
+    let err = f
+        .voucher
+        .try_resolve_split(&f.admin, &id, &(CONSULT_PRICE / 2))
+        .err()
+        .unwrap()
+        .unwrap();
+    assert_eq!(err, VoucherError::EscrowShortfall);
+    assert_eq!(f.voucher.get_voucher(&id).status, VoucherStatus::Disputed);
+}
+
+#[test]
+fn clawback_then_reducing_the_amount_returns_escrow_shortfall() {
+    let f = setup();
+    let issuer = issuer_with_clawback(&f);
+    let id = fund_overpaid(&f, CONSULT_PRICE * 2);
+    issuer.clawback(&f.voucher.address, &1);
+
+    let err = f
+        .voucher
+        .try_reduce_amount(&f.funder, &id, &CONSULT_PRICE)
+        .err()
+        .unwrap()
+        .unwrap();
+    assert_eq!(err, VoucherError::EscrowShortfall);
+    assert_eq!(f.voucher.get_voucher(&id).amount, CONSULT_PRICE * 2);
+}
+
+#[test]
+fn partial_clawback_falls_on_the_last_voucher_out() {
+    let f = setup();
+    let issuer = issuer_with_clawback(&f);
+    let first = claimed(&f);
+    let second = claimed(&f);
+    f.voucher.attest(&f.attester, &first);
+    f.voucher.attest(&f.attester, &second);
+    advance(&f.env, DISPUTE_WINDOW + 1);
+    issuer.clawback(&f.voucher.address, &1);
+
+    // The shared balance still covers one voucher in full...
+    f.voucher.settle(&first);
+    assert_eq!(f.voucher.get_voucher(&first).status, VoucherStatus::Settled);
+    // ...and not the second, which keeps its status until the balance is restored.
+    let err = f.voucher.try_settle(&second).err().unwrap().unwrap();
+    assert_eq!(err, VoucherError::EscrowShortfall);
+    assert_eq!(
+        f.voucher.get_voucher(&second).status,
+        VoucherStatus::Attested
+    );
+
+    issuer.mint(&f.voucher.address, &1);
+    f.voucher.settle(&second);
+    assert_eq!(
+        f.voucher.get_voucher(&second).status,
+        VoucherStatus::Settled
+    );
+}
+
+#[test]
+fn frozen_escrow_returns_transfer_failed_until_unfrozen() {
+    let f = setup();
+    let issuer = issuer_with_clawback(&f);
+    let id = attested(&f);
+    issuer.set_authorized(&f.voucher.address, &false);
+
+    let err = f.voucher.try_settle(&id).err().unwrap().unwrap();
+    assert_eq!(err, VoucherError::TokenTransferFailed);
+    assert_eq!(f.voucher.get_voucher(&id).status, VoucherStatus::Attested);
+    assert_eq!(f.token.balance(&f.voucher.address), CONSULT_PRICE);
+
+    issuer.set_authorized(&f.voucher.address, &true);
+    f.voucher.settle(&id);
+    assert_eq!(f.voucher.get_voucher(&id).status, VoucherStatus::Settled);
+}
+
+#[test]
+fn frozen_provider_returns_transfer_failed() {
+    let f = setup();
+    let issuer = issuer_with_clawback(&f);
+    let id = attested(&f);
+    issuer.set_authorized(&f.provider, &false);
+
+    let err = f.voucher.try_settle(&id).err().unwrap().unwrap();
+    assert_eq!(err, VoucherError::TokenTransferFailed);
+    // The whole call reverted: nobody was paid, not even the fee.
+    assert_eq!(f.token.balance(&f.fee_account), 0);
+    assert_eq!(f.token.balance(&f.attester), 0);
+    assert_eq!(f.voucher.get_voucher(&id).status, VoucherStatus::Attested);
+}
+
+#[test]
+fn frozen_funder_returns_transfer_failed_on_refund() {
+    let f = setup();
+    let issuer = issuer_with_clawback(&f);
+    let id = fund(&f);
+    issuer.set_authorized(&f.funder, &false);
+    advance(&f.env, 31 * 24 * 60 * 60);
+
+    let err = f.voucher.try_refund(&id).err().unwrap().unwrap();
+    assert_eq!(err, VoucherError::TokenTransferFailed);
+    assert_eq!(f.voucher.get_voucher(&id).status, VoucherStatus::Funded);
 }
