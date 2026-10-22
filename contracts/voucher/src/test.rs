@@ -1306,6 +1306,73 @@ fn funder_disputes_within_window() {
 }
 
 #[test]
+fn clinic_responds_to_dispute_once() {
+    let f = setup();
+    let id = fund(&f);
+    f.voucher.claim(&f.provider, &id);
+    f.voucher.dispute(&f.funder, &id, &1u32);
+
+    f.voucher.respond_to_dispute(&f.provider, &id, &2u32);
+    assert_eq!(f.voucher.get_voucher(&id).response_code, 2);
+
+    let err = f
+        .voucher
+        .try_respond_to_dispute(&f.provider, &id, &3u32)
+        .err()
+        .unwrap()
+        .unwrap();
+    assert_eq!(err, VoucherError::DisputeAlreadyResponded);
+}
+
+#[test]
+fn cannot_respond_to_a_non_disputed_voucher() {
+    let f = setup();
+    let id = fund(&f);
+
+    let err = f
+        .voucher
+        .try_respond_to_dispute(&f.provider, &id, &1u32)
+        .err()
+        .unwrap()
+        .unwrap();
+    assert_eq!(err, VoucherError::InvalidStatus);
+}
+
+#[test]
+fn only_the_voucher_provider_can_respond_to_a_dispute() {
+    let f = setup();
+    let id = fund(&f);
+    f.voucher.claim(&f.provider, &id);
+    f.voucher.dispute(&f.funder, &id, &1u32);
+    let stranger = Address::generate(&f.env);
+
+    let err = f
+        .voucher
+        .try_respond_to_dispute(&stranger, &id, &1u32)
+        .err()
+        .unwrap()
+        .unwrap();
+    assert_eq!(err, VoucherError::NotAuthorized);
+}
+
+#[test]
+fn response_code_zero_is_reserved_for_no_response() {
+    let f = setup();
+    let id = fund(&f);
+    f.voucher.claim(&f.provider, &id);
+    f.voucher.dispute(&f.funder, &id, &1u32);
+
+    let err = f
+        .voucher
+        .try_respond_to_dispute(&f.provider, &id, &0u32)
+        .err()
+        .unwrap()
+        .unwrap();
+    assert_eq!(err, VoucherError::InvalidResponseCode);
+    assert_eq!(f.voucher.get_voucher(&id).response_code, 0);
+}
+
+#[test]
 fn cannot_dispute_after_window_closes() {
     let f = setup();
     let id = fund(&f);
@@ -2107,6 +2174,22 @@ fn dispute_event_snapshot_carries_service_and_amount() {
 }
 
 #[test]
+fn dispute_responded_event_snapshot_carries_response_code() {
+    let f = setup();
+    let id = fund(&f);
+    f.voucher.claim(&f.provider, &id);
+    f.voucher.dispute(&f.funder, &id, &1u32);
+
+    f.voucher.respond_to_dispute(&f.provider, &id, &2u32);
+
+    let e = one_event(&f);
+    assert_name_and_topic(&e, "dispute_responded");
+    assert_eq!(field_u64(&e, "voucher_id"), id);
+    assert_eq!(field_u32(&e, "response_code"), 2);
+    assert_eq!(field_names(&e), ["response_code", "voucher_id"]);
+}
+
+#[test]
 fn settle_event_snapshot_carries_service_and_amount() {
     let f = setup();
     let id = fund(&f);
@@ -2287,6 +2370,10 @@ const AUTH_MATRIX: &[AuthCase] = &[
         auth: signer("`funder`", funder_addr),
     },
     AuthCase {
+        function: "respond_to_dispute",
+        auth: signer("`provider`", provider_addr),
+    },
+    AuthCase {
         function: "settle",
         auth: Auth::Free("none (permissionless)"),
     },
@@ -2411,6 +2498,12 @@ fn run_case(f: &AuthFixture, function: &str) -> std::vec::Vec<Address> {
             let id = fund(&f.f);
             voucher.claim(&f.f.provider, &id);
             voucher.dispute(&f.f.funder, &id, &1u32);
+        }
+        "respond_to_dispute" => {
+            let id = fund(&f.f);
+            voucher.claim(&f.f.provider, &id);
+            voucher.dispute(&f.f.funder, &id, &1u32);
+            voucher.respond_to_dispute(&f.f.provider, &id, &1u32);
         }
         "settle" => {
             let id = fund(&f.f);

@@ -159,6 +159,7 @@ pub struct Voucher {
     pub attested_at: u64,
     pub dispute_deadline: u64,
     pub attester: Option<Address>,     // set by `attest`, paid at settlement
+    pub response_code: u32,            // clinic's dispute response; 0 = none
 }
 
 pub struct Config {
@@ -183,6 +184,7 @@ pub struct Config {
 | `claim` | `provider, voucher_id` | `()` | `provider` |
 | `attest` | `attester, voucher_id` | `()` | `attester` |
 | `dispute` | `funder, voucher_id, reason_code` | `()` | `funder` |
+| `respond_to_dispute` | `provider, voucher_id, response_code` | `()` | `provider` |
 | `settle` | `voucher_id` | `()` | **none** |
 | `refund` | `voucher_id` | `()` | **none** |
 | `resolve_dispute` | `admin, voucher_id, refund_funder: bool` | `()` | `admin` |
@@ -217,6 +219,7 @@ Every public function, with the exact signer it demands. `AUTH_MATRIX` in `contr
 | `claim` | `provider` |
 | `attest` | `attester` |
 | `dispute` | `funder` |
+| `respond_to_dispute` | `provider` |
 | `settle` | none (permissionless) |
 | `refund` | none (permissionless) |
 | `resolve_dispute` | `admin` |
@@ -254,6 +257,8 @@ rejects the voucher's own provider even if it holds that role.
 
 **`dispute`** — caller is the funder; status is `Claimed`, or `Attested` and before the deadline.
 
+**`respond_to_dispute`** — caller is the voucher's provider; status is `Disputed`; `response_code` must be nonzero (zero means no response), and only one response can be recorded. The code is stored on the voucher and emitted in `dispute_responded`.
+
 **`settle`** — status is `Attested`; now ≥ `dispute_deadline`; the contract still holds the voucher's amount (`EscrowShortfall` if the token issuer clawed escrow back); the token accepts the transfers (`TokenTransferFailed` if the issuer froze the escrow, the clinic or the attester). Pays the clinic `amount - fee`, the attester its share (`amount * attester_share_bps / 10_000`), and the fee account the remaining fee, then mints a receipt. The three payouts sum to `amount` exactly. If no attester is recorded — a dispute resolved for the provider without an attestation — the fee account receives the whole fee.
 
 **`refund`** — status is `Funded` and either now ≥ `expires_at` or the provider is no longer active in the registry (so a suspended clinic's voucher is refundable immediately, before expiry), or status is `Claimed` and now ≥ `expires_at + CLAIM_GRACE_SECS` (7 days). Suspension does not shorten the claim grace: care may already have been given. Returns the full amount, no fee. `refundable_at` returns the exact time, which is the current ledger time when a funded voucher's provider is inactive. It has the same `EscrowShortfall` and `TokenTransferFailed` checks as `settle`, and so do `resolve_dispute`, `resolve_split` and the refund in `reduce_amount`, which pay through the same paths. Either error reverts the whole call, so the voucher keeps its status; see [the settlement token's issuer](../protocol/trust.md#the-settlement-tokens-issuer).
@@ -284,6 +289,8 @@ rejects the voucher's own provider even if it holds that role.
 |  |  | 22 | `AmountNotReduced` |
 |  |  | 23 | `EscrowShortfall` |
 |  |  | 24 | `TokenTransferFailed` |
+|  |  | 25 | `InvalidResponseCode` |
+|  |  | 26 | `DisputeAlreadyResponded` |
 
 ### Events
 
@@ -293,6 +300,7 @@ rejects the voucher's own provider even if it holds that role.
 | `voucher_claimed` | `provider` | `voucher_id`, `claimed_at`, `service_code`, `amount` |
 | `voucher_attested` | `attester` | `voucher_id`, `attested_at`, `dispute_deadline`, `service_code`, `amount`, `remaining_today` |
 | `voucher_disputed` | `funder` | `voucher_id`, `reason_code`, `service_code`, `amount` |
+| `dispute_responded` | `provider` | `voucher_id`, `response_code` |
 | `voucher_settled` | `provider` | `voucher_id`, `net`, `fee`, `service_code`, `amount`, `attester_share` |
 | `voucher_refunded` | `funder` | `voucher_id`, `amount`, `service_code` |
 | `voucher_amount_reduced` | `funder` | `voucher_id`, `service_code`, `previous_amount`, `amount`, `refunded` |
@@ -306,6 +314,8 @@ rejects the voucher's own provider even if it holds that role.
 > Every lifecycle event now carries `service_code` and `amount`, appended **after** the fields each event already had, so one event says what was paid for without a storage lookup. The data map is keyed by field name (an XDR `ScMap`), and existing fields keep their positions: decoders that read by name — including `sci-healthcare-backend` — pick the new fields up without a breaking change. `voucher_refunded` already carried `amount`; it gains `service_code` only.
 >
 > `voucher_amount_reduced` is new, so it needs one line in the indexer: `voucher_amount_reduced: ['funder']` in `TOPIC_FIELDS` in `sci-healthcare-backend/src/stellar/events.ts`. Without it the event still decodes — the decoder falls back to no topic names — but the `funder` topic reads as `undefined`. Its data fields are read by name and need no decoder change.
+>
+> `dispute_responded` also needs `dispute_responded: ['provider']` in the indexer's `TOPIC_FIELDS` in `sci-healthcare-backend/src/stellar/events.ts`; this backend repository is maintained separately.
 
 ---
 

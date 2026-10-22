@@ -55,6 +55,8 @@ pub struct Voucher {
     /// the protocol fee, which is why it is stored on the voucher rather than
     /// looked up later: the attester of record is the one who did the work.
     pub attester: Option<Address>,
+    /// Clinic's response to a dispute; zero means no response was submitted.
+    pub response_code: u32,
 }
 
 /// Protocol-level settings, fixed at initialization.
@@ -143,6 +145,10 @@ pub enum VoucherError {
     /// (deauthorized) the escrow or the recipient. Nothing moved; the voucher
     /// is unchanged and the call can be retried once the freeze is lifted.
     TokenTransferFailed = 24,
+    /// A clinic response code must be nonzero; zero means no response.
+    InvalidResponseCode = 25,
+    /// A clinic may respond to a dispute only once.
+    DisputeAlreadyResponded = 26,
 }
 
 /// Maps the shared helpers' failures onto this contract's error numbers, so
