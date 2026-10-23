@@ -33,9 +33,10 @@ pub use events::{
 pub use types::{DataKey, Provider, ProviderStatus, RegistryError, ServiceItem};
 
 use storage::{
-    extend_instance, has_admin, has_provider, read_admin, read_attester, read_capacity,
-    read_pending_admin, read_provider, read_service, remove_service as storage_remove_service,
-    write_admin, write_attester, write_capacity, write_provider, write_service,
+    extend_instance, has_admin, has_provider, list_providers_by_country, read_admin, read_attester,
+    read_capacity, read_pending_admin, read_provider, read_service,
+    remove_service as storage_remove_service, write_admin, write_attester, write_capacity,
+    write_provider, write_service,
 };
 
 /// Least notice a clinic must give before a scheduled price takes effect.
@@ -101,6 +102,11 @@ impl Registry {
         storage::write_provider_at(&env, count, &owner);
         storage::write_provider_count(&env, &(count + 1));
 
+        // `CountryCount` for this country is left unset; `read_country_count`
+        // returns 0 when absent, so `providers_in` works even if the provider
+        // never becomes active. The entry is created when the provider is
+        // activated in `set_provider_status`.
+
         ProviderRegistered {
             provider: owner,
             name,
@@ -112,6 +118,11 @@ impl Registry {
     }
 
     /// Moves a provider between lifecycle states. Admin only.
+    ///
+    /// When a provider becomes `Active`, they are added to the per-country
+    /// index so `providers_in` can find them. When they become non-`Active`
+    /// (e.g. `Suspended`), they are removed from the index using swap-and-pop
+    /// so the index stays consistent and reads remain O(1) amortized.
     pub fn set_provider_status(
         env: Env,
         admin: Address,
@@ -121,9 +132,54 @@ impl Registry {
         Self::require_admin(&env, &admin)?;
 
         let mut provider = read_provider(&env, &provider_addr)?;
+        let prev_status = provider.status;
         provider.status = status;
         write_provider(&env, &provider_addr, &provider);
         extend_instance(&env);
+
+        // Update the per-country index when crossing the Active boundary.
+        if prev_status != status {
+            let country = &provider.country;
+            match (prev_status, status) {
+                // Provider just became active: add to country index.
+                (_, ProviderStatus::Active) => {
+                    let count = storage::read_country_count(&env, country);
+                    storage::write_country_at(&env, country, count, &provider_addr);
+                    storage::write_country_count(&env, country, &(count + 1));
+                }
+                // Provider just became non-active: remove from country index
+                // using swap-and-pop.
+                (ProviderStatus::Active, _) => {
+                    // Find the provider's index in the country list.
+                    let total = storage::read_country_count(&env, country);
+                    let mut idx = None;
+                    for i in 0..total {
+                        if let Some(addr) = storage::read_country_at(&env, country, i) {
+                            if addr == provider_addr {
+                                idx = Some(i);
+                                break;
+                            }
+                        }
+                    }
+                    if let Some(i) = idx {
+                        // Swap with the last element and pop.
+                        let last_idx = total.saturating_sub(1);
+                        if i != last_idx {
+                            if let Some(last_addr) =
+                                storage::read_country_at(&env, country, last_idx)
+                            {
+                                storage::write_country_at(&env, country, i, &last_addr);
+                            }
+                        }
+                        storage::write_country_count(&env, country, &(total - 1));
+                    }
+                }
+                // Reactivation (Pending -> Active or Suspended -> Active) is
+                // handled above; no double-add because we only act on the
+                // transition from non-Active to Active.
+                _ => {}
+            }
+        }
 
         ProviderStatusChanged {
             provider: provider_addr,
@@ -492,6 +548,18 @@ impl Registry {
     /// unlimited. `voucher` reads this before funding.
     pub fn get_capacity(env: Env, provider_addr: Address) -> u32 {
         read_capacity(&env, &provider_addr)
+    }
+
+    /// The subset of providers in a given country, paged by `start` and `limit`.
+    ///
+    /// Only `Active` providers are returned. `limit` is capped at
+    /// `MAX_PROVIDERS_PAGE` so one read cannot exceed host limits. Page by
+    /// calling again with `start += returned.len()`. An empty registry or a
+    /// `start` beyond the end returns an empty list. No signature is required;
+    /// this is the on-chain discovery any app or auditor can use instead of
+    /// trusting an indexer.
+    pub fn providers_in(env: Env, country: String, start: u32, limit: u32) -> Vec<Provider> {
+        list_providers_by_country(&env, &country, start, limit)
     }
 
     /// Crate version this contract was built from, e.g. `"0.2.0"`.

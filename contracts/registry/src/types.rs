@@ -82,6 +82,11 @@ pub enum DataKey {
     /// Most vouchers a clinic accepts outstanding at once; absent means
     /// unlimited.
     Capacity(Address),
+    /// Number of active providers in a country, for pagination.
+    CountryCount(String),
+    /// Address of the active provider at `index` in a country's list, in
+    /// insertion order. Uses swap-and-pop on removal so reads stay O(1).
+    CountryAt(String, u32),
 }
 
 #[contracterror]
