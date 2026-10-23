@@ -62,6 +62,7 @@ pub struct ServiceItem {
 | `get_pending_admin` | — | `Option<Address>` | view | — |
 | `get_provider` | `provider_addr` | `Provider` | view | `ProviderNotFound` |
 | `list_providers` | `start, limit: u32` | `Vec<Provider>` | view | — |
+| `providers_in` | `country: String, start, limit: u32` | `Vec<Provider>` | view | — |
 | `is_active_provider` | `provider_addr` | `bool` | view | — |
 | `get_service` | `provider_addr, code` | `ServiceItem` | view | `ServiceNotFound` |
 | `get_services` | `provider_addr, codes: Vec<u32>` | `Vec<ServiceItem>` | view | — |
@@ -76,6 +77,8 @@ pub struct ServiceItem {
 `get_service_price` returns `0` when the service is absent or inactive. It exists so `voucher` can validate pricing over an interface of primitives only, without the two contracts sharing types.
 
 `list_providers(start, limit)` returns providers in registration order, paged by `start` with `limit` capped at `MAX_PROVIDERS_PAGE` (50). Page by calling again with `start += returned.len()`. It is the on-chain discovery any app or auditor can use instead of trusting an indexer, and it needs no signature.
+
+`providers_in(country, start, limit)` returns the `Active` providers registered in `country` (ISO 3166-1 alpha-2), paged the same way. Only clinics the admin has moved to `Active` appear; pending and suspended clinics stay out. The per-country index is maintained on every `set_provider_status` call that crosses the `Active` boundary, so a partner app can show local clinics without running an indexer. `limit` is capped at `MAX_PROVIDERS_PAGE`.
 
 A clinic that temporarily cannot deliver a service (out of test kits, say) calls `set_service_available(provider_addr, code, false)` instead of delisting it. The service keeps its catalogue entry and its price, `is_service_available` returns `false`, and `voucher` refuses to fund it with `ServiceUnavailable`. Vouchers already funded against it are unaffected. `upsert_service` keeps a paused service paused; only `set_service_available(…, true)` puts it back on sale. New services are listed as available.
 
@@ -107,6 +110,7 @@ Every public function, with the exact signer it demands — no signature that is
 | `get_pending_admin` | none (view) |
 | `get_provider` | none (view) |
 | `list_providers` | none (view) |
+| `providers_in` | none (view) |
 | `is_active_provider` | none (view) |
 | `get_service` | none (view) |
 | `get_services` | none (view) |

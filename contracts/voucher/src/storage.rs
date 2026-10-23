@@ -252,3 +252,20 @@ pub(crate) fn read_escrow_cap(env: &Env) -> i128 {
 pub(crate) fn write_escrow_cap(env: &Env, cap: i128) {
     env.storage().instance().set(&DataKey::EscrowCap, &cap);
 }
+
+#[cfg(test)]
+mod storage_coverage {
+    use super::*;
+
+    #[test]
+    fn write_options_with_default_options_returns_early() {
+        let env = Env::default();
+        let contract_id = env.register(crate::VoucherEscrow, ());
+        env.as_contract(&contract_id, || {
+            let id = 1u64;
+            let options = VoucherOptions::default();
+            write_options(&env, id, &options);
+            assert_eq!(read_options(&env, id), VoucherOptions::default());
+        });
+    }
+}

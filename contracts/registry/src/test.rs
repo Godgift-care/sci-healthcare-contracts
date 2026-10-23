@@ -671,6 +671,123 @@ fn list_providers_empty_registry() {
     assert_eq!(f.client.list_providers(&0u32, &10u32).len(), 0);
 }
 
+/// `providers_in` returns only `Active` clinics in one country: pending and
+/// suspended clinics stay out, suspension removes a clinic from the country
+/// index, and reactivation re-adds it once.
+#[test]
+fn providers_in_tracks_active_status() {
+    let f = setup();
+
+    let a = Address::generate(&f.env);
+    let b = Address::generate(&f.env);
+    let c = Address::generate(&f.env);
+
+    f.client.register_provider(
+        &a,
+        &String::from_str(&f.env, "A Clinic"),
+        &String::from_str(&f.env, "NG"),
+    );
+    f.client.register_provider(
+        &b,
+        &String::from_str(&f.env, "B Clinic"),
+        &String::from_str(&f.env, "NG"),
+    );
+    f.client.register_provider(
+        &c,
+        &String::from_str(&f.env, "C Clinic"),
+        &String::from_str(&f.env, "NG"),
+    );
+    f.client
+        .set_provider_status(&f.admin, &a, &ProviderStatus::Active);
+    f.client
+        .set_provider_status(&f.admin, &b, &ProviderStatus::Active);
+    // c stays Pending.
+
+    let ng = f
+        .client
+        .providers_in(&String::from_str(&f.env, "NG"), &0u32, &10u32);
+    assert_eq!(ng.len(), 2);
+    assert_eq!(ng.get_unchecked(0).owner, a);
+    assert_eq!(ng.get_unchecked(1).owner, b);
+
+    // Suspending b removes it; only a remains.
+    f.client
+        .set_provider_status(&f.admin, &b, &ProviderStatus::Suspended);
+    let ng = f
+        .client
+        .providers_in(&String::from_str(&f.env, "NG"), &0u32, &10u32);
+    assert_eq!(ng.len(), 1);
+    assert_eq!(ng.get_unchecked(0).owner, a);
+
+    // Reactivating b re-adds it once.
+    f.client
+        .set_provider_status(&f.admin, &b, &ProviderStatus::Active);
+    let ng = f
+        .client
+        .providers_in(&String::from_str(&f.env, "NG"), &0u32, &10u32);
+    assert_eq!(ng.len(), 2);
+    assert_eq!(ng.get_unchecked(0).owner, a);
+    assert_eq!(ng.get_unchecked(1).owner, b);
+
+    // Other countries are untouched.
+    assert_eq!(
+        f.client
+            .providers_in(&String::from_str(&f.env, "KE"), &0u32, &10u32)
+            .len(),
+        0
+    );
+}
+
+/// `providers_in` pages through a country's active clinics, capping `limit`
+/// at `MAX_PROVIDERS_PAGE`.
+#[test]
+fn providers_in_pages() {
+    let f = setup();
+
+    let mut providers = Vec::new(&f.env);
+    for _ in 0..7 {
+        let provider = Address::generate(&f.env);
+        f.client.register_provider(
+            &provider,
+            &String::from_str(&f.env, "Clinic"),
+            &String::from_str(&f.env, "NG"),
+        );
+        f.client
+            .set_provider_status(&f.admin, &provider, &ProviderStatus::Active);
+        providers.push_back(provider);
+    }
+
+    let first = f
+        .client
+        .providers_in(&String::from_str(&f.env, "NG"), &0u32, &3u32);
+    assert_eq!(first.len(), 3);
+    assert_eq!(first.get_unchecked(0).owner, providers.get_unchecked(0));
+    assert_eq!(first.get_unchecked(1).owner, providers.get_unchecked(1));
+    assert_eq!(first.get_unchecked(2).owner, providers.get_unchecked(2));
+
+    let second = f
+        .client
+        .providers_in(&String::from_str(&f.env, "NG"), &3u32, &3u32);
+    assert_eq!(second.len(), 3);
+    assert_eq!(second.get_unchecked(0).owner, providers.get_unchecked(3));
+    assert_eq!(second.get_unchecked(1).owner, providers.get_unchecked(4));
+    assert_eq!(second.get_unchecked(2).owner, providers.get_unchecked(5));
+
+    let last = f
+        .client
+        .providers_in(&String::from_str(&f.env, "NG"), &6u32, &3u32);
+    assert_eq!(last.len(), 1);
+    assert_eq!(last.get_unchecked(0).owner, providers.get_unchecked(6));
+
+    // start beyond the end returns nothing.
+    assert_eq!(
+        f.client
+            .providers_in(&String::from_str(&f.env, "NG"), &7u32, &10u32)
+            .len(),
+        0
+    );
+}
+
 /// The counter and index entries get their TTL extended on read, like every
 /// other persistent entry.
 #[test]
@@ -999,6 +1116,10 @@ const AUTH_MATRIX: &[AuthCase] = &[
         auth: signer("`new_admin`", new_admin_addr),
     },
     AuthCase {
+        function: "providers_in",
+        auth: Auth::Free("none (view)"),
+    },
+    AuthCase {
         function: "get_admin",
         auth: Auth::Free("none (view)"),
     },
@@ -1130,6 +1251,10 @@ fn run_case(f: &AuthFixture, function: &str) -> std::vec::Vec<Address> {
         "accept_admin" => {
             client.propose_admin(&f.f.admin, &f.new_admin);
             client.accept_admin(&f.new_admin);
+        }
+        "providers_in" => {
+            activate(&f.f, &f.provider);
+            client.providers_in(&String::from_str(env, "NG"), &0u32, &10u32);
         }
         "get_admin" => {
             client.get_admin();
