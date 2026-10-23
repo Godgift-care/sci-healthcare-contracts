@@ -124,6 +124,9 @@ pub enum DataKey {
     ProviderCount(Address),
     /// A provider's receipt ids in mint order: `(provider, index) -> voucher_id`.
     ProviderReceipt(Address, u32),
+    /// Running total of the amounts of a provider's receipts: the money side
+    /// of the clinic's on-chain track record, read by `provider_stats`.
+    ProviderTotal(Address),
 }
 
 #[contracterror]
@@ -138,6 +141,10 @@ pub enum ReceiptError {
     InvalidAmount = 6,
     NoPendingAdmin = 7,
     NoPendingMinter = 8,
+    /// A provider's receipt count or running total would have overflowed.
+    /// Wrapping either one would understate a clinic's track record, so the
+    /// mint is refused instead.
+    MathOverflow = 9,
 }
 
 /// Maps the shared helpers' failures onto this contract's error numbers, so
@@ -264,6 +271,23 @@ impl ReceiptBook {
             .persistent()
             .get(&provider_count_key)
             .unwrap_or(0);
+        // Both counters are checked: a clinic's track record must never wrap
+        // back to zero or understate what it was paid. Returning the typed
+        // error reverts the whole mint, so the receipt and the counters stay
+        // in step.
+        let next_provider_count = provider_count
+            .checked_add(1)
+            .ok_or(ReceiptError::MathOverflow)?;
+        let provider_total_key = DataKey::ProviderTotal(provider.clone());
+        let provider_total: i128 = env
+            .storage()
+            .persistent()
+            .get(&provider_total_key)
+            .unwrap_or(0);
+        let next_provider_total = provider_total
+            .checked_add(amount)
+            .ok_or(ReceiptError::MathOverflow)?;
+
         let provider_entry_key = DataKey::ProviderReceipt(provider.clone(), provider_count);
         env.storage()
             .persistent()
@@ -271,8 +295,12 @@ impl ReceiptBook {
         common::extend_persistent(&env, &provider_entry_key);
         env.storage()
             .persistent()
-            .set(&provider_count_key, &(provider_count + 1));
+            .set(&provider_count_key, &next_provider_count);
         common::extend_persistent(&env, &provider_count_key);
+        env.storage()
+            .persistent()
+            .set(&provider_total_key, &next_provider_total);
+        common::extend_persistent(&env, &provider_total_key);
 
         ReceiptMinted {
             beneficiary_ref,
@@ -339,6 +367,36 @@ impl ReceiptBook {
             }
             None => 0,
         }
+    }
+
+    /// A clinic's on-chain track record: `(count, total_amount)`.
+    ///
+    /// The count is the receipts minted for this provider and the total is
+    /// the sum of their amounts, in the same base units the receipts carry.
+    /// Exact and read-only: no signature, no indexer. A provider with no
+    /// receipts returns `(0, 0)`. Both entries are TTL-extended on read like
+    /// every other persistent entry, so a clinic's record is not archived
+    /// out from under it while it is being read.
+    pub fn provider_stats(env: Env, provider: Address) -> (u32, i128) {
+        let count_key = DataKey::ProviderCount(provider.clone());
+        let count: u32 = match env.storage().persistent().get(&count_key) {
+            Some(count) => {
+                common::extend_persistent(&env, &count_key);
+                count
+            }
+            None => 0,
+        };
+
+        let total_key = DataKey::ProviderTotal(provider);
+        let total: i128 = match env.storage().persistent().get(&total_key) {
+            Some(total) => {
+                common::extend_persistent(&env, &total_key);
+                total
+            }
+            None => 0,
+        };
+
+        (count, total)
     }
 
     /// A clinic's receipts in mint order, newest last.

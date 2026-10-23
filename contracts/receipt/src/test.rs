@@ -180,6 +180,122 @@ fn count_tracks_episodes_per_beneficiary() {
 }
 
 #[test]
+fn provider_stats_report_exact_count_and_total() {
+    let f = setup();
+    let clinic_a = Address::generate(&f.env);
+    let clinic_b = Address::generate(&f.env);
+    let patient = bref(&f.env, 7);
+
+    // A clinic nobody has minted for yet reports zeros, not an error.
+    assert_eq!(f.client.provider_stats(&clinic_a), (0, 0));
+
+    // Interleave the two clinics so a shared or leaky counter would show.
+    f.client.mint(
+        &f.minter,
+        &1u64,
+        &patient,
+        &clinic_a,
+        &101u32,
+        &30_000_000i128,
+    );
+    f.client.mint(
+        &f.minter,
+        &2u64,
+        &patient,
+        &clinic_b,
+        &101u32,
+        &10_000_000i128,
+    );
+    f.client.mint(
+        &f.minter,
+        &3u64,
+        &patient,
+        &clinic_a,
+        &202u32,
+        &40_000_000i128,
+    );
+    f.client
+        .mint(&f.minter, &4u64, &patient, &clinic_a, &101u32, &5i128);
+
+    assert_eq!(f.client.provider_stats(&clinic_a), (3, 70_000_005));
+    assert_eq!(f.client.provider_stats(&clinic_b), (1, 10_000_000));
+
+    // The count agrees with the per-beneficiary and per-clinic views: one
+    // set of receipts, three ways of reading it.
+    assert_eq!(f.client.count_for(&patient), 4);
+    assert_eq!(
+        f.client
+            .receipts_of_provider(&clinic_a, &0u32, &50u32)
+            .len(),
+        3
+    );
+}
+
+#[test]
+fn provider_count_overflow_is_refused() {
+    // The count is the clinic's index length as well as its track record.
+    // One more receipt would wrap it, so the mint must be refused rather
+    // than report a clinic with u32::MAX receipts and a fresh index.
+    let f = setup();
+    let provider = Address::generate(&f.env);
+    let patient = bref(&f.env, 7);
+    f.client
+        .mint(&f.minter, &1u64, &patient, &provider, &101u32, &10i128);
+
+    let contract = f.client.address.clone();
+    f.env.as_contract(&contract, || {
+        f.env
+            .storage()
+            .persistent()
+            .set(&DataKey::ProviderCount(provider.clone()), &u32::MAX);
+    });
+
+    let err = f
+        .client
+        .try_mint(&f.minter, &2u64, &patient, &provider, &101u32, &10i128)
+        .err()
+        .unwrap()
+        .unwrap();
+    assert_eq!(err, ReceiptError::MathOverflow);
+
+    // The refused mint wrote nothing: no receipt, no wrapped counter.
+    assert!(f.client.try_get_receipt(&2u64).is_err());
+    assert_eq!(f.client.provider_stats(&provider), (u32::MAX, 10i128));
+}
+
+#[test]
+fn provider_total_overflow_is_refused() {
+    // The total is the money a clinic has been paid. Wrapping it would
+    // understate the record everyone is meant to check, so the mint fails.
+    let f = setup();
+    let provider = Address::generate(&f.env);
+    let patient = bref(&f.env, 7);
+    f.client
+        .mint(&f.minter, &1u64, &patient, &provider, &101u32, &10i128);
+
+    let contract = f.client.address.clone();
+    let near_max = i128::MAX - 5;
+    f.env.as_contract(&contract, || {
+        f.env
+            .storage()
+            .persistent()
+            .set(&DataKey::ProviderTotal(provider.clone()), &near_max);
+    });
+
+    let err = f
+        .client
+        .try_mint(&f.minter, &2u64, &patient, &provider, &101u32, &10i128)
+        .err()
+        .unwrap()
+        .unwrap();
+    assert_eq!(err, ReceiptError::MathOverflow);
+
+    // No receipt, and the running total still says what it said before.
+    assert!(f.client.try_get_receipt(&2u64).is_err());
+    assert_eq!(f.client.provider_stats(&provider), (1, near_max));
+}
+
+#[test]
 fn provider_receipts_are_in_mint_order_and_never_mix() {
     let f = setup();
     let clinic_a = Address::generate(&f.env);
@@ -583,6 +699,10 @@ const AUTH_MATRIX: &[AuthCase] = &[
         auth: Auth::Free("none (view)"),
     },
     AuthCase {
+        function: "provider_stats",
+        auth: Auth::Free("none (view)"),
+    },
+    AuthCase {
         function: "receipts_of_provider",
         auth: Auth::Free("none (view)"),
     },
@@ -678,6 +798,9 @@ fn run_case(f: &AuthFixture, function: &str) -> std::vec::Vec<Address> {
         }
         "count_for" => {
             client.count_for(&bref(env, 7));
+        }
+        "provider_stats" => {
+            client.provider_stats(&f.f.minter);
         }
         "receipts_of_provider" => {
             client.receipts_of_provider(&f.f.minter, &0u32, &10u32);
@@ -1092,6 +1215,13 @@ fn provider_entry_ttl(f: &Fixture, provider: &Address, index: u32) -> u32 {
         .as_contract(&contract, || f.env.storage().persistent().get_ttl(&key))
 }
 
+fn provider_total_ttl(f: &Fixture, provider: &Address) -> u32 {
+    let contract = f.client.address.clone();
+    let key = DataKey::ProviderTotal(provider.clone());
+    f.env
+        .as_contract(&contract, || f.env.storage().persistent().get_ttl(&key))
+}
+
 #[test]
 fn receipt_survives_sixty_days_of_activity() {
     let f = setup();
@@ -1171,6 +1301,26 @@ fn provider_index_extends_its_own_entries() {
     assert_eq!(receipts.len(), 1);
     assert_eq!(provider_count_ttl(&f, &provider), NINETY_DAYS);
     assert_eq!(provider_entry_ttl(&f, &provider, 0), NINETY_DAYS);
+}
+
+#[test]
+fn provider_stats_extend_their_own_entries() {
+    let f = setup();
+    let provider = Address::generate(&f.env);
+    let patient = bref(&f.env, 7);
+    f.client
+        .mint(&f.minter, &1u64, &patient, &provider, &101u32, &30_000_000);
+
+    // Day 61: the counters are past their 30-day threshold. Only a read of
+    // `provider_stats` extends them — the receipt's own TTL does not cover
+    // them, and neither does `receipts_of_provider` extend the total.
+    advance_days(&f, 61);
+    assert_eq!(f.client.provider_stats(&provider), (1, 30_000_000));
+    assert_eq!(provider_count_ttl(&f, &provider), NINETY_DAYS);
+    assert_eq!(provider_total_ttl(&f, &provider), NINETY_DAYS);
+
+    // An unknown provider is still an ordinary (0, 0), not an error.
+    assert_eq!(f.client.provider_stats(&Address::generate(&f.env)), (0, 0));
 }
 
 #[test]

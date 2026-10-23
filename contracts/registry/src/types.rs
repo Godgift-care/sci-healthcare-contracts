@@ -73,8 +73,20 @@ pub enum DataKey {
     Provider(Address),
     Service(Address, u32),
     Attester(Address),
+    /// Total number of registered providers.
+    ProviderCount,
+    /// Provider address at a registration index, in registration order.
+    ProviderAt(u32),
     /// Address nominated by `propose_admin`, awaiting `accept_admin`.
     PendingAdmin,
+    /// Most vouchers a clinic accepts outstanding at once; absent means
+    /// unlimited.
+    Capacity(Address),
+    /// Number of active providers in a country, for pagination.
+    CountryCount(String),
+    /// Address of the active provider at `index` in a country's list, in
+    /// insertion order. Uses swap-and-pop on removal so reads stay O(1).
+    CountryAt(String, u32),
 }
 
 #[contracterror]
@@ -107,5 +119,22 @@ impl From<sci_common::CommonError> for RegistryError {
             sci_common::CommonError::NotAuthorized => RegistryError::NotAuthorized,
             sci_common::CommonError::NoPendingAdmin => RegistryError::NoPendingAdmin,
         }
+    }
+}
+
+#[cfg(test)]
+mod error_conversion_tests {
+    use super::*;
+
+    #[test]
+    fn not_authorized_maps() {
+        let err: RegistryError = sci_common::CommonError::NotAuthorized.into();
+        assert_eq!(err, RegistryError::NotAuthorized);
+    }
+
+    #[test]
+    fn no_pending_admin_maps() {
+        let err: RegistryError = sci_common::CommonError::NoPendingAdmin.into();
+        assert_eq!(err, RegistryError::NoPendingAdmin);
     }
 }

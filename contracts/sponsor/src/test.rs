@@ -313,29 +313,35 @@ fn a_match_spends_the_budget_and_not_a_penny_more() {
 fn the_cap_limits_what_one_voucher_costs() {
     let f = setup();
     f.desk.deposit(&f.sponsor, &BUDGET);
-    // Ten times the voucher's amount, but only 4_000_000 is allowed.
+    // Ten times the voucher's amount, but only 3_500_000 is allowed (the
+    // voucher contract takes at most 20% above the 3_000_000 price).
     f.desk
-        .set_rules(&f.sponsor, &rules(&f.env, 100_000, 4_000_000));
+        .set_rules(&f.sponsor, &rules(&f.env, 100_000, 3_500_000));
 
     let original = fund(&f);
     let matched = f.desk.match_voucher(&f.sponsor, &original);
 
     let summary = f.voucher.voucher_summary(&matched).unwrap();
-    assert_eq!(summary.4, 4_000_000, "the match is capped");
-    assert_eq!(f.desk.available_budget(&f.sponsor), BUDGET - 4_000_000);
+    assert_eq!(summary.4, 3_500_000, "the match is capped");
+    assert_eq!(f.desk.available_budget(&f.sponsor), BUDGET - 3_500_000);
 }
 
 #[test]
 fn the_ratio_decides_how_much_is_added() {
     let f = setup();
     f.desk.deposit(&f.sponsor, &BUDGET);
-    f.desk.set_rules(&f.sponsor, &rules(&f.env, 20_000, CAP));
+    // 1.2 to 1: the most the voucher contract accepts above the price.
+    f.desk.set_rules(&f.sponsor, &rules(&f.env, 12_000, CAP));
 
     let original = fund(&f);
     let matched = f.desk.match_voucher(&f.sponsor, &original);
 
     let summary = f.voucher.voucher_summary(&matched).unwrap();
-    assert_eq!(summary.4, 2 * CONSULT_PRICE, "twice the funded amount");
+    assert_eq!(
+        summary.4,
+        CONSULT_PRICE * 6 / 5,
+        "1.2 times the funded amount"
+    );
 }
 
 #[test]
