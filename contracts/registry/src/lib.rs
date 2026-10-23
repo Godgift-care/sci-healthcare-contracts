@@ -76,8 +76,14 @@ impl Registry {
         if name.is_empty() {
             return Err(RegistryError::EmptyName);
         }
-        // ISO 3166-1 alpha-2 is always two characters.
-        if country.len() != 2 {
+        // ISO 3166-1 alpha-2 is exactly two ASCII uppercase letters — never
+        // two arbitrary characters. A lowercase "ng", a digit, two spaces or
+        // a multi-byte character that happens to occupy two bytes would
+        // split one country into two entries in the app and the indexer, so
+        // it never enters the registry. The full ISO list is an off-chain
+        // concern; the shape is not.
+        let country_bytes = country.to_bytes();
+        if country_bytes.len() != 2 || !country_bytes.iter().all(|byte| byte.is_ascii_uppercase()) {
             return Err(RegistryError::InvalidCountry);
         }
         if has_provider(&env, &owner) {
@@ -91,6 +97,7 @@ impl Registry {
             country: country.clone(),
             status: ProviderStatus::Pending,
             registered_at,
+            reason_code: 0,
         };
         write_provider(&env, &owner, &provider);
         extend_instance(&env);
@@ -112,22 +119,77 @@ impl Registry {
     }
 
     /// Moves a provider between lifecycle states. Admin only.
+    ///
+    /// Only the four informative transitions are accepted — `Pending →
+    /// Active`, `Pending → Suspended`, `Active → Suspended` and
+    /// `Suspended → Active`. Setting the same status again, or moving a
+    /// provider backwards to `Pending`, is refused with `InvalidTransition`
+    /// instead of emitting an event that misleads the indexer and anyone
+    /// auditing the registry's history. Entering `Retired` is likewise not
+    /// the admin's call: the provider's own owner leaves with `retire`.
+    ///
+    /// `reason_code` is the documented reason for the change (see
+    /// `docs/protocol/trust.md`); it is stored on the provider and emitted
+    /// with the status, so a suspended clinic knows why and a funder can
+    /// tell a fraud suspension from a paperwork one.
     pub fn set_provider_status(
         env: Env,
         admin: Address,
         provider_addr: Address,
         status: ProviderStatus,
+        reason_code: u32,
     ) -> Result<(), RegistryError> {
         Self::require_admin(&env, &admin)?;
 
         let mut provider = read_provider(&env, &provider_addr)?;
+        if !ProviderStatus::is_transition_allowed(provider.status, status) {
+            return Err(RegistryError::InvalidTransition);
+        }
         provider.status = status;
+        provider.reason_code = reason_code;
         write_provider(&env, &provider_addr, &provider);
         extend_instance(&env);
 
         ProviderStatusChanged {
             provider: provider_addr,
             status,
+            reason_code,
+        }
+        .publish(&env);
+        Ok(())
+    }
+
+    /// Lets a provider withdraw from the registry. Its own owner only.
+    ///
+    /// Clinics close, and a closed clinic that stays listed keeps drawing
+    /// funders' money into escrow it will never claim. `retire` sets the
+    /// terminal `Retired` status: the clinic immediately stops being an
+    /// active provider, so `voucher` refuses to fund it any new vouchers
+    /// and an unclaimed one refunds without waiting for expiry, while a
+    /// voucher claimed before the clinic retired still attests and
+    /// settles as care delivered.
+    ///
+    /// Nothing can move a retired clinic back in, not even the admin: it
+    /// must register again. Retiring an already-retired clinic is refused
+    /// with `InvalidTransition`, so the lifecycle history stays free of
+    /// no-op events. `reason_code` follows the same documented codes as
+    /// `set_provider_status` (see `docs/protocol/trust.md`).
+    pub fn retire(env: Env, owner: Address, reason_code: u32) -> Result<(), RegistryError> {
+        owner.require_auth();
+
+        let mut provider = read_provider(&env, &owner)?;
+        if provider.status == ProviderStatus::Retired {
+            return Err(RegistryError::InvalidTransition);
+        }
+        provider.status = ProviderStatus::Retired;
+        provider.reason_code = reason_code;
+        write_provider(&env, &owner, &provider);
+        extend_instance(&env);
+
+        ProviderStatusChanged {
+            provider: owner,
+            status: ProviderStatus::Retired,
+            reason_code,
         }
         .publish(&env);
         Ok(())

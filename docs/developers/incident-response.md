@@ -67,9 +67,12 @@ Use the narrowest lever that stops the harm. Each is one call and can be undone.
 **Suspend a clinic** — stops new vouchers to it and stops it claiming. Vouchers already attested still settle, so pair it with disputes (below).
 
 ```bash
-# ProviderStatus: 0 Pending, 1 Active, 2 Suspended
+# ProviderStatus: 0 Pending, 1 Active, 2 Suspended, 3 Retired.
+# reason_code 3 = complaint under review (the codes are in docs/protocol/trust.md).
+# Only Pending→Active, Pending→Suspended, Active→Suspended and
+# Suspended→Active are accepted; anything else fails with InvalidTransition.
 stellar contract invoke --id "$REGISTRY_CONTRACT_ID" --source-account "$ADMIN" --network "$NET" \
-  -- set_provider_status --admin "$ADMIN_ADDR" --provider_addr <clinic G...> --status 2
+  -- set_provider_status --admin "$ADMIN_ADDR" --provider_addr <clinic G...> --status 2 --reason_code 3
 ```
 
 **Remove an attester** — every further attestation by that key is rejected.
@@ -138,7 +141,7 @@ The communications lead owns this; the incident commander approves every message
 
 ## 5. Recovery
 
-- **Contained, no bug:** restore what you changed — `set_provider_status ... --status 1` for a cleared clinic, `add_attester` for a cleared attester, `set_attestation_cap` back to its previous value (the default is 100), `set_paused ... --paused false` on the faucet.
+- **Contained, no bug:** restore what you changed — `set_provider_status ... --status 1 --reason_code 1` for a cleared clinic (an `Active → Suspended` suspension is undone by `Suspended → Active`), `add_attester` for a cleared attester, `set_attestation_cap` back to its previous value (the default is 100), `set_paused ... --paused false` on the faucet.
 - **Contract bug:** fix it, test it, release it, and deploy a new set with `scripts/deploy.sh <network> --force`, then `scripts/verify-deployments.sh <network>`. Vouchers in the old contracts are not migrated: they still settle and refund there, so keep the old contract ids in the app until every old voucher is settled or refunded. Point new funding at the new contracts only.
 - **Admin lost to an attacker:** the same — redeploy, move clinics and attesters to the new registry, and tell funders and clinics which contracts to trust.
 

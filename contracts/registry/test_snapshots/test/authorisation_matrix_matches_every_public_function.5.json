@@ -49,6 +49,9 @@
                 },
                 {
                   "u32": 1
+                },
+                {
+                  "u32": 1
                 }
               ]
             }
@@ -64,19 +67,13 @@
           "function": {
             "contract_fn": {
               "contract_address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM",
-              "function_name": "upsert_service",
+              "function_name": "retire",
               "args": [
                 {
                   "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHK3M"
                 },
                 {
-                  "u32": 101
-                },
-                {
-                  "string": "Consult"
-                },
-                {
-                  "i128": "30000000"
+                  "u32": 1
                 }
               ]
             }
@@ -142,6 +139,14 @@
                   },
                   {
                     "key": {
+                      "symbol": "reason_code"
+                    },
+                    "val": {
+                      "u32": 1
+                    }
+                  },
+                  {
+                    "key": {
                       "symbol": "registered_at"
                     },
                     "val": {
@@ -153,7 +158,7 @@
                       "symbol": "status"
                     },
                     "val": {
-                      "u32": 1
+                      "u32": 3
                     }
                   }
                 ]
@@ -208,93 +213,6 @@
               "durability": "persistent",
               "val": {
                 "u32": 1
-              }
-            }
-          },
-          "ext": "v0"
-        },
-        "live_until": 1555200
-      },
-      {
-        "entry": {
-          "last_modified_ledger_seq": 0,
-          "data": {
-            "contract_data": {
-              "ext": "v0",
-              "contract": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM",
-              "key": {
-                "vec": [
-                  {
-                    "symbol": "Service"
-                  },
-                  {
-                    "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHK3M"
-                  },
-                  {
-                    "u32": 101
-                  }
-                ]
-              },
-              "durability": "persistent",
-              "val": {
-                "map": [
-                  {
-                    "key": {
-                      "symbol": "active"
-                    },
-                    "val": {
-                      "bool": true
-                    }
-                  },
-                  {
-                    "key": {
-                      "symbol": "available"
-                    },
-                    "val": {
-                      "bool": true
-                    }
-                  },
-                  {
-                    "key": {
-                      "symbol": "code"
-                    },
-                    "val": {
-                      "u32": 101
-                    }
-                  },
-                  {
-                    "key": {
-                      "symbol": "effective_at"
-                    },
-                    "val": {
-                      "u64": "0"
-                    }
-                  },
-                  {
-                    "key": {
-                      "symbol": "label"
-                    },
-                    "val": {
-                      "string": "Consult"
-                    }
-                  },
-                  {
-                    "key": {
-                      "symbol": "pending_price"
-                    },
-                    "val": {
-                      "i128": "0"
-                    }
-                  },
-                  {
-                    "key": {
-                      "symbol": "price"
-                    },
-                    "val": {
-                      "i128": "30000000"
-                    }
-                  }
-                ]
               }
             }
           },
@@ -424,31 +342,28 @@
           "v0": {
             "topics": [
               {
-                "symbol": "service_upserted"
+                "symbol": "provider_status_changed"
               },
               {
                 "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHK3M"
-              },
-              {
-                "u32": 101
               }
             ],
             "data": {
               "map": [
                 {
                   "key": {
-                    "symbol": "label"
+                    "symbol": "reason_code"
                   },
                   "val": {
-                    "string": "Consult"
+                    "u32": 1
                   }
                 },
                 {
                   "key": {
-                    "symbol": "price"
+                    "symbol": "status"
                   },
                   "val": {
-                    "i128": "30000000"
+                    "u32": 3
                   }
                 }
               ]

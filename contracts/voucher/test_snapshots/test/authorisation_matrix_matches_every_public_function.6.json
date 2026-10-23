@@ -95,6 +95,9 @@
                 },
                 {
                   "u32": 1
+                },
+                {
+                  "u32": 1
                 }
               ]
             }
@@ -247,6 +250,9 @@
                 },
                 {
                   "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAYRE5"
+                },
+                {
+                  "u32": 1
                 },
                 {
                   "u32": 1
@@ -596,6 +602,14 @@
                   },
                   {
                     "key": {
+                      "symbol": "reason_code"
+                    },
+                    "val": {
+                      "u32": 1
+                    }
+                  },
+                  {
+                    "key": {
                       "symbol": "registered_at"
                     },
                     "val": {
@@ -660,6 +674,14 @@
                     },
                     "val": {
                       "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAYRE5"
+                    }
+                  },
+                  {
+                    "key": {
+                      "symbol": "reason_code"
+                    },
+                    "val": {
+                      "u32": 1
                     }
                   },
                   {

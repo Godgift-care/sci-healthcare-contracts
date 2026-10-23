@@ -95,6 +95,9 @@
                 },
                 {
                   "u32": 1
+                },
+                {
+                  "u32": 1
                 }
               ]
             }
@@ -377,6 +380,14 @@
                     },
                     "val": {
                       "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHK3M"
+                    }
+                  },
+                  {
+                    "key": {
+                      "symbol": "reason_code"
+                    },
+                    "val": {
+                      "u32": 1
                     }
                   },
                   {

@@ -232,7 +232,8 @@ npm run lifecycle -- settle <voucher-id>         # finish a voucher later, if th
 | --- | --- | --- |
 | `initialize(admin)` | once | Sets the administrator |
 | `register_provider(owner, name, country)` | owner | Self-registers a clinic as `Pending` |
-| `set_provider_status(admin, provider, status)` | admin | `Pending` → `Active` → `Suspended` |
+| `set_provider_status(admin, provider, status, reason_code)` | admin | Only `Pending` → `Active`/`Suspended`, `Active` → `Suspended`, `Suspended` → `Active` |
+| `retire(owner, reason_code)` | owner | Clinic leaves the registry for good (`Retired`, terminal) |
 | `upsert_service(provider, code, label, price)` | provider | Lists a billable service or lowers its price; requires `Active` |
 | `schedule_service_price(provider, code, price, effective_at)` | provider | Schedules a price change at least 24 h ahead |
 | `remove_service(provider, code)` | provider | Delists a service |
