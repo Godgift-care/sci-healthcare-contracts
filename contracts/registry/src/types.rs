@@ -1,11 +1,5 @@
 use soroban_sdk::{contracterror, contracttype, Address, String};
 
-/// Upper sanity bound on a service price, in the smallest unit of the
-/// settlement token (10,000 USDC at 7 decimals). A price above this is almost
-/// certainly a typo (an extra zero), and funders paying the listed price would
-/// overpay, so the registry rejects it with `InvalidPrice`.
-pub const MAX_PRICE: i128 = 10_000 * 10_000_000;
-
 /// Lifecycle state of a care provider in the registry.
 ///
 /// A provider is `Pending` on self-registration and only becomes `Active`

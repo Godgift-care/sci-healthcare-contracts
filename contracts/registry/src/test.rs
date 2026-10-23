@@ -1944,3 +1944,39 @@ fn capacity_changed_event_snapshot() {
     );
     assert_eq!(field_u32(&e, "max_outstanding"), 12);
 }
+
+#[test]
+fn prices_up_to_the_ceiling_are_accepted() {
+    let f = setup();
+    let provider = register_active_provider(&f);
+    let label = String::from_str(&f.env, "Surgery");
+
+    f.client
+        .upsert_service(&provider, &CONSULT, &label, &MAX_PRICE);
+    assert_eq!(f.client.get_service_price(&provider, &CONSULT), MAX_PRICE);
+}
+
+#[test]
+fn prices_above_the_ceiling_are_rejected() {
+    let f = setup();
+    let provider = register_active_provider(&f);
+    let label = String::from_str(&f.env, "Surgery");
+
+    let err = f
+        .client
+        .try_upsert_service(&provider, &CONSULT, &label, &(MAX_PRICE + 1))
+        .err()
+        .unwrap()
+        .unwrap();
+    assert_eq!(err, RegistryError::InvalidPrice);
+
+    let provider = priced_service(&f);
+    let effective_at = START + MIN_PRICE_NOTICE_SECS;
+    let err = f
+        .client
+        .try_schedule_service_price(&provider, &CONSULT, &(MAX_PRICE + 1), &effective_at)
+        .err()
+        .unwrap()
+        .unwrap();
+    assert_eq!(err, RegistryError::InvalidPrice);
+}
