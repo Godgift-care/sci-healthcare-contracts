@@ -275,6 +275,7 @@ npm run lifecycle -- settle <voucher-id>         # finish a voucher later, if th
 | `accept_minter(new_minter)` | new_minter | Completes the handover |
 | `mint(minter, voucher_id, beneficiary_ref, provider, service_code, amount)` | minter | Records a settled episode |
 | `count_for(beneficiary_ref)` | view | Settled episodes for a beneficiary |
+| `provider_stats(provider)` | view | A clinic's receipt count and total paid |
 | `receipts_of_provider(provider, start, limit)` | view | A clinic's receipts in mint order, capped at 50 per page |
 
 There is deliberately no transfer function on receipts.

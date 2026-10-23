@@ -22,6 +22,39 @@ cargo test
 The toolchain is pinned in `rust-toolchain.toml`. Please do not change it in a
 feature PR.
 
+### Dev container
+
+The repository ships a [dev container](.devcontainer/) with everything pinned
+to the versions CI uses: Rust 1.96.0 with the `wasm32v1-none` target, the
+Stellar CLI 27.1.0, `wasm-opt` from binaryen 133 and `just`. Open the
+repository in VS Code with the Dev Containers extension (**Reopen in
+Container**) or in GitHub Codespaces, and `cargo test` and `just wasm` work
+straight away. When CI bumps one of those versions, bump it in
+`.devcontainer/Dockerfile` in the same change.
+
+### Common tasks
+
+A [`justfile`](justfile) wraps the commands CI and the docs use, so there is
+one entry point. Install [`just`](https://github.com/casey/just) (it is already
+in the dev container), then:
+
+| Recipe | Runs |
+| --- | --- |
+| `just` | lists the recipes |
+| `just build` | `cargo build --all` |
+| `just test` | `cargo test --all` |
+| `just fmt` / `just fmt-check` | `cargo fmt --all` / with `-- --check` |
+| `just clippy` | `cargo clippy --all-targets --all-features -- -D warnings` |
+| `just check` | `fmt-check`, `clippy` and `test` — what CI runs on a pull request |
+| `just wasm [out]` | `scripts/build-wasm.sh` (default `dist`) |
+| `just deploy [network] [flags]` | `scripts/deploy.sh`, e.g. `just deploy testnet --dry-run` |
+| `just seed [network]` | `scripts/seed.sh` |
+| `just verify [network]` | `scripts/verify-deployments.sh` |
+| `just test-deploy` | `scripts/test-deploy.sh` |
+| `just e2e-local` | `scripts/e2e-local.sh` against a local node on port 8000 |
+
+The network defaults to `testnet`; set `NETWORK` to change it.
+
 ## Non-negotiables
 
 These are the rules a review will fail you on.

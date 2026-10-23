@@ -48,21 +48,24 @@ mod economics_test;
 mod test;
 
 use sci_common as common;
-use soroban_sdk::{contract, contractimpl, token, Address, BytesN, Env, String};
+use soroban_sdk::{contract, contractimpl, token, Address, Bytes, BytesN, Env, String};
 
 #[allow(unused_imports)]
 pub use events::{
-    AdminChanged, AdminProposed, AttestationCapChanged, DisputeResolved, Initialized,
-    VoucherAmountReduced, VoucherAttested, VoucherClaimed, VoucherCreated, VoucherDisputed,
+    AdminChanged, AdminProposed, AttestationCapChanged, DisputeResolved,
+    DisputeWindowBoundsChanged, EscrowCapChanged, Initialized, VoucherAmountReduced,
+    VoucherAttested, VoucherClaimed, VoucherCreated, VoucherDisputed, VoucherRedirected,
     VoucherRefunded, VoucherSettled,
 };
 pub use interfaces::{ReceiptClient, RegistryClient};
-pub use types::{Config, DataKey, Voucher, VoucherError, VoucherStatus};
+pub use types::{Config, DataKey, Exposure, Voucher, VoucherError, VoucherOptions, VoucherStatus};
 
 use storage::{
     bump_next_id, decrease_open_escrow, extend_instance, has_config, increase_open_escrow,
-    peek_next_id, read_attestation_cap, read_attestations, read_config, read_open_escrow,
-    read_voucher, write_attestation_cap, write_attestations, write_config, write_voucher,
+    peek_next_id, read_attestation_cap, read_attestations, read_config, read_dispute_window_bounds,
+    read_escrow_cap, read_exposure, read_open_escrow, read_options, read_voucher,
+    write_attestation_cap, write_attestations, write_config, write_dispute_window_bounds,
+    write_escrow_cap, write_exposure, write_options, write_voucher,
 };
 
 const BPS_DENOMINATOR: i128 = 10_000;
@@ -85,6 +88,13 @@ pub const CLAIM_GRACE_SECS: u64 = 7 * 24 * 60 * 60;
 pub const DEFAULT_MAX_ATTESTATIONS_PER_DAY: u32 = 100;
 /// Seconds in a UTC day: buckets the per-attester attestation counter.
 const SECONDS_PER_DAY: u64 = 24 * 60 * 60;
+/// Shortest and longest per-voucher dispute window a funder may choose, until
+/// the admin sets others with `set_dispute_window_bounds`: one day to thirty.
+///
+/// The floor keeps a funder from choosing a window too short to notice a bad
+/// attestation in; the ceiling keeps a clinic from waiting indefinitely to be
+/// paid for care it delivered.
+pub const DEFAULT_DISPUTE_WINDOW_BOUNDS: (u64, u64) = (SECONDS_PER_DAY, 30 * SECONDS_PER_DAY);
 
 #[contract]
 pub struct VoucherEscrow;
@@ -149,78 +159,100 @@ impl VoucherEscrow {
         amount: i128,
         expires_at: u64,
     ) -> Result<u64, VoucherError> {
+        Self::fund(
+            &env,
+            funder,
+            beneficiary_ref,
+            provider,
+            service_code,
+            amount,
+            expires_at,
+            VoucherOptions::default(),
+        )
+    }
+
+    /// `create_voucher` with optional terms chosen by the funder:
+    ///
+    /// - `presence_commitment`: SHA-256 of a secret the funder gives the
+    ///   patient. The clinic must then claim with `claim_with_proof`,
+    ///   revealing the secret, so a claim shows the clinic had the patient
+    ///   rather than only saying so.
+    /// - `dispute_window`: a dispute window for this voucher, within the
+    ///   bounds (`InvalidDisputeWindow` otherwise). A funder of expensive care
+    ///   can take longer to object; a small voucher can settle sooner.
+    ///
+    /// With both unset this is exactly `create_voucher`.
+    #[allow(clippy::too_many_arguments)]
+    pub fn create_voucher_with_options(
+        env: Env,
+        funder: Address,
+        beneficiary_ref: BytesN<32>,
+        provider: Address,
+        service_code: u32,
+        amount: i128,
+        expires_at: u64,
+        options: VoucherOptions,
+    ) -> Result<u64, VoucherError> {
+        Self::fund(
+            &env,
+            funder,
+            beneficiary_ref,
+            provider,
+            service_code,
+            amount,
+            expires_at,
+            options,
+        )
+    }
+
+    /// Redirects a funded voucher to another active clinic offering the same
+    /// service for no more than the escrowed amount.
+    pub fn redirect(
+        env: Env,
+        funder: Address,
+        voucher_id: u64,
+        new_provider: Address,
+    ) -> Result<(), VoucherError> {
         funder.require_auth();
 
-        if funder == provider {
-            return Err(VoucherError::SelfFunded);
+        let mut voucher = read_voucher(&env, voucher_id)?;
+        if voucher.funder != funder {
+            return Err(VoucherError::NotAuthorized);
         }
-
-        if amount <= 0 {
-            return Err(VoucherError::InvalidAmount);
-        }
-        let now = env.ledger().timestamp();
-        if expires_at <= now {
-            return Err(VoucherError::InvalidExpiry);
+        if voucher.status != VoucherStatus::Funded {
+            return Err(VoucherError::InvalidStatus);
         }
 
         let config = read_config(&env)?;
         let registry = RegistryClient::new(&env, &config.registry);
-
-        if !registry.is_active_provider(&provider) {
+        if !registry.is_active_provider(&new_provider) {
             return Err(VoucherError::ProviderNotActive);
         }
 
-        // Zero means the provider does not offer this service, or has
-        // deactivated it.
-        let price = registry.get_service_price(&provider, &service_code);
+        let price = registry.get_service_price(&new_provider, &voucher.service_code);
         if price == 0 {
             return Err(VoucherError::ServiceNotOffered);
         }
-        if amount < price {
+        if voucher.amount < price {
             return Err(VoucherError::AmountBelowPrice);
         }
-        // Listed, but paused by the clinic (e.g. out of test kits).
-        if !registry.is_service_available(&provider, &service_code) {
+        if !registry.is_service_available(&new_provider, &voucher.service_code) {
             return Err(VoucherError::ServiceUnavailable);
         }
 
-        // Escrow first, record second: if the transfer fails the whole
-        // invocation reverts and no voucher is written.
-        let escrow = env.current_contract_address();
-        let token_client = token::Client::new(&env, &config.token);
-        token_client.transfer(&funder, &escrow, &amount);
-        increase_open_escrow(&env, amount)?;
-
-        let id = bump_next_id(&env);
-        let voucher = Voucher {
-            id,
-            funder: funder.clone(),
-            beneficiary_ref: beneficiary_ref.clone(),
-            provider: provider.clone(),
-            service_code,
-            amount,
-            status: VoucherStatus::Funded,
-            created_at: now,
-            expires_at,
-            claimed_at: 0,
-            attested_at: 0,
-            dispute_deadline: 0,
-            attester: None,
-        };
+        let previous_provider = voucher.provider.clone();
+        voucher.provider = new_provider.clone();
         write_voucher(&env, &voucher);
 
-        VoucherCreated {
+        VoucherRedirected {
             funder,
-            provider,
-            beneficiary_ref,
-            voucher_id: id,
-            service_code,
-            amount,
-            created_at: now,
-            expires_at,
+            voucher_id,
+            previous_provider,
+            new_provider,
+            service_code: voucher.service_code,
         }
         .publish(&env);
-        Ok(id)
+        Ok(())
     }
 
     /// Gives back an overpayment without giving up the voucher.
@@ -289,8 +321,18 @@ impl VoucherEscrow {
         let token_client = token::Client::new(&env, &config.token);
         Self::ensure_escrow_covers(&env, &token_client, voucher.amount)?;
         Self::send(&env, &token_client, &funder, difference)?;
-        // The difference has left escrow, so the running total follows it.
+        // The difference has left escrow, so the running total and the
+        // clinic's exposure follow it. The voucher itself stays open.
         decrease_open_escrow(&env, difference)?;
+        let exposure = read_exposure(&env, &voucher.provider);
+        write_exposure(
+            &env,
+            &voucher.provider,
+            &Exposure {
+                vouchers: exposure.vouchers,
+                value: (exposure.value - difference).max(0),
+            },
+        );
 
         let previous_amount = voucher.amount;
         voucher.amount = new_amount;
@@ -311,41 +353,27 @@ impl VoucherEscrow {
     /// Provider marks the patient as presented and the service as begun.
     ///
     /// A provider suspended after the voucher was funded cannot claim it;
-    /// the voucher can be refunded at once instead of waiting for expiry.
+    /// the voucher can be refunded at once instead of waiting for expiry. A
+    /// voucher funded with a presence commitment is refused
+    /// (`PresenceProofRequired`): it is claimed with `claim_with_proof`.
     pub fn claim(env: Env, provider: Address, voucher_id: u64) -> Result<(), VoucherError> {
-        provider.require_auth();
+        Self::claim_voucher(&env, provider, voucher_id, None)
+    }
 
-        let mut voucher = read_voucher(&env, voucher_id)?;
-        if voucher.provider != provider {
-            return Err(VoucherError::NotAuthorized);
-        }
-        if voucher.status != VoucherStatus::Funded {
-            return Err(VoucherError::InvalidStatus);
-        }
-
-        let config = read_config(&env)?;
-        if !RegistryClient::new(&env, &config.registry).is_active_provider(&provider) {
-            return Err(VoucherError::ProviderNotActive);
-        }
-
-        let now = env.ledger().timestamp();
-        if now >= voucher.expires_at {
-            return Err(VoucherError::VoucherExpired);
-        }
-
-        voucher.status = VoucherStatus::Claimed;
-        voucher.claimed_at = now;
-        write_voucher(&env, &voucher);
-
-        VoucherClaimed {
-            provider,
-            voucher_id,
-            claimed_at: now,
-            service_code: voucher.service_code,
-            amount: voucher.amount,
-        }
-        .publish(&env);
-        Ok(())
+    /// Claims a voucher funded with a presence commitment by revealing the
+    /// secret behind it. `sha256(secret)` must equal the commitment
+    /// (`InvalidPresenceProof` otherwise); a voucher without one is
+    /// `NoPresenceCommitment`.
+    ///
+    /// The secret becomes public on chain with this call. That is harmless:
+    /// it was only ever good for this one voucher, which this claim uses up.
+    pub fn claim_with_proof(
+        env: Env,
+        provider: Address,
+        voucher_id: u64,
+        secret: Bytes,
+    ) -> Result<(), VoucherError> {
+        Self::claim_voucher(&env, provider, voucher_id, Some(secret))
     }
 
     /// Attests that the service was delivered, opening the dispute window.
@@ -388,9 +416,10 @@ impl VoucherEscrow {
         voucher.status = VoucherStatus::Attested;
         voucher.attested_at = now;
         voucher.attester = Some(attester.clone());
-        voucher.dispute_deadline = now
-            .checked_add(config.dispute_window)
-            .ok_or(VoucherError::MathOverflow)?;
+        let window = read_options(&env, voucher_id)
+            .dispute_window
+            .unwrap_or(config.dispute_window);
+        voucher.dispute_deadline = now.checked_add(window).ok_or(VoucherError::MathOverflow)?;
         write_voucher(&env, &voucher);
 
         VoucherAttested {
@@ -628,7 +657,75 @@ impl VoucherEscrow {
         Ok(())
     }
 
+    /// Sets the range a funder's per-voucher dispute window must fall in.
+    ///
+    /// `min` must be at least 1 and no more than `max`
+    /// (`InvalidDisputeWindow`). Affects vouchers funded afterwards; a voucher
+    /// keeps the window it was funded with.
+    pub fn set_dispute_window_bounds(
+        env: Env,
+        admin: Address,
+        min: u64,
+        max: u64,
+    ) -> Result<(), VoucherError> {
+        let config = read_config(&env)?;
+        common::require_admin(&config.admin, &admin)?;
+        if min == 0 || min > max {
+            return Err(VoucherError::InvalidDisputeWindow);
+        }
+
+        write_dispute_window_bounds(&env, (min, max));
+        extend_instance(&env);
+        DisputeWindowBoundsChanged { admin, min, max }.publish(&env);
+        Ok(())
+    }
+
+    /// Sets the most value one clinic may hold in escrow at once, across all
+    /// its open vouchers. `0` means unlimited, the default.
+    ///
+    /// A limit on loss while clinic verification is young: if a verified
+    /// clinic turns out to be fraudulent, at most this much is exposed to it.
+    /// Takes effect for new vouchers only; vouchers already funded settle or
+    /// refund as normal even if the clinic is above a lowered cap.
+    pub fn set_max_escrow_per_provider(
+        env: Env,
+        admin: Address,
+        max: i128,
+    ) -> Result<(), VoucherError> {
+        let config = read_config(&env)?;
+        common::require_admin(&config.admin, &admin)?;
+        if max < 0 {
+            return Err(VoucherError::InvalidEscrowCap);
+        }
+
+        write_escrow_cap(&env, max);
+        extend_instance(&env);
+        EscrowCapChanged { admin, max }.publish(&env);
+        Ok(())
+    }
+
     // ----- views -----
+
+    /// `(min, max)` seconds a funder's per-voucher dispute window may take.
+    pub fn get_dispute_window_bounds(env: Env) -> (u64, u64) {
+        read_dispute_window_bounds(&env)
+    }
+
+    /// The options a voucher was funded with; all off for a plain voucher.
+    pub fn get_voucher_options(env: Env, voucher_id: u64) -> Result<VoucherOptions, VoucherError> {
+        read_voucher(&env, voucher_id)?;
+        Ok(read_options(&env, voucher_id))
+    }
+
+    /// Most value one clinic may hold in escrow at once; `0` is unlimited.
+    pub fn get_max_escrow_per_provider(env: Env) -> i128 {
+        read_escrow_cap(&env)
+    }
+
+    /// The clinic's open vouchers: how many, and how much they escrow.
+    pub fn get_exposure(env: Env, provider: Address) -> Exposure {
+        read_exposure(&env, &provider)
+    }
 
     /// Most attestations one attester may make per UTC day.
     pub fn get_attestation_cap(env: Env) -> u32 {
@@ -730,6 +827,195 @@ impl VoucherEscrow {
     }
 
     // ----- internal -----
+
+    /// Validates and escrows a new voucher. Shared by `create_voucher` and
+    /// `create_voucher_with_options`.
+    #[allow(clippy::too_many_arguments)]
+    fn fund(
+        env: &Env,
+        funder: Address,
+        beneficiary_ref: BytesN<32>,
+        provider: Address,
+        service_code: u32,
+        amount: i128,
+        expires_at: u64,
+        options: VoucherOptions,
+    ) -> Result<u64, VoucherError> {
+        funder.require_auth();
+
+        // A clinic funding its own voucher could claim and settle care it
+        // never gave.
+        if funder == provider {
+            return Err(VoucherError::SelfFunded);
+        }
+
+        if amount <= 0 {
+            return Err(VoucherError::InvalidAmount);
+        }
+        let now = env.ledger().timestamp();
+        if expires_at <= now {
+            return Err(VoucherError::InvalidExpiry);
+        }
+        if let Some(window) = options.dispute_window {
+            let (min, max) = read_dispute_window_bounds(env);
+            if window < min || window > max {
+                return Err(VoucherError::InvalidDisputeWindow);
+            }
+        }
+
+        let config = read_config(env)?;
+        let registry = RegistryClient::new(env, &config.registry);
+
+        if !registry.is_active_provider(&provider) {
+            return Err(VoucherError::ProviderNotActive);
+        }
+
+        // Zero means the provider does not offer this service, or has
+        // deactivated it.
+        let price = registry.get_service_price(&provider, &service_code);
+        if price == 0 {
+            return Err(VoucherError::ServiceNotOffered);
+        }
+        if amount < price {
+            return Err(VoucherError::AmountBelowPrice);
+        }
+        // Listed, but paused by the clinic (e.g. out of test kits).
+        if !registry.is_service_available(&provider, &service_code) {
+            return Err(VoucherError::ServiceUnavailable);
+        }
+
+        // The clinic's own capacity, then the protocol's per-clinic cap.
+        let exposure = read_exposure(env, &provider);
+        let capacity = registry.get_capacity(&provider);
+        if capacity > 0 && exposure.vouchers >= capacity {
+            return Err(VoucherError::ProviderAtCapacity);
+        }
+        let escrowed = exposure
+            .value
+            .checked_add(amount)
+            .ok_or(VoucherError::MathOverflow)?;
+        let escrow_cap = read_escrow_cap(env);
+        if escrow_cap > 0 && escrowed > escrow_cap {
+            return Err(VoucherError::EscrowCapReached);
+        }
+
+        // Escrow first, record second: if the transfer fails the whole
+        // invocation reverts and no voucher is written.
+        let escrow = env.current_contract_address();
+        let token_client = token::Client::new(env, &config.token);
+        token_client.transfer(&funder, &escrow, &amount);
+        increase_open_escrow(env, amount)?;
+
+        write_exposure(
+            env,
+            &provider,
+            &Exposure {
+                vouchers: exposure.vouchers + 1,
+                value: escrowed,
+            },
+        );
+
+        let id = bump_next_id(env);
+        let voucher = Voucher {
+            id,
+            funder: funder.clone(),
+            beneficiary_ref: beneficiary_ref.clone(),
+            provider: provider.clone(),
+            service_code,
+            amount,
+            status: VoucherStatus::Funded,
+            created_at: now,
+            expires_at,
+            claimed_at: 0,
+            attested_at: 0,
+            dispute_deadline: 0,
+            attester: None,
+        };
+        write_voucher(env, &voucher);
+        write_options(env, id, &options);
+
+        VoucherCreated {
+            funder,
+            provider,
+            beneficiary_ref,
+            voucher_id: id,
+            service_code,
+            amount,
+            created_at: now,
+            expires_at,
+        }
+        .publish(env);
+        Ok(id)
+    }
+
+    /// Claims a voucher, with the presence secret when it has a commitment.
+    fn claim_voucher(
+        env: &Env,
+        provider: Address,
+        voucher_id: u64,
+        secret: Option<Bytes>,
+    ) -> Result<(), VoucherError> {
+        provider.require_auth();
+
+        let mut voucher = read_voucher(env, voucher_id)?;
+        if voucher.provider != provider {
+            return Err(VoucherError::NotAuthorized);
+        }
+        if voucher.status != VoucherStatus::Funded {
+            return Err(VoucherError::InvalidStatus);
+        }
+
+        match (read_options(env, voucher_id).presence_commitment, secret) {
+            (None, None) => {}
+            (Some(_), None) => return Err(VoucherError::PresenceProofRequired),
+            (None, Some(_)) => return Err(VoucherError::NoPresenceCommitment),
+            (Some(commitment), Some(secret)) => {
+                let digest: BytesN<32> = env.crypto().sha256(&secret).into();
+                if digest != commitment {
+                    return Err(VoucherError::InvalidPresenceProof);
+                }
+            }
+        }
+
+        let config = read_config(env)?;
+        if !RegistryClient::new(env, &config.registry).is_active_provider(&provider) {
+            return Err(VoucherError::ProviderNotActive);
+        }
+
+        let now = env.ledger().timestamp();
+        if now >= voucher.expires_at {
+            return Err(VoucherError::VoucherExpired);
+        }
+
+        voucher.status = VoucherStatus::Claimed;
+        voucher.claimed_at = now;
+        write_voucher(env, &voucher);
+
+        VoucherClaimed {
+            provider,
+            voucher_id,
+            claimed_at: now,
+            service_code: voucher.service_code,
+            amount: voucher.amount,
+        }
+        .publish(env);
+        Ok(())
+    }
+
+    /// Takes a voucher that is leaving escrow off its clinic's exposure.
+    /// Saturating, so a voucher funded before tracking existed cannot
+    /// underflow the record.
+    fn release_exposure(env: &Env, voucher: &Voucher) {
+        let exposure = read_exposure(env, &voucher.provider);
+        write_exposure(
+            env,
+            &voucher.provider,
+            &Exposure {
+                vouchers: exposure.vouchers.saturating_sub(1),
+                value: (exposure.value - voucher.amount).max(0),
+            },
+        );
+    }
 
     fn refundable_at_for(
         env: &Env,
@@ -850,6 +1136,7 @@ impl VoucherEscrow {
 
         voucher.status = VoucherStatus::Settled;
         write_voucher(env, voucher);
+        Self::release_exposure(env, voucher);
 
         ReceiptClient::new(env, &config.receipt_book).mint(
             &escrow,
@@ -898,6 +1185,9 @@ impl VoucherEscrow {
         if to_funder > 0 {
             Self::send(env, &token_client, &voucher.funder, to_funder)?;
         }
+        // The whole voucher has left escrow, whichever way it was split.
+        decrease_open_escrow(env, voucher.amount)?;
+        Self::release_exposure(env, voucher);
 
         voucher.status = if to_provider == 0 {
             VoucherStatus::Refunded
@@ -931,6 +1221,7 @@ impl VoucherEscrow {
 
         voucher.status = VoucherStatus::Refunded;
         write_voucher(env, voucher);
+        Self::release_exposure(env, voucher);
 
         VoucherRefunded {
             funder: voucher.funder.clone(),
