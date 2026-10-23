@@ -213,3 +213,20 @@ impl From<sci_common::CommonError> for VoucherError {
         }
     }
 }
+
+#[cfg(test)]
+mod error_conversion_tests {
+    use super::*;
+
+    #[test]
+    fn not_authorized_maps() {
+        let err: VoucherError = sci_common::CommonError::NotAuthorized.into();
+        assert_eq!(err, VoucherError::NotAuthorized);
+    }
+
+    #[test]
+    fn no_pending_admin_maps() {
+        let err: VoucherError = sci_common::CommonError::NoPendingAdmin.into();
+        assert_eq!(err, VoucherError::NoPendingAdmin);
+    }
+}
