@@ -55,6 +55,8 @@ pub struct Voucher {
     /// the protocol fee, which is why it is stored on the voucher rather than
     /// looked up later: the attester of record is the one who did the work.
     pub attester: Option<Address>,
+    /// Clinic's response to a dispute; zero means no response was submitted.
+    pub response_code: u32,
 }
 
 /// Optional terms a funder can attach to a voucher with
@@ -201,6 +203,10 @@ pub enum VoucherError {
     /// The chosen dispute window is outside the allowed bounds, or the bounds
     /// themselves are invalid.
     InvalidDisputeWindow = 31,
+    /// A clinic response code must be nonzero; zero means no response.
+    InvalidResponseCode = 32,
+    /// A clinic may respond to a dispute only once.
+    DisputeAlreadyResponded = 33,
 }
 
 /// Maps the shared helpers' failures onto this contract's error numbers, so

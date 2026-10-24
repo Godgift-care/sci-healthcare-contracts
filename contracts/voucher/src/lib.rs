@@ -52,7 +52,7 @@ use soroban_sdk::{contract, contractimpl, token, Address, Bytes, BytesN, Env, St
 
 #[allow(unused_imports)]
 pub use events::{
-    AdminChanged, AdminProposed, AttestationCapChanged, DisputeResolved,
+    AdminChanged, AdminProposed, AttestationCapChanged, DisputeResolved, DisputeResponded,
     DisputeWindowBoundsChanged, EscrowCapChanged, Initialized, VoucherAmountReduced,
     VoucherAttested, VoucherClaimed, VoucherCreated, VoucherDisputed, VoucherRedirected,
     VoucherRefunded, VoucherSettled,
@@ -472,6 +472,42 @@ impl VoucherEscrow {
             reason_code,
             service_code: voucher.service_code,
             amount: voucher.amount,
+        }
+        .publish(&env);
+        Ok(())
+    }
+
+    /// Clinic records its response to a funder's dispute. A nonzero response
+    /// code may be submitted once while the voucher is disputed.
+    pub fn respond_to_dispute(
+        env: Env,
+        provider: Address,
+        voucher_id: u64,
+        response_code: u32,
+    ) -> Result<(), VoucherError> {
+        provider.require_auth();
+
+        let mut voucher = read_voucher(&env, voucher_id)?;
+        if voucher.provider != provider {
+            return Err(VoucherError::NotAuthorized);
+        }
+        if voucher.status != VoucherStatus::Disputed {
+            return Err(VoucherError::InvalidStatus);
+        }
+        if voucher.response_code != 0 {
+            return Err(VoucherError::DisputeAlreadyResponded);
+        }
+        if response_code == 0 {
+            return Err(VoucherError::InvalidResponseCode);
+        }
+
+        voucher.response_code = response_code;
+        write_voucher(&env, &voucher);
+
+        DisputeResponded {
+            provider,
+            voucher_id,
+            response_code,
         }
         .publish(&env);
         Ok(())
@@ -924,6 +960,7 @@ impl VoucherEscrow {
             attested_at: 0,
             dispute_deadline: 0,
             attester: None,
+            response_code: 0,
         };
         write_voucher(env, &voucher);
         write_options(env, id, &options);
