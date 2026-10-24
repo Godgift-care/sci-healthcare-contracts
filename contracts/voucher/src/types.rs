@@ -201,6 +201,8 @@ pub enum VoucherError {
     /// The chosen dispute window is outside the allowed bounds, or the bounds
     /// themselves are invalid.
     InvalidDisputeWindow = 31,
+    /// The amount is more than `MAX_OVERPAY_BPS` above the listed service price.
+    AmountAboveMaxPrice = 35,
 }
 
 /// Maps the shared helpers' failures onto this contract's error numbers, so
