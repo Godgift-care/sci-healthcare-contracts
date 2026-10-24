@@ -76,6 +76,13 @@ say "Authorising attester"
 stellar contract invoke --id "$REGISTRY_CONTRACT_ID" --source-account "$ADMIN" $N \
   -- add_attester --admin "$ADMIN_ADDR" --attester "$ATTESTER" 2>&1 | quiet
 
+# Coarse service categories. Deliberately generic: no category may imply a diagnosis.
+for entry in "1:Consultation" "2:Laboratory" "3:Imaging" "4:Medication" "5:Procedure" "6:Dental" "7:Vision"; do
+  code="${entry%%:*}"
+  label="${entry#*:}"
+  stellar contract invoke <FLAGS> -- add_category --admin <ADMIN> --code "$code" --label "$label"
+done
+
 # BytesN is passed as raw hex, not JSON. This stands in for the HMAC the
 # client computes; no patient identifier ever reaches the chain.
 BREF="$(printf 'patient-demo-001' | sha256sum | cut -d' ' -f1)"
