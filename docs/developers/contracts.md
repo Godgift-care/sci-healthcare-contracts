@@ -206,6 +206,7 @@ pub struct Exposure {            // a clinic's open vouchers
 | `initialize` | `admin, registry, receipt_book, token, dispute_window, fee_bps, attester_share_bps, fee_account` | `()` | once |
 | `create_voucher` | `funder, beneficiary_ref, provider, service_code, amount, expires_at` | `u64` | `funder` |
 | `create_voucher_with_options` | `funder, beneficiary_ref, provider, service_code, amount, expires_at, options: VoucherOptions` | `u64` | `funder` |
+| `reassign` | `funder, voucher_id, new_ref` | `()` | `funder` |
 | `reduce_amount` | `funder, voucher_id, new_amount` | `()` | `funder` |
 | `redirect` | `funder, voucher_id, new_provider` | `()` | `funder` |
 | `claim` | `provider, voucher_id` | `()` | `provider` |
@@ -249,6 +250,7 @@ Every public function, with the exact signer it demands. `AUTH_MATRIX` in `contr
 | `initialize` | none (one-shot) |
 | `create_voucher` | `funder` |
 | `create_voucher_with_options` | `funder` |
+| `reassign` | `funder` |
 | `reduce_amount` | `funder` |
 | `redirect` | `funder` |
 | `claim` | `provider` |
@@ -293,6 +295,10 @@ rejects the voucher's own provider even if it holds that role.
 **`reduce_amount`** — caller is the funder of this voucher (`NotAuthorized`); status is `Funded` (`InvalidStatus`); `new_amount` > 0 (`InvalidAmount`) and strictly below the escrowed amount (`AmountNotReduced`); the service is still listed (`ServiceNotOffered`); and `new_amount` ≥ the price the registry lists **at call time** (`AmountBelowPrice`). The difference goes straight back to the funder and the escrow keeps the rest; no fee is taken on money that never became care, and the `open_escrow` total follows the difference down. The price at call time is the floor, not the price at funding time: a clinic that has raised its price cannot have a funded voucher reduced below that price, and a clinic that has lowered it frees the funder to reduce further. A voucher whose service has been delisted cannot be reduced at all — there is no floor to reduce towards — and is refunded at expiry instead. Once the clinic has claimed the voucher the amount is what the clinic expects to be paid, so the reduction is closed.
 
 **`create_voucher_with_options`** — everything `create_voucher` checks, plus: a `dispute_window`, when set, lies within `get_dispute_window_bounds()` (`InvalidDisputeWindow`). With both options unset it is exactly `create_voucher`.
+**`reassign`** — caller is the funder of this voucher (`NotAuthorized`); status is `Funded` (`InvalidStatus`). Only the patient reference changes: the amount, the provider, the service, the expiry and the status stay exactly as they were, and no money moves, so a funder who typed the wrong patient reference does not have to wait for expiry or fund the voucher twice. Once the clinic has claimed the voucher the reference it was funded for is settled, so it cannot be moved. Both references are opaque salted hashes, so the `voucher_reassigned` event carries the old and the new reference and no patient identity.
+
+**`claim`** — caller is the named provider; provider is still `Active` in the registry; status is `Funded`; not expired.
+
 
 **`claim`** — caller is the named provider; provider is still `Active` in the registry; status is `Funded`; not expired; the voucher has no presence commitment (`PresenceProofRequired`).
 
@@ -358,6 +364,7 @@ rejects the voucher's own provider even if it holds that role.
 | `voucher_refunded` | `funder` | `voucher_id`, `amount`, `service_code` |
 | `voucher_amount_reduced` | `funder` | `voucher_id`, `service_code`, `previous_amount`, `amount`, `refunded` |
 | `voucher_redirected` | `funder`, `new_provider` | `voucher_id`, `previous_provider`, `service_code` |
+| `voucher_reassigned` | `funder` | `voucher_id`, `old_ref`, `new_ref` |
 | `dispute_resolved` | `admin` | `voucher_id`, `refunded_funder`, `to_provider`, `fee`, `to_funder` |
 | `attestation_cap_changed` | `admin` | `cap` |
 | `dispute_window_bounds_changed` | `admin` | `min`, `max` |
