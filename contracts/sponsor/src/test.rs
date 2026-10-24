@@ -18,6 +18,8 @@ use crate::{Rules, SponsorDesk, SponsorDeskClient, SponsorError, MAX_MATCH_BPS, 
 const START_TIME: u64 = 1_700_000_000;
 const CONSULT: u32 = 101;
 const CONSULT_PRICE: i128 = 3_000_000; // 0.30 USDC at 7 decimals
+/// Registry reason code for a routine activation; see `docs/protocol/trust.md`.
+const REASON_VERIFIED: u32 = 1;
 /// A cheap service, so a ratio small enough to round down to nothing can
 /// be tried.
 const CHEAP: u32 = 102;
@@ -74,7 +76,7 @@ fn setup() -> Fixture {
         &String::from_str(&env, "Ikeja General Clinic"),
         &String::from_str(&env, "NG"),
     );
-    registry.set_provider_status(&admin, &provider, &ProviderStatus::Active);
+    registry.set_provider_status(&admin, &provider, &ProviderStatus::Active, &REASON_VERIFIED);
     registry.upsert_service(
         &provider,
         &CONSULT,
@@ -568,8 +570,12 @@ fn a_clinic_that_is_no_longer_active_cannot_be_matched() {
         .set_rules(&f.sponsor, &rules(&f.env, ONE_FOR_ONE, CAP));
 
     let original = fund(&f);
-    f.registry
-        .set_provider_status(&f.admin, &f.provider, &ProviderStatus::Suspended);
+    f.registry.set_provider_status(
+        &f.admin,
+        &f.provider,
+        &ProviderStatus::Suspended,
+        &REASON_VERIFIED,
+    );
     assert_eq!(
         f.desk.try_match_voucher(&f.sponsor, &original),
         Err(Ok(SponsorError::ProviderNotEligible))

@@ -5,12 +5,44 @@ use soroban_sdk::{contracterror, contracttype, Address, String};
 /// A provider is `Pending` on self-registration and only becomes `Active`
 /// after an off-chain verification step performed by an attester or the
 /// admin. Vouchers can only be created against `Active` providers.
+///
+/// The lifecycle is a one-way street: `set_provider_status` only accepts
+/// the transitions `Pending → Active`, `Pending → Suspended`,
+/// `Active → Suspended` and `Suspended → Active` (anything else fails with
+/// `InvalidTransition`). A provider that leaves for good calls `retire`,
+/// which sets `Retired` — a terminal state nothing can move it out of.
+/// New statuses are added, never renumbered.
 #[contracttype]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum ProviderStatus {
     Pending = 0,
     Active = 1,
     Suspended = 2,
+    /// Withdrawn from the registry by its own owner via `retire`. Not
+    /// active, cannot receive vouchers, and no status change — by the admin
+    /// or anyone else — can leave it: re-registering is the way back.
+    Retired = 3,
+}
+
+impl ProviderStatus {
+    /// Whether the registry may move a provider from `from` to `to` with
+    /// `set_provider_status`.
+    ///
+    /// Only the four transitions that carry real information are allowed:
+    /// `Pending → Active` (verified), `Pending → Suspended` (refused before
+    /// it ever traded), `Active → Suspended` and `Suspended → Active`.
+    /// Everything else — including setting the same status twice — is a
+    /// no-op or backwards move that would emit a misleading event, and is
+    /// refused with `InvalidTransition`. Entering `Retired` is not one of
+    /// these: only the provider's own owner retires it, via `retire`.
+    pub fn is_transition_allowed(from: ProviderStatus, to: ProviderStatus) -> bool {
+        use ProviderStatus::{Active, Pending, Suspended};
+
+        matches!(
+            (from, to),
+            (Pending, Active) | (Pending, Suspended) | (Active, Suspended) | (Suspended, Active)
+        )
+    }
 }
 
 /// A registered care provider (clinic, pharmacy, diagnostic lab).
@@ -22,10 +54,15 @@ pub enum ProviderStatus {
 pub struct Provider {
     pub owner: Address,
     pub name: String,
-    /// ISO 3166-1 alpha-2 country code, e.g. "NG", "KE".
+    /// ISO 3166-1 alpha-2 country code, e.g. "NG", "KE". Two ASCII
+    /// uppercase letters only.
     pub country: String,
     pub status: ProviderStatus,
     pub registered_at: u64,
+    /// Reason code of the most recent status change, as documented in
+    /// `docs/protocol/trust.md`. Codes are added, never renumbered. 0 on
+    /// registration, before any status change has recorded a reason.
+    pub reason_code: u32,
 }
 
 /// A single billable service offered by a provider.
@@ -109,6 +146,9 @@ pub enum RegistryError {
     /// `upsert_service` may lower a listed price at once, but a rise has to
     /// go through `schedule_service_price`.
     PriceIncreaseNeedsNotice = 13,
+    /// The requested provider status change is not one of the allowed
+    /// transitions, or would leave `Retired`.
+    InvalidTransition = 14,
 }
 
 /// Maps the shared helpers' failures onto this contract's error numbers, so

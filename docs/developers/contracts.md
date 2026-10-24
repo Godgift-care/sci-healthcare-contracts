@@ -22,14 +22,15 @@ Answers one question: who is allowed to do what.
 ### Types
 
 ```rust
-pub enum ProviderStatus { Pending = 0, Active = 1, Suspended = 2 }
+pub enum ProviderStatus { Pending = 0, Active = 1, Suspended = 2, Retired = 3 }
 
 pub struct Provider {
     pub owner: Address,       // receives settlement
     pub name: String,
-    pub country: String,      // ISO 3166-1 alpha-2
+    pub country: String,      // ISO 3166-1 alpha-2, two ASCII uppercase letters
     pub status: ProviderStatus,
     pub registered_at: u64,
+    pub reason_code: u32,     // why the last status change happened, 0 before any
 }
 
 pub struct ServiceItem {
@@ -49,7 +50,8 @@ pub struct ServiceItem {
 | --- | --- | --- | --- | --- |
 | `initialize` | `admin: Address` | `()` | once | `AlreadyInitialized` |
 | `register_provider` | `owner, name, country` | `()` | `owner` | `EmptyName`, `InvalidCountry`, `ProviderExists` |
-| `set_provider_status` | `admin, provider_addr, status` | `()` | `admin` | `NotAuthorized`, `ProviderNotFound` |
+| `set_provider_status` | `admin, provider_addr, status, reason_code: u32` | `()` | `admin` | `NotAuthorized`, `ProviderNotFound`, `InvalidTransition` |
+| `retire` | `owner, reason_code: u32` | `()` | `owner` | `ProviderNotFound`, `InvalidTransition` |
 | `upsert_service` | `provider_addr, code, label, price` | `()` | `provider_addr` | `InvalidPrice`, `EmptyName`, `ProviderNotActive`, `PriceIncreaseNeedsNotice` |
 | `schedule_service_price` | `provider_addr, code, price, effective_at` | `()` | `provider_addr` | `InvalidPrice`, `ProviderNotActive`, `ServiceNotFound`, `PriceNoticeTooShort` |
 | `remove_service` | `provider_addr, code` | `()` | `provider_addr` | `ServiceNotFound` |
@@ -76,6 +78,8 @@ pub struct ServiceItem {
 
 `get_service_price` returns `0` when the service is absent or inactive. It exists so `voucher` can validate pricing over an interface of primitives only, without the two contracts sharing types.
 
+`register_provider` accepts a country only in the shape of an ISO 3166-1 alpha-2 code: exactly two ASCII uppercase letters. `ng`, `N1`, two spaces and multi-byte characters are all refused with `InvalidCountry`, so the app and the indexer can never see one country registered as two, or junk codes break the country filter. Checking the code against the full ISO list is an off-chain concern.
+
 `list_providers(start, limit)` returns providers in registration order, paged by `start` with `limit` capped at `MAX_PROVIDERS_PAGE` (50). Page by calling again with `start += returned.len()`. It is the on-chain discovery any app or auditor can use instead of trusting an indexer, and it needs no signature.
 
 `providers_in(country, start, limit)` returns the `Active` providers registered in `country` (ISO 3166-1 alpha-2), paged the same way. Only clinics the admin has moved to `Active` appear; pending and suspended clinics stay out. The per-country index is maintained on every `set_provider_status` call that crosses the `Active` boundary, so a partner app can show local clinics without running an indexer. `limit` is capped at `MAX_PROVIDERS_PAGE`.
@@ -88,6 +92,21 @@ A clinic declares how many vouchers it can serve at once with `set_capacity(prov
 
 Every contract — registry, voucher, receipt and faucet — has a `version()` view returning the crate version it was built from (`CARGO_PKG_VERSION`, the workspace version, currently `0.2.0`). Use it to tell which build a deployment runs before relying on a newer function.
 
+### Status lifecycle
+
+A provider's status only moves where the move carries information. `set_provider_status` accepts exactly these transitions and refuses everything else with `InvalidTransition` — including setting the same status twice and the backwards `Active → Pending`, either of which would emit an event that misleads the indexer:
+
+| From \ To | `Pending` | `Active` | `Suspended` | `Retired` |
+| --- | --- | --- | --- | --- |
+| `Pending` | ✗ | ✓ | ✓ | ✗ |
+| `Active` | ✗ | ✗ | ✓ | ✗ |
+| `Suspended` | ✗ | ✓ | ✗ | ✗ |
+| `Retired` | ✗ | ✗ | ✗ | ✗ |
+
+Every change carries a `reason_code: u32` — stored on the provider as its last reason, and published in `provider_status_changed` — so a suspended clinic knows why it was suspended and funders can tell a fraud suspension from paperwork. The codes are documented in [the trust model](../protocol/trust.md#reason-codes) and are added, never renumbered; registration records `0` before any change has happened.
+
+**Retirement** is the one status the admin cannot assign. A clinic that closes calls `retire(owner, reason_code)` — its own signature only — which sets the terminal `Retired` status. A retired clinic is not an active provider, so `voucher` refuses to fund it any new vouchers; vouchers already funded against it refund as they always could (immediately, before expiry), and a voucher claimed while the clinic was active still attests and settles as care delivered. Nothing can move a retired clinic back — not the admin, not the owner — so the way back is to register again; retiring an already-retired clinic is refused with `InvalidTransition`.
+
 ### Authorisation matrix
 
 Every public function, with the exact signer it demands — no signature that is missing, and none that is extra. The table is rendered from the `AUTH_MATRIX` list in `contracts/registry/src/test.rs`; `authorisation_matrix_matches_every_public_function` calls each row and asserts `env.auths()` holds precisely that address, and `authorisation_table_in_the_docs_matches_the_matrix` fails if this table and that list disagree.
@@ -97,6 +116,7 @@ Every public function, with the exact signer it demands — no signature that is
 | `initialize` | none (one-shot) |
 | `register_provider` | `owner` |
 | `set_provider_status` | `admin` |
+| `retire` | `owner` |
 | `upsert_service` | `provider_addr` |
 | `schedule_service_price` | `provider_addr` |
 | `remove_service` | `provider_addr` |
@@ -140,10 +160,11 @@ A signer is not the same as a role: `admin` must be the stored admin **and** sig
 | 11 | `NoPendingAdmin` |
 | 12 | `PriceNoticeTooShort` |
 | 13 | `PriceIncreaseNeedsNotice` |
+| 14 | `InvalidTransition` |
 
 ### Events
 
-`provider_registered`, `provider_status_changed`, `service_upserted`, `service_removed`, `service_price_scheduled` (topics `provider`, `code`; data `price`, `effective_at`), `service_availability_changed` (topics `provider`, `code`; data `available`), `capacity_changed` (topic `provider`; data `max_outstanding`), `attester_added`, `attester_removed`, `admin_changed`, `initialized`
+`provider_registered`, `provider_status_changed` (topics `provider`; data `status`, `reason_code`), `service_upserted`, `service_removed`, `service_price_scheduled` (topics `provider`, `code`; data `price`, `effective_at`), `service_availability_changed` (topics `provider`, `code`; data `available`), `capacity_changed` (topic `provider`; data `max_outstanding`), `attester_added`, `attester_removed`, `admin_changed`, `initialized`
 
 ---
 

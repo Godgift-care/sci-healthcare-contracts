@@ -20,6 +20,10 @@ const ATTESTER_SHARE_BPS: u32 = 50;
 const START_TIME: u64 = 1_700_000_000;
 const CONSULT: u32 = 101;
 const CONSULT_PRICE: i128 = 30_000_000; // 3.00 USDC at 7 decimals
+/// Registry reason code for a routine activation; see `docs/protocol/trust.md`.
+const REASON_VERIFIED: u32 = 1;
+/// Registry reason code given when a clinic closes, see the same table.
+const REASON_CLOSED: u32 = 5;
 
 struct Fixture {
     env: Env,
@@ -91,7 +95,7 @@ fn setup_with(fee_bps: u32, attester_share_bps: u32) -> Fixture {
         &String::from_str(&env, "Ikeja General Clinic"),
         &String::from_str(&env, "NG"),
     );
-    registry.set_provider_status(&admin, &provider, &ProviderStatus::Active);
+    registry.set_provider_status(&admin, &provider, &ProviderStatus::Active, &REASON_VERIFIED);
     registry.upsert_service(
         &provider,
         &CONSULT,
@@ -257,8 +261,12 @@ fn funder_need_not_be_beneficiary() {
 #[test]
 fn cannot_fund_inactive_provider() {
     let f = setup();
-    f.registry
-        .set_provider_status(&f.admin, &f.provider, &ProviderStatus::Suspended);
+    f.registry.set_provider_status(
+        &f.admin,
+        &f.provider,
+        &ProviderStatus::Suspended,
+        &REASON_VERIFIED,
+    );
 
     let err = f
         .voucher
@@ -274,6 +282,71 @@ fn cannot_fund_inactive_provider() {
         .unwrap()
         .unwrap();
     assert_eq!(err, VoucherError::ProviderNotActive);
+}
+
+#[test]
+fn cannot_fund_a_retired_clinic() {
+    // A clinic that has left the registry draws no new vouchers: funders
+    // would only be escrowing money nobody can ever claim.
+    let f = setup();
+    f.registry.retire(&f.provider, &REASON_CLOSED);
+
+    let err = f
+        .voucher
+        .try_create_voucher(
+            &f.funder,
+            &patient(&f.env),
+            &f.provider,
+            &CONSULT,
+            &CONSULT_PRICE,
+            &(START_TIME + 1000),
+        )
+        .err()
+        .unwrap()
+        .unwrap();
+    assert_eq!(err, VoucherError::ProviderNotActive);
+}
+
+#[test]
+fn funded_voucher_of_a_retired_clinic_refunds_immediately() {
+    // The clinic closed after the voucher was funded. Retirement stops new
+    // money in; the money already escrowed goes back to the funder straight
+    // away rather than at expiry.
+    let f = setup();
+    let before = f.token.balance(&f.funder);
+    let id = fund(&f);
+    let expires_at = f.voucher.get_voucher(&id).expires_at;
+
+    f.registry.retire(&f.provider, &REASON_CLOSED);
+    assert!(f.env.ledger().timestamp() < expires_at);
+
+    assert_eq!(
+        f.voucher.refundable_at(&id),
+        f.env.ledger().timestamp(),
+        "a retired clinic's funder should not wait for expiry"
+    );
+    f.voucher.refund(&id);
+
+    assert_eq!(f.token.balance(&f.funder), before);
+    assert_eq!(f.voucher.get_voucher(&id).status, VoucherStatus::Refunded);
+}
+
+#[test]
+fn care_delivered_before_retirement_still_settles() {
+    // The clinic claimed while it was still active, then retired. Care that
+    // was delivered is still paid for: retirement stops new money in, it
+    // never freezes money already owed for care given.
+    let f = setup();
+    let id = claimed(&f);
+
+    f.registry.retire(&f.provider, &REASON_CLOSED);
+
+    f.voucher.attest(&f.attester, &id);
+    advance(&f.env, DISPUTE_WINDOW + 1);
+    f.voucher.settle(&id);
+
+    assert_eq!(f.voucher.get_voucher(&id).status, VoucherStatus::Settled);
+    assert_eq!(f.receipts.get_receipt(&id).provider, f.provider);
 }
 
 #[test]
@@ -332,8 +405,12 @@ fn register_redirect_provider(f: &Fixture) -> Address {
         &String::from_str(&f.env, "New Clinic"),
         &String::from_str(&f.env, "NG"),
     );
-    f.registry
-        .set_provider_status(&f.admin, &provider, &ProviderStatus::Active);
+    f.registry.set_provider_status(
+        &f.admin,
+        &provider,
+        &ProviderStatus::Active,
+        &REASON_VERIFIED,
+    );
     provider
 }
 
@@ -373,8 +450,12 @@ fn cannot_redirect_to_an_inactive_provider() {
     let f = setup();
     let id = fund(&f);
     let new_provider = register_redirect_provider(&f);
-    f.registry
-        .set_provider_status(&f.admin, &new_provider, &ProviderStatus::Suspended);
+    f.registry.set_provider_status(
+        &f.admin,
+        &new_provider,
+        &ProviderStatus::Suspended,
+        &REASON_VERIFIED,
+    );
 
     let err = f
         .voucher
@@ -1111,8 +1192,12 @@ fn cannot_claim_expired_voucher() {
 fn suspended_provider_cannot_claim() {
     let f = setup();
     let id = fund(&f);
-    f.registry
-        .set_provider_status(&f.admin, &f.provider, &ProviderStatus::Suspended);
+    f.registry.set_provider_status(
+        &f.admin,
+        &f.provider,
+        &ProviderStatus::Suspended,
+        &REASON_VERIFIED,
+    );
 
     let err = f
         .voucher
@@ -1288,8 +1373,12 @@ fn funded_voucher_of_suspended_clinic_refunds_immediately() {
     let id = fund(&f);
     let expires_at = f.voucher.get_voucher(&id).expires_at;
 
-    f.registry
-        .set_provider_status(&f.admin, &f.provider, &ProviderStatus::Suspended);
+    f.registry.set_provider_status(
+        &f.admin,
+        &f.provider,
+        &ProviderStatus::Suspended,
+        &REASON_VERIFIED,
+    );
     assert!(f.env.ledger().timestamp() < expires_at);
 
     assert_eq!(
@@ -1317,8 +1406,12 @@ fn claimed_voucher_of_suspended_clinic_keeps_claim_grace() {
     let id = fund(&f);
     f.voucher.claim(&f.provider, &id);
 
-    f.registry
-        .set_provider_status(&f.admin, &f.provider, &ProviderStatus::Suspended);
+    f.registry.set_provider_status(
+        &f.admin,
+        &f.provider,
+        &ProviderStatus::Suspended,
+        &REASON_VERIFIED,
+    );
 
     let expires_at = f.voucher.get_voucher(&id).expires_at;
     let refundable_at = expires_at + crate::CLAIM_GRACE_SECS;
@@ -2000,11 +2093,19 @@ fn multisig_admin_can_act_on_all_three_contracts() {
     assert!(f.registry.is_attester(&new_attester));
 
     // Registry: suspend and restore the provider through the same account.
-    f.registry
-        .set_provider_status(&multisig, &f.provider, &ProviderStatus::Suspended);
+    f.registry.set_provider_status(
+        &multisig,
+        &f.provider,
+        &ProviderStatus::Suspended,
+        &REASON_VERIFIED,
+    );
     assert!(!f.registry.is_active_provider(&f.provider));
-    f.registry
-        .set_provider_status(&multisig, &f.provider, &ProviderStatus::Active);
+    f.registry.set_provider_status(
+        &multisig,
+        &f.provider,
+        &ProviderStatus::Active,
+        &REASON_VERIFIED,
+    );
 
     // Receipt book: hand the minter role over in two steps, then put it
     // back for the voucher.
@@ -2565,8 +2666,12 @@ fn run_case(f: &AuthFixture, function: &str) -> std::vec::Vec<Address> {
                 &String::from_str(env, "New Clinic"),
                 &String::from_str(env, "NG"),
             );
-            f.f.registry
-                .set_provider_status(&f.f.admin, &provider, &ProviderStatus::Active);
+            f.f.registry.set_provider_status(
+                &f.f.admin,
+                &provider,
+                &ProviderStatus::Active,
+                &REASON_VERIFIED,
+            );
             f.f.registry.upsert_service(
                 &provider,
                 &CONSULT,
@@ -3821,7 +3926,7 @@ fn math_overflow_in_fee_calculation() {
         &String::from_str(&env, "Clinic"),
         &String::from_str(&env, "NG"),
     );
-    registry.set_provider_status(&admin, &provider, &ProviderStatus::Active);
+    registry.set_provider_status(&admin, &provider, &ProviderStatus::Active, &REASON_VERIFIED);
     registry.upsert_service(
         &provider,
         &CONSULT,

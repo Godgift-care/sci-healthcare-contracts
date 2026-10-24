@@ -49,7 +49,7 @@ Seven days after a voucher's expiry during which a `Claimed` but never-attested 
 Used in: [How a voucher works — Claimed](protocol/lifecycle.md#claimed), [Contract reference — refund](developers/contracts.md#refund).
 
 ### Clinic (provider)
-A verified health business — clinic, pharmacy or lab — that lists services and receives settlement. In the registry it is a `Provider` with status `Pending`, `Active` or `Suspended`; only `Active` clinics can receive vouchers or claim them.
+A verified health business — clinic, pharmacy or lab — that lists services and receives settlement. In the registry it is a `Provider` with status `Pending`, `Active`, `Suspended` or `Retired`; only `Active` clinics can receive vouchers or claim them, and `Retired` is the terminal status a clinic gives itself when it closes (see [status lifecycle](developers/contracts.md#status-lifecycle)).
 
 Used in: [Running a clinic](guides/clinics.md), [Contract reference — registry](developers/contracts.md#registry).
 
