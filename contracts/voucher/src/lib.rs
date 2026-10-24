@@ -63,9 +63,10 @@ pub use types::{Config, DataKey, Exposure, Voucher, VoucherError, VoucherOptions
 use storage::{
     bump_next_id, decrease_open_escrow, extend_instance, has_config, increase_open_escrow,
     peek_next_id, read_attestation_cap, read_attestations, read_config, read_dispute_window_bounds,
-    read_escrow_cap, read_exposure, read_open_escrow, read_options, read_voucher,
-    write_attestation_cap, write_attestations, write_config, write_dispute_window_bounds,
-    write_escrow_cap, write_exposure, write_options, write_voucher,
+    read_escrow_cap, read_exposure, read_open_escrow, read_options, read_pending_max_amount,
+    read_voucher, write_attestation_cap, write_attestations, write_config,
+    write_dispute_window_bounds, write_escrow_cap, write_exposure, write_options,
+    write_pending_max_amount, write_voucher,
 };
 
 const BPS_DENOMINATOR: i128 = 10_000;
@@ -86,6 +87,11 @@ pub const CLAIM_GRACE_SECS: u64 = 7 * 24 * 60 * 60;
 /// this many vouchers before the day ends, buying the admin time to remove
 /// it from the registry.
 pub const DEFAULT_MAX_ATTESTATIONS_PER_DAY: u32 = 100;
+/// Maximum amount for one voucher in the default testnet deployment: 100 USDC
+/// at seven decimals.
+pub const DEFAULT_MAX_VOUCHER_AMOUNT: i128 = 1_000_000_000;
+/// Minimum notice before a scheduled maximum voucher amount can be activated.
+pub const MAX_AMOUNT_CHANGE_DELAY_SECS: u64 = 24 * 60 * 60;
 /// Seconds in a UTC day: buckets the per-attester attestation counter.
 const SECONDS_PER_DAY: u64 = 24 * 60 * 60;
 /// Shortest and longest per-voucher dispute window a funder may choose, until
@@ -110,6 +116,7 @@ impl VoucherEscrow {
         registry: Address,
         receipt_book: Address,
         token: Address,
+        max_amount: i128,
         dispute_window: u64,
         fee_bps: u32,
         attester_share_bps: u32,
@@ -117,6 +124,9 @@ impl VoucherEscrow {
     ) -> Result<(), VoucherError> {
         if has_config(&env) {
             return Err(VoucherError::AlreadyInitialized);
+        }
+        if max_amount <= 0 {
+            return Err(VoucherError::InvalidMaxAmount);
         }
         if fee_bps > MAX_FEE_BPS {
             return Err(VoucherError::InvalidFee);
@@ -134,6 +144,7 @@ impl VoucherEscrow {
                 registry,
                 receipt_book,
                 token,
+                max_amount,
                 dispute_window,
                 fee_bps,
                 attester_share_bps,
@@ -704,6 +715,54 @@ impl VoucherEscrow {
         Ok(())
     }
 
+    /// Schedules a new maximum voucher amount at least 24 hours in advance.
+    ///
+    /// Replacing a pending change restarts the notice period. The active cap
+    /// remains in force until `activate_max_amount` succeeds.
+    pub fn schedule_max_amount(
+        env: Env,
+        admin: Address,
+        max_amount: i128,
+        effective_at: u64,
+    ) -> Result<(), VoucherError> {
+        let config = read_config(&env)?;
+        common::require_admin(&config.admin, &admin)?;
+        if max_amount <= 0 {
+            return Err(VoucherError::InvalidMaxAmount);
+        }
+        let earliest = env
+            .ledger()
+            .timestamp()
+            .checked_add(MAX_AMOUNT_CHANGE_DELAY_SECS)
+            .ok_or(VoucherError::MathOverflow)?;
+        if effective_at < earliest {
+            return Err(VoucherError::MaxAmountNoticeTooShort);
+        }
+
+        write_pending_max_amount(&env, Some((max_amount, effective_at)));
+        extend_instance(&env);
+        Ok(())
+    }
+
+    /// Activates the scheduled maximum amount once its notice period ends.
+    ///
+    /// Permissionless so the change does not depend on the admin being online
+    /// at the activation time.
+    pub fn activate_max_amount(env: Env) -> Result<(), VoucherError> {
+        let mut config = read_config(&env)?;
+        let (max_amount, effective_at) =
+            read_pending_max_amount(&env).ok_or(VoucherError::NoPendingMaxAmount)?;
+        if env.ledger().timestamp() < effective_at {
+            return Err(VoucherError::MaxAmountChangeNotReady);
+        }
+
+        config.max_amount = max_amount;
+        write_config(&env, &config);
+        write_pending_max_amount(&env, None);
+        extend_instance(&env);
+        Ok(())
+    }
+
     // ----- views -----
 
     /// `(min, max)` seconds a funder's per-voucher dispute window may take.
@@ -740,6 +799,11 @@ impl VoucherEscrow {
 
     pub fn get_pending_admin(env: Env) -> Option<Address> {
         common::read_pending_admin(&env, &DataKey::PendingAdmin)
+    }
+
+    /// Scheduled maximum amount and effective time, if a change is pending.
+    pub fn get_pending_max_amount(env: Env) -> Option<(i128, u64)> {
+        read_pending_max_amount(&env)
     }
 
     /// Earliest ledger time at which `refund` will succeed, or
@@ -858,6 +922,9 @@ impl VoucherEscrow {
         }
 
         let config = read_config(env)?;
+        if amount > config.max_amount {
+            return Err(VoucherError::AmountExceedsMax);
+        }
         let registry = RegistryClient::new(env, &config.registry);
 
         if !registry.is_active_provider(&provider) {

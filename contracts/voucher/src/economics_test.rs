@@ -29,6 +29,7 @@ fn quoting_contract(env: &Env) -> VoucherEscrowClient<'_> {
         &a,
         &a,
         &a,
+        &1_000_000_000i128,
         &(72 * 60 * 60),
         &FEE_BPS,
         &ATTESTER_SHARE_BPS,
