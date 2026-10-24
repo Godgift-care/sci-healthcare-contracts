@@ -50,7 +50,7 @@ pub struct ServiceItem {
 | `initialize` | `admin: Address` | `()` | once | `AlreadyInitialized` |
 | `register_provider` | `owner, name, country` | `()` | `owner` | `EmptyName`, `InvalidCountry`, `ProviderExists` |
 | `set_provider_status` | `admin, provider_addr, status` | `()` | `admin` | `NotAuthorized`, `ProviderNotFound` |
-| `upsert_service` | `provider_addr, code, label, price` | `()` | `provider_addr` | `InvalidPrice`, `EmptyName`, `ProviderNotActive`, `PriceIncreaseNeedsNotice` |
+| `upsert_service` | `provider_addr, code, label, price` | `()` | `provider_addr` | `InvalidPrice` (≤ 0 or > `MAX_PRICE`), `EmptyName`, `ProviderNotActive`, `PriceIncreaseNeedsNotice` |
 | `schedule_service_price` | `provider_addr, code, price, effective_at` | `()` | `provider_addr` | `InvalidPrice`, `ProviderNotActive`, `ServiceNotFound`, `PriceNoticeTooShort` |
 | `remove_service` | `provider_addr, code` | `()` | `provider_addr` | `ServiceNotFound` |
 | `set_service_available` | `provider_addr, code, available: bool` | `()` | `provider_addr` | `ServiceNotFound` |
@@ -826,3 +826,6 @@ The contracts are unaudited and have only run on testnet. The
 [mainnet launch checklist](mainnet-checklist.md) lists the code, key,
 parameter, monitoring, communication and rollback gates, each with an owner and
 the evidence required. Do not deploy to mainnet until it is signed off.
+
+
+Prices must be positive and no greater than `MAX_PRICE` (10,000 USDC, `100_000_000_000` base units at 7 decimals). A price above the ceiling is rejected with `InvalidPrice` by both `upsert_service` and `schedule_service_price`, which catches a misplaced decimal or an extra zero before funders overpay.

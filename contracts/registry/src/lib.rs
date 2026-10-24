@@ -46,6 +46,11 @@ pub const MIN_PRICE_NOTICE_SECS: u64 = 24 * 60 * 60;
 /// Most providers one `list_providers` call may return.
 pub use storage::MAX_PROVIDERS_PAGE;
 
+/// Highest price a service may be listed or scheduled at, in base units
+/// (10,000 USDC at 7 decimals). A price above this is almost certainly a
+/// typo such as an extra zero, and funders paying it would overpay.
+pub const MAX_PRICE: i128 = 100_000_000_000;
+
 #[contract]
 pub struct Registry;
 
@@ -208,7 +213,7 @@ impl Registry {
     ) -> Result<(), RegistryError> {
         provider_addr.require_auth();
 
-        if price <= 0 {
+        if price <= 0 || price > MAX_PRICE {
             return Err(RegistryError::InvalidPrice);
         }
         if label.is_empty() {
@@ -273,7 +278,7 @@ impl Registry {
     ) -> Result<(), RegistryError> {
         provider_addr.require_auth();
 
-        if price <= 0 {
+        if price <= 0 || price > MAX_PRICE {
             return Err(RegistryError::InvalidPrice);
         }
         let provider = read_provider(&env, &provider_addr)?;
