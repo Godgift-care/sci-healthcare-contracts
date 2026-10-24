@@ -69,7 +69,7 @@ Use the narrowest lever that stops the harm. Each is one call and can be undone.
 ```bash
 # ProviderStatus: 0 Pending, 1 Active, 2 Suspended
 stellar contract invoke --id "$REGISTRY_CONTRACT_ID" --source-account "$ADMIN" --network "$NET" \
-  -- set_provider_status --admin "$ADMIN_ADDR" --provider_addr <clinic G...> --status 2
+  -- set_provider_status --caller "$ADMIN_ADDR" --provider_addr <clinic G...> --status 2
 ```
 
 **Remove an attester** — every further attestation by that key is rejected.
