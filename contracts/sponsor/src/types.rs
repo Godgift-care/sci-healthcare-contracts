@@ -208,3 +208,20 @@ impl From<sci_common::CommonError> for SponsorError {
         }
     }
 }
+
+#[cfg(test)]
+mod error_conversion_tests {
+    use super::*;
+
+    #[test]
+    fn not_authorized_maps() {
+        let err: SponsorError = sci_common::CommonError::NotAuthorized.into();
+        assert_eq!(err, SponsorError::NotAuthorized);
+    }
+
+    #[test]
+    fn no_pending_admin_maps() {
+        let err: SponsorError = sci_common::CommonError::NoPendingAdmin.into();
+        assert_eq!(err, SponsorError::NoPendingAdmin);
+    }
+}

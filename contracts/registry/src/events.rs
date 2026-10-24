@@ -78,6 +78,16 @@ pub struct AttesterAdded {
     pub attester: Address,
 }
 
+/// A clinic declared how many vouchers it can have outstanding at once.
+/// `max_outstanding` is 0 for unlimited.
+#[contractevent]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct CapacityChanged {
+    #[topic]
+    pub provider: Address,
+    pub max_outstanding: u32,
+}
+
 #[contractevent]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct AttesterRemoved {
