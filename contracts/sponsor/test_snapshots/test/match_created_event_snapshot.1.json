@@ -705,6 +705,63 @@
               "key": {
                 "vec": [
                   {
+                    "symbol": "CountryAt"
+                  },
+                  {
+                    "string": "NG"
+                  },
+                  {
+                    "u32": 0
+                  }
+                ]
+              },
+              "durability": "persistent",
+              "val": {
+                "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAITA4"
+              }
+            }
+          },
+          "ext": "v0"
+        },
+        "live_until": 1555200
+      },
+      {
+        "entry": {
+          "last_modified_ledger_seq": 0,
+          "data": {
+            "contract_data": {
+              "ext": "v0",
+              "contract": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAARQG5",
+              "key": {
+                "vec": [
+                  {
+                    "symbol": "CountryCount"
+                  },
+                  {
+                    "string": "NG"
+                  }
+                ]
+              },
+              "durability": "persistent",
+              "val": {
+                "u32": 1
+              }
+            }
+          },
+          "ext": "v0"
+        },
+        "live_until": 1555200
+      },
+      {
+        "entry": {
+          "last_modified_ledger_seq": 0,
+          "data": {
+            "contract_data": {
+              "ext": "v0",
+              "contract": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAARQG5",
+              "key": {
+                "vec": [
+                  {
                     "symbol": "Provider"
                   },
                   {
@@ -756,6 +813,57 @@
                     }
                   }
                 ]
+              }
+            }
+          },
+          "ext": "v0"
+        },
+        "live_until": 1555200
+      },
+      {
+        "entry": {
+          "last_modified_ledger_seq": 0,
+          "data": {
+            "contract_data": {
+              "ext": "v0",
+              "contract": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAARQG5",
+              "key": {
+                "vec": [
+                  {
+                    "symbol": "ProviderAt"
+                  },
+                  {
+                    "u32": 0
+                  }
+                ]
+              },
+              "durability": "persistent",
+              "val": {
+                "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAITA4"
+              }
+            }
+          },
+          "ext": "v0"
+        },
+        "live_until": 1555200
+      },
+      {
+        "entry": {
+          "last_modified_ledger_seq": 0,
+          "data": {
+            "contract_data": {
+              "ext": "v0",
+              "contract": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAARQG5",
+              "key": {
+                "vec": [
+                  {
+                    "symbol": "ProviderCount"
+                  }
+                ]
+              },
+              "durability": "persistent",
+              "val": {
+                "u32": 1
               }
             }
           },
@@ -983,6 +1091,50 @@
               "key": {
                 "vec": [
                   {
+                    "symbol": "Exposure"
+                  },
+                  {
+                    "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAITA4"
+                  }
+                ]
+              },
+              "durability": "persistent",
+              "val": {
+                "map": [
+                  {
+                    "key": {
+                      "symbol": "value"
+                    },
+                    "val": {
+                      "i128": "6000000"
+                    }
+                  },
+                  {
+                    "key": {
+                      "symbol": "vouchers"
+                    },
+                    "val": {
+                      "u32": 2
+                    }
+                  }
+                ]
+              }
+            }
+          },
+          "ext": "v0"
+        },
+        "live_until": 1555200
+      },
+      {
+        "entry": {
+          "last_modified_ledger_seq": 0,
+          "data": {
+            "contract_data": {
+              "ext": "v0",
+              "contract": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAATYON",
+              "key": {
+                "vec": [
+                  {
                     "symbol": "Voucher"
                   },
                   {
@@ -992,116 +1144,43 @@
               },
               "durability": "persistent",
               "val": {
-                "map": [
+                "vec": [
                   {
-                    "key": {
-                      "symbol": "amount"
-                    },
-                    "val": {
-                      "i128": "3000000"
-                    }
+                    "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHK3M"
                   },
                   {
-                    "key": {
-                      "symbol": "attested_at"
-                    },
-                    "val": {
-                      "u64": "0"
-                    }
+                    "bytes": "0909090909090909090909090909090909090909090909090909090909090909"
                   },
                   {
-                    "key": {
-                      "symbol": "attester"
-                    },
-                    "val": "void"
+                    "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAITA4"
                   },
                   {
-                    "key": {
-                      "symbol": "beneficiary_ref"
-                    },
-                    "val": {
-                      "bytes": "0909090909090909090909090909090909090909090909090909090909090909"
-                    }
+                    "u32": 101
                   },
                   {
-                    "key": {
-                      "symbol": "claimed_at"
-                    },
-                    "val": {
-                      "u64": "0"
-                    }
+                    "i128": "3000000"
                   },
                   {
-                    "key": {
-                      "symbol": "created_at"
-                    },
-                    "val": {
-                      "u64": "1700000000"
-                    }
+                    "u32": 0
                   },
                   {
-                    "key": {
-                      "symbol": "dispute_deadline"
-                    },
-                    "val": {
-                      "u64": "0"
-                    }
+                    "u64": "1700000000"
                   },
                   {
-                    "key": {
-                      "symbol": "disputed_at"
-                    },
-                    "val": {
-                      "u64": "0"
-                    }
+                    "u64": "1702592000"
                   },
                   {
-                    "key": {
-                      "symbol": "expires_at"
-                    },
-                    "val": {
-                      "u64": "1702592000"
-                    }
+                    "u64": "0"
                   },
                   {
-                    "key": {
-                      "symbol": "funder"
-                    },
-                    "val": {
-                      "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHK3M"
-                    }
+                    "u64": "0"
                   },
                   {
-                    "key": {
-                      "symbol": "id"
-                    },
-                    "val": {
-                      "u64": "1"
-                    }
+                    "u64": "0"
                   },
+                  "void",
                   {
-                    "key": {
-                      "symbol": "provider"
-                    },
-                    "val": {
-                      "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAITA4"
-                    }
-                  },
-                  {
-                    "key": {
-                      "symbol": "service_code"
-                    },
-                    "val": {
-                      "u32": 101
-                    }
-                  },
-                  {
-                    "key": {
-                      "symbol": "status"
-                    },
-                    "val": {
-                      "u32": 0
-                    }
+                    "u64": "0"
                   }
                 ]
               }
@@ -1130,116 +1209,43 @@
               },
               "durability": "persistent",
               "val": {
-                "map": [
+                "vec": [
                   {
-                    "key": {
-                      "symbol": "amount"
-                    },
-                    "val": {
-                      "i128": "3000000"
-                    }
+                    "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAXI7N"
                   },
                   {
-                    "key": {
-                      "symbol": "attested_at"
-                    },
-                    "val": {
-                      "u64": "0"
-                    }
+                    "bytes": "0909090909090909090909090909090909090909090909090909090909090909"
                   },
                   {
-                    "key": {
-                      "symbol": "attester"
-                    },
-                    "val": "void"
+                    "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAITA4"
                   },
                   {
-                    "key": {
-                      "symbol": "beneficiary_ref"
-                    },
-                    "val": {
-                      "bytes": "0909090909090909090909090909090909090909090909090909090909090909"
-                    }
+                    "u32": 101
                   },
                   {
-                    "key": {
-                      "symbol": "claimed_at"
-                    },
-                    "val": {
-                      "u64": "0"
-                    }
+                    "i128": "3000000"
                   },
                   {
-                    "key": {
-                      "symbol": "created_at"
-                    },
-                    "val": {
-                      "u64": "1700000000"
-                    }
+                    "u32": 0
                   },
                   {
-                    "key": {
-                      "symbol": "dispute_deadline"
-                    },
-                    "val": {
-                      "u64": "0"
-                    }
+                    "u64": "1700000000"
                   },
                   {
-                    "key": {
-                      "symbol": "disputed_at"
-                    },
-                    "val": {
-                      "u64": "0"
-                    }
+                    "u64": "1702592000"
                   },
                   {
-                    "key": {
-                      "symbol": "expires_at"
-                    },
-                    "val": {
-                      "u64": "1702592000"
-                    }
+                    "u64": "0"
                   },
                   {
-                    "key": {
-                      "symbol": "funder"
-                    },
-                    "val": {
-                      "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAXI7N"
-                    }
+                    "u64": "0"
                   },
                   {
-                    "key": {
-                      "symbol": "id"
-                    },
-                    "val": {
-                      "u64": "2"
-                    }
+                    "u64": "0"
                   },
+                  "void",
                   {
-                    "key": {
-                      "symbol": "provider"
-                    },
-                    "val": {
-                      "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAITA4"
-                    }
-                  },
-                  {
-                    "key": {
-                      "symbol": "service_code"
-                    },
-                    "val": {
-                      "u32": 101
-                    }
-                  },
-                  {
-                    "key": {
-                      "symbol": "status"
-                    },
-                    "val": {
-                      "u32": 0
-                    }
+                    "u64": "0"
                   }
                 ]
               }
