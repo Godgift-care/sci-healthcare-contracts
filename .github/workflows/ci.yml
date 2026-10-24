@@ -42,6 +42,18 @@ jobs:
       - uses: dtolnay/rust-toolchain@1.96.0
       - uses: Swatinem/rust-cache@v2
       - run: cargo test --all
+      # soroban-sdk rewrites contracts/*/test_snapshots/ on every test run. A
+      # snapshot the run changed, or wrote for the first time, means the
+      # committed snapshots no longer describe what the tests check.
+      - name: Fail on stale test snapshots
+        run: |
+          stale="$(git status --porcelain --untracked-files=all -- 'contracts/*/test_snapshots/*')"
+          if [ -n "$stale" ]; then
+            echo "::error::test snapshots are stale: run \`cargo test --all\` and commit contracts/*/test_snapshots"
+            echo "$stale"
+            git --no-pager diff --stat -- 'contracts/*/test_snapshots/*'
+            exit 1
+          fi
 
   coverage:
     name: coverage

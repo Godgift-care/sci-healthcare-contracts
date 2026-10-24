@@ -1,0 +1,24 @@
+{
+  "name": "SCI Healthcare contracts",
+  "build": {
+    "dockerfile": "Dockerfile"
+  },
+  "remoteUser": "vscode",
+  // Fetch dependencies once, so `cargo test` and `just wasm` start building
+  // straight away.
+  "postCreateCommand": "cargo fetch",
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "rust-lang.rust-analyzer",
+        "tamasfe.even-better-toml",
+        "nefrob.vscode-just-syntax"
+      ],
+      "settings": {
+        "rust-analyzer.check.command": "clippy"
+      }
+    }
+  },
+  // A local Stellar node for scripts/e2e-local.sh listens here.
+  "forwardPorts": [8000]
+}

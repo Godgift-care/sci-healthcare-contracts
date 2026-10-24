@@ -54,12 +54,15 @@ pub struct ServiceItem {
 | `schedule_service_price` | `provider_addr, code, price, effective_at` | `()` | `provider_addr` | `InvalidPrice`, `ProviderNotActive`, `ServiceNotFound`, `PriceNoticeTooShort` |
 | `remove_service` | `provider_addr, code` | `()` | `provider_addr` | `ServiceNotFound` |
 | `set_service_available` | `provider_addr, code, available: bool` | `()` | `provider_addr` | `ServiceNotFound` |
+| `set_capacity` | `provider_addr, max_outstanding: u32` | `()` | `provider_addr` | `ProviderNotFound` |
 | `add_attester` | `admin, attester` | `()` | `admin` | `NotAuthorized` |
 | `remove_attester` | `admin, attester` | `()` | `admin` | `NotAuthorized` |
 | `propose_admin` | `admin, new_admin` | `()` | `admin` | `NotAuthorized` |
 | `accept_admin` | `new_admin` | `()` | `new_admin` | `NoPendingAdmin`, `NotAuthorized` |
 | `get_pending_admin` | — | `Option<Address>` | view | — |
 | `get_provider` | `provider_addr` | `Provider` | view | `ProviderNotFound` |
+| `list_providers` | `start, limit: u32` | `Vec<Provider>` | view | — |
+| `providers_in` | `country: String, start, limit: u32` | `Vec<Provider>` | view | — |
 | `is_active_provider` | `provider_addr` | `bool` | view | — |
 | `get_service` | `provider_addr, code` | `ServiceItem` | view | `ServiceNotFound` |
 | `get_services` | `provider_addr, codes: Vec<u32>` | `Vec<ServiceItem>` | view | — |
@@ -67,14 +70,21 @@ pub struct ServiceItem {
 | `get_upcoming_price` | `provider_addr, code` | `(i128, u64)` | view | `ServiceNotFound` |
 | `is_service_available` | `provider_addr, code` | `bool` | view | — |
 | `is_attester` | `addr` | `bool` | view | — |
+| `get_capacity` | `provider_addr` | `u32` | view | — |
 | `get_admin` | — | `Address` | view | `NotInitialized` |
 | `version` | — | `String` | view | — |
 
 `get_service_price` returns `0` when the service is absent or inactive. It exists so `voucher` can validate pricing over an interface of primitives only, without the two contracts sharing types.
 
+`list_providers(start, limit)` returns providers in registration order, paged by `start` with `limit` capped at `MAX_PROVIDERS_PAGE` (50). Page by calling again with `start += returned.len()`. It is the on-chain discovery any app or auditor can use instead of trusting an indexer, and it needs no signature.
+
+`providers_in(country, start, limit)` returns the `Active` providers registered in `country` (ISO 3166-1 alpha-2), paged the same way. Only clinics the admin has moved to `Active` appear; pending and suspended clinics stay out. The per-country index is maintained on every `set_provider_status` call that crosses the `Active` boundary, so a partner app can show local clinics without running an indexer. `limit` is capped at `MAX_PROVIDERS_PAGE`.
+
 A clinic that temporarily cannot deliver a service (out of test kits, say) calls `set_service_available(provider_addr, code, false)` instead of delisting it. The service keeps its catalogue entry and its price, `is_service_available` returns `false`, and `voucher` refuses to fund it with `ServiceUnavailable`. Vouchers already funded against it are unaffected. `upsert_service` keeps a paused service paused; only `set_service_available(…, true)` puts it back on sale. New services are listed as available.
 
 Price changes are scheduled, not sprung. `schedule_service_price(provider_addr, code, price, effective_at)` records a new price that takes effect at `effective_at`, which must be at least `MIN_PRICE_NOTICE_SECS` (24 hours) away or the call fails with `PriceNoticeTooShort`. Until then `get_service_price` returns the current price and `get_upcoming_price` returns `(price, effective_at)` so apps can warn funders; from `effective_at` on, every read returns the new price — no keeper has to call in. Scheduling again replaces the earlier schedule, and scheduling the current price calls a change off. `upsert_service` still lists a new service, or lowers an existing price, at once, but rejects a rise with `PriceIncreaseNeedsNotice`. A service that is removed and listed again starts fresh, at whatever price it is listed with.
+
+A clinic declares how many vouchers it can serve at once with `set_capacity(provider_addr, max_outstanding)`; `0` — the default — means unlimited. `voucher` counts each clinic's outstanding vouchers (funded, claimed, attested or disputed) and refuses a new one at capacity with `ProviderAtCapacity`; the count drops when a voucher settles or refunds. Lowering the capacity never affects vouchers already funded. The change emits `capacity_changed` (topic `provider`; data `max_outstanding`).
 
 Every contract — registry, voucher, receipt and faucet — has a `version()` view returning the crate version it was built from (`CARGO_PKG_VERSION`, the workspace version, currently `0.2.0`). Use it to tell which build a deployment runs before relying on a newer function.
 
@@ -91,6 +101,7 @@ Every public function, with the exact signer it demands — no signature that is
 | `schedule_service_price` | `provider_addr` |
 | `remove_service` | `provider_addr` |
 | `set_service_available` | `provider_addr` |
+| `set_capacity` | `provider_addr` |
 | `add_attester` | `admin` |
 | `remove_attester` | `admin` |
 | `propose_admin` | `admin` |
@@ -98,6 +109,8 @@ Every public function, with the exact signer it demands — no signature that is
 | `get_admin` | none (view) |
 | `get_pending_admin` | none (view) |
 | `get_provider` | none (view) |
+| `list_providers` | none (view) |
+| `providers_in` | none (view) |
 | `is_active_provider` | none (view) |
 | `get_service` | none (view) |
 | `get_services` | none (view) |
@@ -105,6 +118,7 @@ Every public function, with the exact signer it demands — no signature that is
 | `get_upcoming_price` | none (view) |
 | `is_service_available` | none (view) |
 | `is_attester` | none (view) |
+| `get_capacity` | none (view) |
 | `version` | none (view) |
 
 A signer is not the same as a role: `admin` must be the stored admin **and** sign, and the two checks are ordered so a wrong `admin` argument fails before any signature is requested.
@@ -129,7 +143,7 @@ A signer is not the same as a role: `admin` must be the stored admin **and** sig
 
 ### Events
 
-`provider_registered`, `provider_status_changed`, `service_upserted`, `service_removed`, `service_price_scheduled` (topics `provider`, `code`; data `price`, `effective_at`), `service_availability_changed` (topics `provider`, `code`; data `available`), `attester_added`, `attester_removed`, `admin_changed`, `initialized`
+`provider_registered`, `provider_status_changed`, `service_upserted`, `service_removed`, `service_price_scheduled` (topics `provider`, `code`; data `price`, `effective_at`), `service_availability_changed` (topics `provider`, `code`; data `available`), `capacity_changed` (topic `provider`; data `max_outstanding`), `attester_added`, `attester_removed`, `admin_changed`, `initialized`
 
 ---
 
@@ -172,7 +186,19 @@ pub struct Config {
     pub attester_share_bps: u32,       // part of fee_bps, never more
     pub fee_account: Address,
 }
+
+pub struct VoucherOptions {                       // create_voucher_with_options
+    pub presence_commitment: Option<BytesN<32>>,  // sha256 of the patient's secret
+    pub dispute_window: Option<u64>,              // per-voucher window, within the bounds
+}
+
+pub struct Exposure {            // a clinic's open vouchers
+    pub vouchers: u32,           // funded and not yet settled or refunded
+    pub value: i128,             // what they escrow in total
+}
 ```
+
+`Voucher` is what every function takes and returns. In storage it is kept positionally — an XDR vec of its values, without the id, which is already in the key — rather than as a map carrying every field name; for an attested voucher that is 228 bytes instead of 464, about half, and rent is charged on entry size (`stored_voucher_is_smaller_than_the_named_layout` prints both). `VoucherOptions` lives in its own entry, written only for a voucher that sets one.
 
 ### Functions
 
@@ -180,8 +206,11 @@ pub struct Config {
 | --- | --- | --- | --- |
 | `initialize` | `admin, registry, receipt_book, token, max_amount, dispute_window, fee_bps, attester_share_bps, fee_account` | `()` | once |
 | `create_voucher` | `funder, beneficiary_ref, provider, service_code, amount, expires_at` | `u64` | `funder` |
+| `create_voucher_with_options` | `funder, beneficiary_ref, provider, service_code, amount, expires_at, options: VoucherOptions` | `u64` | `funder` |
 | `reduce_amount` | `funder, voucher_id, new_amount` | `()` | `funder` |
+| `redirect` | `funder, voucher_id, new_provider` | `()` | `funder` |
 | `claim` | `provider, voucher_id` | `()` | `provider` |
+| `claim_with_proof` | `provider, voucher_id, secret: Bytes` | `()` | `provider` |
 | `attest` | `attester, voucher_id` | `()` | `attester` |
 | `dispute` | `funder, voucher_id, reason_code` | `()` | `funder` |
 | `settle` | `voucher_id` | `()` | **none** |
@@ -189,12 +218,18 @@ pub struct Config {
 | `resolve_dispute` | `admin, voucher_id, refund_funder: bool` | `()` | `admin` |
 | `resolve_split` | `admin, voucher_id, to_provider: i128` | `()` | `admin` |
 | `set_attestation_cap` | `admin, cap: u32` | `()` | `admin` |
+| `set_dispute_window_bounds` | `admin, min: u64, max: u64` | `()` | `admin` |
+| `set_max_escrow_per_provider` | `admin, max: i128` | `()` | `admin` |
 | `schedule_max_amount` | `admin, max_amount: i128, effective_at: u64` | `()` | `admin` |
 | `activate_max_amount` | — | `()` | **none** |
 | `propose_admin` | `admin, new_admin` | `()` | `admin` |
 | `accept_admin` | `new_admin` | `()` | `new_admin` |
 | `get_voucher` | `voucher_id` | `Voucher` | view |
+| `get_voucher_options` | `voucher_id` | `VoucherOptions` | view |
+| `get_dispute_window_bounds` | — | `(u64, u64)` | view |
 | `refundable_at` | `voucher_id` | `u64` | view |
+| `get_max_escrow_per_provider` | — | `i128` | view |
+| `get_exposure` | `provider` | `Exposure` | view |
 | `get_attestation_cap` | — | `u32` | view |
 | `attestations_left` | `attester` | `u32` | view |
 | `get_pending_admin` | — | `Option<Address>` | view |
@@ -205,7 +240,7 @@ pub struct Config {
 | `escrow_summary` | — | `(i128, i128)` | view |
 | `version` | — | `String` | view |
 
-`max_amount` is the positive maximum amount for one voucher in the settlement token's smallest unit. The deployment default is 1,000,000,000 stroops (100 USDC at seven decimals). `create_voucher` accepts the cap itself and rejects larger amounts (`AmountExceedsMax`, #26). To change it, an admin calls `schedule_max_amount` with an `effective_at` at least 24 hours in the future; scheduling another value replaces the pending change and restarts the notice period. `activate_max_amount` is permissionless but succeeds only at or after that time. Until activation, the existing cap remains active. `get_pending_max_amount` returns the scheduled `(amount, effective_at)`, or `None`.
+`max_amount` is the positive maximum amount for one voucher in the settlement token's smallest unit. The deployment default is 1,000,000,000 stroops (100 USDC at seven decimals). `create_voucher` accepts the cap itself and rejects larger amounts (`AmountExceedsMax`, #37). To change it, an admin calls `schedule_max_amount` with an `effective_at` at least 24 hours in the future; scheduling another value replaces the pending change and restarts the notice period. `activate_max_amount` is permissionless but succeeds only at or after that time. Until activation, the existing cap remains active. `get_pending_max_amount` returns the scheduled `(amount, effective_at)`, or `None`.
 
 `fee_bps` is capped at 1000 (10%) at initialisation. `attester_share_bps` is the part of the voucher amount paid to the attester who confirmed delivery, and must be **no greater than `fee_bps`** (`InvalidAttesterShare`, #21). It is carved out of the fee, so the clinic's net is unchanged and the payouts sum exactly to the voucher amount. Zero keeps the pre-attester-share behaviour: the fee account receives the whole fee.
 
@@ -219,8 +254,11 @@ Every public function, with the exact signer it demands. `AUTH_MATRIX` in `contr
 | --- | --- |
 | `initialize` | none (one-shot) |
 | `create_voucher` | `funder` |
+| `create_voucher_with_options` | `funder` |
 | `reduce_amount` | `funder` |
+| `redirect` | `funder` |
 | `claim` | `provider` |
+| `claim_with_proof` | `provider` |
 | `attest` | `attester` |
 | `dispute` | `funder` |
 | `settle` | none (permissionless) |
@@ -228,10 +266,16 @@ Every public function, with the exact signer it demands. `AUTH_MATRIX` in `contr
 | `resolve_dispute` | `admin` |
 | `resolve_split` | `admin` |
 | `set_attestation_cap` | `admin` |
+| `set_dispute_window_bounds` | `admin` |
+| `set_max_escrow_per_provider` | `admin` |
 | `schedule_max_amount` | `admin` |
 | `activate_max_amount` | none (permissionless) |
 | `propose_admin` | `admin` |
 | `accept_admin` | `new_admin` |
+| `get_dispute_window_bounds` | none (view) |
+| `get_voucher_options` | none (view) |
+| `get_max_escrow_per_provider` | none (view) |
+| `get_exposure` | none (view) |
 | `get_attestation_cap` | none (view) |
 | `attestations_left` | none (view) |
 | `get_pending_admin` | none (view) |
@@ -251,13 +295,21 @@ rejects the voucher's own provider even if it holds that role.
 
 ### What each function checks
 
-**`create_voucher`** — amount > 0 and no greater than `config.max_amount` (`AmountExceedsMax`); expiry in the future; provider is `Active`; the service exists and is active; amount ≥ listed price; the service is not paused (`ServiceUnavailable`). Transfers the token *before* writing the voucher, so a failed transfer reverts everything.
+**`create_voucher`** — amount > 0 and no greater than `config.max_amount` (`AmountExceedsMax`); expiry in the future; provider is `Active`; the service exists and is active; amount ≥ listed price; the service is not paused (`ServiceUnavailable`); the clinic is below the capacity it declared in the registry (`ProviderAtCapacity`); the clinic's escrow plus this amount stays within the per-clinic cap (`EscrowCapReached`). Transfers the token *before* writing the voucher, so a failed transfer reverts everything.
+
+**`set_max_escrow_per_provider`** — caller is admin; `max` ≥ 0 (`InvalidEscrowCap`). `0`, the default, is unlimited. The cap limits what one clinic can hold in escrow across all its open vouchers, so a verified clinic that turns out to be fraudulent is exposed to at most this much. `get_exposure(provider)` returns the clinic's open voucher count and escrowed value; both fall when a voucher settles or refunds, including through `resolve_dispute` and `resolve_split`, and the value falls by the refunded difference when `reduce_amount` lowers a voucher. Lowering the cap only affects new vouchers.
 
 **`reduce_amount`** — caller is the funder of this voucher (`NotAuthorized`); status is `Funded` (`InvalidStatus`); `new_amount` > 0 (`InvalidAmount`) and strictly below the escrowed amount (`AmountNotReduced`); the service is still listed (`ServiceNotOffered`); and `new_amount` ≥ the price the registry lists **at call time** (`AmountBelowPrice`). The difference goes straight back to the funder and the escrow keeps the rest; no fee is taken on money that never became care, and the `open_escrow` total follows the difference down. The price at call time is the floor, not the price at funding time: a clinic that has raised its price cannot have a funded voucher reduced below that price, and a clinic that has lowered it frees the funder to reduce further. A voucher whose service has been delisted cannot be reduced at all — there is no floor to reduce towards — and is refunded at expiry instead. Once the clinic has claimed the voucher the amount is what the clinic expects to be paid, so the reduction is closed.
 
-**`claim`** — caller is the named provider; provider is still `Active` in the registry; status is `Funded`; not expired.
+**`create_voucher_with_options`** — everything `create_voucher` checks, plus: a `dispute_window`, when set, lies within `get_dispute_window_bounds()` (`InvalidDisputeWindow`). With both options unset it is exactly `create_voucher`.
 
-**`attest`** — caller is a registry attester; caller is **not** the provider; status is `Claimed`; the attester has attestations left today. Stores the attester on the voucher and sets `dispute_deadline = now + dispute_window`.
+**`claim`** — caller is the named provider; provider is still `Active` in the registry; status is `Funded`; not expired; the voucher has no presence commitment (`PresenceProofRequired`).
+
+**`claim_with_proof`** — the same checks as `claim`, for a voucher funded with a `presence_commitment`: `sha256(secret)` must equal it (`InvalidPresenceProof`), and a voucher without one is `NoPresenceCommitment`. The funder gives the secret to the patient, so a claim shows the clinic had the patient in front of it rather than only saying so. The secret becomes public with the claim; it was only ever good for that voucher.
+
+**`attest`** — caller is a registry attester; caller is **not** the provider; status is `Claimed`; the attester has attestations left today. Stores the attester on the voucher and sets `dispute_deadline = now + window`, where `window` is the voucher's own `dispute_window` if it was funded with one and `Config.dispute_window` otherwise.
+
+**`set_dispute_window_bounds`** — caller is admin; `1 ≤ min ≤ max` (`InvalidDisputeWindow`). The range a funder's per-voucher window must fall in; `DEFAULT_DISPUTE_WINDOW_BOUNDS` is one day to thirty. Applies to vouchers funded afterwards. Emits `dispute_window_bounds_changed`.
 
 **`set_attestation_cap`** — caller is admin; `cap` ≥ 1 (`InvalidAttestationCap`). Each attester may attest at most `cap` vouchers per UTC day (`timestamp / 86400`); the next is rejected with `AttestationCapReached` until midnight UTC, when the counter resets. The default is `DEFAULT_MAX_ATTESTATIONS_PER_DAY` (100). Counters live in temporary storage keyed by `(attester, day)`. The cap bounds what a stolen attester key can confirm before the admin removes it from the registry; `attestations_left(attester)` and the `remaining_today` field of `voucher_attested` show how close an attester is.
 
@@ -268,6 +320,8 @@ rejects the voucher's own provider even if it holds that role.
 **`settle`** — status is `Attested`; now ≥ `dispute_deadline`; the contract still holds the voucher's amount (`EscrowShortfall` if the token issuer clawed escrow back); the token accepts the transfers (`TokenTransferFailed` if the issuer froze the escrow, the clinic or the attester). Pays the clinic `amount - fee`, the attester its share (`amount * attester_share_bps / 10_000`), and the fee account the remaining fee, then mints a receipt. The three payouts sum to `amount` exactly. If no attester is recorded — a dispute resolved for the provider without an attestation — the fee account receives the whole fee.
 
 **`refund`** — status is `Funded` and either now ≥ `expires_at` or the provider is no longer active in the registry (so a suspended clinic's voucher is refundable immediately, before expiry), or status is `Claimed` and now ≥ `expires_at + CLAIM_GRACE_SECS` (7 days). Suspension does not shorten the claim grace: care may already have been given. Returns the full amount, no fee. `refundable_at` returns the exact time, which is the current ledger time when a funded voucher's provider is inactive. It has the same `EscrowShortfall` and `TokenTransferFailed` checks as `settle`, and so do `resolve_dispute`, `resolve_split` and the refund in `reduce_amount`, which pay through the same paths. Either error reverts the whole call, so the voucher keeps its status; see [the settlement token's issuer](../protocol/trust.md#the-settlement-tokens-issuer).
+
+**`redirect`** — caller is the funder; status is `Funded`. The replacement clinic must be active, offer the voucher's service, have it available, and list it at no more than the escrowed amount. Changes only the provider: amount, expiry and escrow are unchanged. Emits `voucher_redirected` with `funder` and `new_provider` topics and the previous provider, voucher id and service code in its data.
 
 **`propose_admin` / `accept_admin`** — two-step handover, identical in all three contracts. Proposing again replaces the nominee; nothing changes until the nominee signs `accept_admin`. On mainnet, hand admin to a 2-of-3 Stellar multisig account rather than a single key; see [Using a multisig admin](multisig-admin.md).
 
@@ -295,9 +349,18 @@ rejects the voucher's own provider even if it holds that role.
 |  |  | 22 | `AmountNotReduced` |
 |  |  | 23 | `EscrowShortfall` |
 |  |  | 24 | `TokenTransferFailed` |
-| 25 | `InvalidMaxAmount` | 26 | `AmountExceedsMax` |
-| 27 | `MaxAmountNoticeTooShort` | 28 | `NoPendingMaxAmount` |
-|  |  | 29 | `MaxAmountChangeNotReady` |
+|  |  | 25 | `ProviderAtCapacity` |
+|  |  | 26 | `EscrowCapReached` |
+|  |  | 27 | `InvalidEscrowCap` |
+|  |  | 28 | `PresenceProofRequired` |
+|  |  | 29 | `InvalidPresenceProof` |
+|  |  | 30 | `NoPresenceCommitment` |
+|  |  | 31 | `InvalidDisputeWindow` |
+|  |  | 36 | `InvalidMaxAmount` |
+|  |  | 37 | `AmountExceedsMax` |
+|  |  | 38 | `MaxAmountNoticeTooShort` |
+|  |  | 39 | `NoPendingMaxAmount` |
+|  |  | 40 | `MaxAmountChangeNotReady` |
 
 ### Events
 
@@ -310,8 +373,11 @@ rejects the voucher's own provider even if it holds that role.
 | `voucher_settled` | `provider` | `voucher_id`, `net`, `fee`, `service_code`, `amount`, `attester_share` |
 | `voucher_refunded` | `funder` | `voucher_id`, `amount`, `service_code` |
 | `voucher_amount_reduced` | `funder` | `voucher_id`, `service_code`, `previous_amount`, `amount`, `refunded` |
+| `voucher_redirected` | `funder`, `new_provider` | `voucher_id`, `previous_provider`, `service_code` |
 | `dispute_resolved` | `admin` | `voucher_id`, `refunded_funder`, `to_provider`, `fee`, `to_funder` |
 | `attestation_cap_changed` | `admin` | `cap` |
+| `dispute_window_bounds_changed` | `admin` | `min`, `max` |
+| `escrow_cap_changed` | `admin` | `max` |
 
 > Fields listed under **Topics** are published in the event's topic list, **not** in its data map. An indexer reading them off the data map gets `undefined`.
 >
@@ -350,6 +416,7 @@ pub struct Receipt {
 | `mint` | `minter, voucher_id, beneficiary_ref, provider, service_code, amount` | `()` | `minter` |
 | `get_receipt` | `voucher_id` | `Receipt` | view |
 | `count_for` | `beneficiary_ref` | `u32` | view |
+| `provider_stats` | `provider` | `(u32, i128)` | view |
 | `receipts_of_provider` | `provider, start, limit` | `Vec<Receipt>` | view |
 | `name` | — | `String` | none (view) |
 | `symbol` | — | `String` | none (view) |
@@ -367,6 +434,8 @@ Receipts are soulbound: there is deliberately no transfer function, so a receipt
 
 `mint` also appends the voucher id to a per-provider index, so a clinic can prove its track record to a funder or auditor without an indexer. `receipts_of_provider(provider, start, limit)` returns that clinic's receipts in mint order, newest last. `limit` is capped at `MAX_RECEIPTS_PAGE` (50); page with `start += returned.len()`. The index is keyed by provider address, so two clinics' receipts never mix, and a provider with no receipts gets an empty vector rather than an error.
 
+**`provider_stats`** — a clinic's on-chain track record in one call: `(count, total_amount)`, the receipts minted for that provider and the sum of their amounts, read straight from `ProviderCount(provider)` and `ProviderTotal(provider)`. Exact and read-only: no signature, no indexer, and a provider with no receipts gets `(0, 0)` rather than an error. Both entries are extended on read like every other persistent entry. `mint` keeps both with **checked arithmetic** (`checked_add`): a count or total that would overflow is refused with `MathOverflow` (#9) instead of wrapping, so a clinic's record can never understate what it was paid.
+
 ### Authorisation matrix
 
 Every public function, with the exact signer it demands. `AUTH_MATRIX` in `contracts/receipt/src/test.rs` drives both `authorisation_matrix_matches_every_public_function` and this table.
@@ -383,6 +452,7 @@ Every public function, with the exact signer it demands. `AUTH_MATRIX` in `contr
 | `get_pending_minter` | none (view) |
 | `get_receipt` | none (view) |
 | `count_for` | none (view) |
+| `provider_stats` | none (view) |
 | `receipts_of_provider` | none (view) |
 | `name` | none (view) |
 | `symbol` | none (view) |
@@ -403,6 +473,7 @@ Every public function, with the exact signer it demands. `AUTH_MATRIX` in `contr
 | 6 | `InvalidAmount` |
 | 7 | `NoPendingAdmin` |
 | 8 | `NoPendingMinter` |
+| 9 | `MathOverflow` |
 
 ### Events
 
@@ -579,7 +650,7 @@ stays in the live ledger. These are the numbers, all in ledgers:
 | `Voucher(id)` | persistent | every read and write | 30 days | 90 days |
 | `Provider`, `Service`, `Attester` | persistent | every read and write | 30 days | 90 days |
 | `Receipt(id)`, `Count(beneficiary_ref)` | persistent | every read and write | 30 days | 90 days |
-| `ProviderCount(provider)`, `ProviderReceipt(provider, index)` | persistent | every mint and `receipts_of_provider` read | 30 days | 90 days |
+| `ProviderCount(provider)`, `ProviderTotal(provider)`, `ProviderReceipt(provider, index)` | persistent | every mint, and `receipts_of_provider` / `provider_stats` reads | 30 days | 90 days |
 | Sponsor `Sponsor(address)`, `Match(id)`, `OriginalOf(id)` | persistent | every read and write | 30 days | 90 days |
 | Faucet `LastDrip(address)` | temporary | every drip | 1 day | 7 days |
 | Faucet `LifetimeDripped(address)` | persistent | every drip and lifetime-cap read | 30 days | 90 days |

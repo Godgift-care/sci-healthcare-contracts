@@ -118,6 +118,18 @@ pub struct VoucherAmountReduced {
 
 #[contractevent]
 #[derive(Clone, Debug, Eq, PartialEq)]
+pub struct VoucherRedirected {
+    #[topic]
+    pub funder: Address,
+    #[topic]
+    pub new_provider: Address,
+    pub voucher_id: u64,
+    pub previous_provider: Address,
+    pub service_code: u32,
+}
+
+#[contractevent]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct DisputeResolved {
     #[topic]
     pub admin: Address,
@@ -140,6 +152,27 @@ pub struct AttestationCapChanged {
     #[topic]
     pub admin: Address,
     pub cap: u32,
+}
+
+/// The admin changed the range a funder's per-voucher dispute window must
+/// fall in.
+#[contractevent]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct DisputeWindowBoundsChanged {
+    #[topic]
+    pub admin: Address,
+    pub min: u64,
+    pub max: u64,
+}
+
+/// The admin changed the most value one clinic may hold in escrow. `max` is
+/// 0 for unlimited.
+#[contractevent]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct EscrowCapChanged {
+    #[topic]
+    pub admin: Address,
+    pub max: i128,
 }
 
 #[contractevent]
