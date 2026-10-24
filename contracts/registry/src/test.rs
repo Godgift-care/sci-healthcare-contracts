@@ -728,9 +728,9 @@ fn providers_in_tracks_active_status() {
         &String::from_str(&f.env, "NG"),
     );
     f.client
-        .set_provider_status(&f.admin, &a, &ProviderStatus::Active);
+        .set_provider_status(&f.admin, &a, &ProviderStatus::Active, &0u32);
     f.client
-        .set_provider_status(&f.admin, &b, &ProviderStatus::Active);
+        .set_provider_status(&f.admin, &b, &ProviderStatus::Active, &0u32);
     // c stays Pending.
 
     let ng = f
@@ -742,7 +742,7 @@ fn providers_in_tracks_active_status() {
 
     // Suspending b removes it; only a remains.
     f.client
-        .set_provider_status(&f.admin, &b, &ProviderStatus::Suspended);
+        .set_provider_status(&f.admin, &b, &ProviderStatus::Suspended, &0u32);
     let ng = f
         .client
         .providers_in(&String::from_str(&f.env, "NG"), &0u32, &10u32);
@@ -751,7 +751,7 @@ fn providers_in_tracks_active_status() {
 
     // Reactivating b re-adds it once.
     f.client
-        .set_provider_status(&f.admin, &b, &ProviderStatus::Active);
+        .set_provider_status(&f.admin, &b, &ProviderStatus::Active, &0u32);
     let ng = f
         .client
         .providers_in(&String::from_str(&f.env, "NG"), &0u32, &10u32);
@@ -783,7 +783,7 @@ fn providers_in_pages() {
             &String::from_str(&f.env, "NG"),
         );
         f.client
-            .set_provider_status(&f.admin, &provider, &ProviderStatus::Active);
+            .set_provider_status(&f.admin, &provider, &ProviderStatus::Active, &0u32);
         providers.push_back(provider);
     }
 
