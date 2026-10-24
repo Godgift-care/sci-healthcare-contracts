@@ -345,6 +345,7 @@ rejects the voucher's own provider even if it holds that role.
 |  |  | 29 | `InvalidPresenceProof` |
 |  |  | 30 | `NoPresenceCommitment` |
 |  |  | 31 | `InvalidDisputeWindow` |
+|  |  | 41 | `ReceiptMintFailed` |
 
 ### Events
 

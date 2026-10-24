@@ -1635,70 +1635,6 @@
     {
       "event": {
         "ext": "v0",
-        "contract_id": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAATYON",
-        "type_": "contract",
-        "body": {
-          "v0": {
-            "topics": [
-              {
-                "symbol": "dispute_resolved"
-              },
-              {
-                "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM"
-              }
-            ],
-            "data": {
-              "map": [
-                {
-                  "key": {
-                    "symbol": "fee"
-                  },
-                  "val": {
-                    "i128": "150000"
-                  }
-                },
-                {
-                  "key": {
-                    "symbol": "refunded_funder"
-                  },
-                  "val": {
-                    "bool": false
-                  }
-                },
-                {
-                  "key": {
-                    "symbol": "to_funder"
-                  },
-                  "val": {
-                    "i128": "15000000"
-                  }
-                },
-                {
-                  "key": {
-                    "symbol": "to_provider"
-                  },
-                  "val": {
-                    "i128": "15000000"
-                  }
-                },
-                {
-                  "key": {
-                    "symbol": "voucher_id"
-                  },
-                  "val": {
-                    "u64": "1"
-                  }
-                }
-              ]
-            }
-          }
-        }
-      },
-      "failed_call": false
-    },
-    {
-      "event": {
-        "ext": "v0",
         "contract_id": "CDS3FDGQ4JA2V3F26Y4BMWWJEC5TT26RJBN7KIQKUMVO2MAOCMDTSZ7A",
         "type_": "contract",
         "body": {
@@ -1825,6 +1761,70 @@
                   },
                   "val": {
                     "u64": "1700000000"
+                  }
+                },
+                {
+                  "key": {
+                    "symbol": "voucher_id"
+                  },
+                  "val": {
+                    "u64": "1"
+                  }
+                }
+              ]
+            }
+          }
+        }
+      },
+      "failed_call": false
+    },
+    {
+      "event": {
+        "ext": "v0",
+        "contract_id": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAATYON",
+        "type_": "contract",
+        "body": {
+          "v0": {
+            "topics": [
+              {
+                "symbol": "dispute_resolved"
+              },
+              {
+                "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM"
+              }
+            ],
+            "data": {
+              "map": [
+                {
+                  "key": {
+                    "symbol": "fee"
+                  },
+                  "val": {
+                    "i128": "150000"
+                  }
+                },
+                {
+                  "key": {
+                    "symbol": "refunded_funder"
+                  },
+                  "val": {
+                    "bool": false
+                  }
+                },
+                {
+                  "key": {
+                    "symbol": "to_funder"
+                  },
+                  "val": {
+                    "i128": "15000000"
+                  }
+                },
+                {
+                  "key": {
+                    "symbol": "to_provider"
+                  },
+                  "val": {
+                    "i128": "15000000"
                   }
                 },
                 {
