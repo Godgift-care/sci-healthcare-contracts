@@ -95,7 +95,7 @@ for entry in "${CONTRACTS[@]}"; do
   fi
 
   fetched="$TMP/$file"
-  if ! stellar contract fetch --contract-id "$id" --network "$NETWORK" --out-file "$fetched" >/dev/null 2>&1; then
+  if ! stellar contract fetch --id "$id" --network "$NETWORK" --out-file "$fetched" >/dev/null 2>&1; then
     printf '%-10s %-12s %-12s %s\n' "${file#sci_}" "-" "-" "could not fetch $id"
     failures=$((failures + 1))
     continue
