@@ -160,7 +160,7 @@
           "function": {
             "contract_fn": {
               "contract_address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAATYON",
-              "function_name": "create_voucher",
+              "function_name": "create_voucher_at_price",
               "args": [
                 {
                   "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFCT4"
@@ -175,10 +175,13 @@
                   "u32": 101
                 },
                 {
-                  "i128": "60000000"
+                  "i128": "30000000"
                 },
                 {
                   "u64": "1702592000"
+                },
+                {
+                  "i128": "30000000"
                 }
               ]
             }
@@ -197,7 +200,7 @@
                       "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAATYON"
                     },
                     {
-                      "i128": "60000000"
+                      "i128": "30000000"
                     }
                   ]
                 }
@@ -205,31 +208,6 @@
               "sub_invocations": []
             }
           ]
-        }
-      ]
-    ],
-    [
-      [
-        "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFCT4",
-        {
-          "function": {
-            "contract_fn": {
-              "contract_address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAATYON",
-              "function_name": "reduce_amount",
-              "args": [
-                {
-                  "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFCT4"
-                },
-                {
-                  "u64": "1"
-                },
-                {
-                  "i128": "30000000"
-                }
-              ]
-            }
-          },
-          "sub_invocations": []
         }
       ]
     ]
@@ -315,26 +293,6 @@
               "key": {
                 "ledger_key_nonce": {
                   "nonce": "4837995959683129791"
-                }
-              },
-              "durability": "temporary",
-              "val": "void"
-            }
-          },
-          "ext": "v0"
-        },
-        "live_until": 6311999
-      },
-      {
-        "entry": {
-          "last_modified_ledger_seq": 0,
-          "data": {
-            "contract_data": {
-              "ext": "v0",
-              "contract": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFCT4",
-              "key": {
-                "ledger_key_nonce": {
-                  "nonce": "6277191135259896685"
                 }
               },
               "durability": "temporary",
@@ -1266,10 +1224,10 @@
                 "symbol": "transfer"
               },
               {
-                "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAATYON"
+                "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFCT4"
               },
               {
-                "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFCT4"
+                "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAATYON"
               },
               {
                 "string": "aaa:GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAPP4V"
@@ -1292,10 +1250,16 @@
           "v0": {
             "topics": [
               {
-                "symbol": "voucher_amount_reduced"
+                "symbol": "voucher_created"
               },
               {
                 "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFCT4"
+              },
+              {
+                "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHK3M"
+              },
+              {
+                "bytes": "0909090909090909090909090909090909090909090909090909090909090909"
               }
             ],
             "data": {
@@ -1310,18 +1274,18 @@
                 },
                 {
                   "key": {
-                    "symbol": "previous_amount"
+                    "symbol": "created_at"
                   },
                   "val": {
-                    "i128": "60000000"
+                    "u64": "1700000000"
                   }
                 },
                 {
                   "key": {
-                    "symbol": "refunded"
+                    "symbol": "expires_at"
                   },
                   "val": {
-                    "i128": "30000000"
+                    "u64": "1702592000"
                   }
                 },
                 {

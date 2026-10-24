@@ -51,7 +51,7 @@ pub struct ServiceItem {
 | `register_provider` | `owner, name, country` | `()` | `owner` | `EmptyName`, `InvalidCountry`, `ProviderExists` |
 | `set_provider_status` | `admin, provider_addr, status` | `()` | `admin` | `NotAuthorized`, `ProviderNotFound` |
 | `upsert_service` | `provider_addr, code, label, price` | `()` | `provider_addr` | `InvalidPrice`, `EmptyName`, `ProviderNotActive`, `PriceIncreaseNeedsNotice` |
-| `schedule_service_price` | `provider_addr, code, price, effective_at` | `()` | `provider_addr` | `InvalidPrice`, `ProviderNotActive`, `ServiceNotFound`, `PriceNoticeTooShort` |
+| `schedule_service_price` | `provider_addr, code, price, effective_at, confirm_large_change: bool` | `()` | `provider_addr` | `InvalidPrice`, `ProviderNotActive`, `ServiceNotFound`, `PriceNoticeTooShort`, `LargePriceJumpNeedsConfirmation` |
 | `remove_service` | `provider_addr, code` | `()` | `provider_addr` | `ServiceNotFound` |
 | `set_service_available` | `provider_addr, code, available: bool` | `()` | `provider_addr` | `ServiceNotFound` |
 | `set_capacity` | `provider_addr, max_outstanding: u32` | `()` | `provider_addr` | `ProviderNotFound` |
@@ -82,7 +82,7 @@ pub struct ServiceItem {
 
 A clinic that temporarily cannot deliver a service (out of test kits, say) calls `set_service_available(provider_addr, code, false)` instead of delisting it. The service keeps its catalogue entry and its price, `is_service_available` returns `false`, and `voucher` refuses to fund it with `ServiceUnavailable`. Vouchers already funded against it are unaffected. `upsert_service` keeps a paused service paused; only `set_service_available(…, true)` puts it back on sale. New services are listed as available.
 
-Price changes are scheduled, not sprung. `schedule_service_price(provider_addr, code, price, effective_at)` records a new price that takes effect at `effective_at`, which must be at least `MIN_PRICE_NOTICE_SECS` (24 hours) away or the call fails with `PriceNoticeTooShort`. Until then `get_service_price` returns the current price and `get_upcoming_price` returns `(price, effective_at)` so apps can warn funders; from `effective_at` on, every read returns the new price — no keeper has to call in. Scheduling again replaces the earlier schedule, and scheduling the current price calls a change off. `upsert_service` still lists a new service, or lowers an existing price, at once, but rejects a rise with `PriceIncreaseNeedsNotice`. A service that is removed and listed again starts fresh, at whatever price it is listed with.
+Price changes are scheduled, not sprung. `schedule_service_price(provider_addr, code, price, effective_at, confirm_large_change)` records a new price that takes effect at `effective_at`, which must be at least `MIN_PRICE_NOTICE_SECS` (24 hours) away or the call fails with `PriceNoticeTooShort`. A price of `MAX_PRICE_JUMP` (5) times the current price or more is rejected with `LargePriceJumpNeedsConfirmation` unless `confirm_large_change` is `true`: a fat-fingered zero would otherwise overcharge every funder that day. Until `effective_at`, `get_service_price` returns the current price and `get_upcoming_price` returns `(price, effective_at)` so apps can warn funders; from `effective_at` on, every read returns the new price — no keeper has to call in. Scheduling again replaces the earlier schedule, and scheduling the current price calls a change off. `upsert_service` still lists a new service, or lowers an existing price, at once, but rejects a rise with `PriceIncreaseNeedsNotice`; prices rise only through `schedule_service_price`, which is where the large-jump check lives. A service that is removed and listed again starts fresh, at whatever price it is listed with.
 
 A clinic declares how many vouchers it can serve at once with `set_capacity(provider_addr, max_outstanding)`; `0` — the default — means unlimited. `voucher` counts each clinic's outstanding vouchers (funded, claimed, attested or disputed) and refuses a new one at capacity with `ProviderAtCapacity`; the count drops when a voucher settles or refunds. Lowering the capacity never affects vouchers already funded. The change emits `capacity_changed` (topic `provider`; data `max_outstanding`).
 
@@ -140,10 +140,13 @@ A signer is not the same as a role: `admin` must be the stored admin **and** sig
 | 11 | `NoPendingAdmin` |
 | 12 | `PriceNoticeTooShort` |
 | 13 | `PriceIncreaseNeedsNotice` |
+| 14 | `LargePriceJumpNeedsConfirmation` |
 
 ### Events
 
 `provider_registered`, `provider_status_changed`, `service_upserted`, `service_removed`, `service_price_scheduled` (topics `provider`, `code`; data `price`, `effective_at`), `service_availability_changed` (topics `provider`, `code`; data `available`), `capacity_changed` (topic `provider`; data `max_outstanding`), `attester_added`, `attester_removed`, `admin_changed`, `initialized`
+
+The full schema — every topic, data field, type and the function that emits it — is in [Reading contract events](events.md).
 
 ---
 
@@ -206,6 +209,7 @@ pub struct Exposure {            // a clinic's open vouchers
 | `initialize` | `admin, registry, receipt_book, token, dispute_window, fee_bps, attester_share_bps, fee_account` | `()` | once |
 | `create_voucher` | `funder, beneficiary_ref, provider, service_code, amount, expires_at` | `u64` | `funder` |
 | `create_voucher_with_options` | `funder, beneficiary_ref, provider, service_code, amount, expires_at, options: VoucherOptions` | `u64` | `funder` |
+| `create_voucher_at_price` | `funder, beneficiary_ref, provider, service_code, amount, expires_at, expected_price` | `u64` | `funder` |
 | `reduce_amount` | `funder, voucher_id, new_amount` | `()` | `funder` |
 | `redirect` | `funder, voucher_id, new_provider` | `()` | `funder` |
 | `claim` | `provider, voucher_id` | `()` | `provider` |
@@ -249,6 +253,7 @@ Every public function, with the exact signer it demands. `AUTH_MATRIX` in `contr
 | `initialize` | none (one-shot) |
 | `create_voucher` | `funder` |
 | `create_voucher_with_options` | `funder` |
+| `create_voucher_at_price` | `funder` |
 | `reduce_amount` | `funder` |
 | `redirect` | `funder` |
 | `claim` | `provider` |
@@ -289,6 +294,8 @@ rejects the voucher's own provider even if it holds that role.
 **`create_voucher`** — amount > 0; expiry in the future; provider is `Active`; the service exists and is active; amount ≥ listed price; the service is not paused (`ServiceUnavailable`); the clinic is below the capacity it declared in the registry (`ProviderAtCapacity`); the clinic's escrow plus this amount stays within the per-clinic cap (`EscrowCapReached`). Transfers the token *before* writing the voucher, so a failed transfer reverts everything.
 
 **`set_max_escrow_per_provider`** — caller is admin; `max` ≥ 0 (`InvalidEscrowCap`). `0`, the default, is unlimited. The cap limits what one clinic can hold in escrow across all its open vouchers, so a verified clinic that turns out to be fraudulent is exposed to at most this much. `get_exposure(provider)` returns the clinic's open voucher count and escrowed value; both fall when a voucher settles or refunds, including through `resolve_dispute` and `resolve_split`, and the value falls by the refunded difference when `reduce_amount` lowers a voucher. Lowering the cap only affects new vouchers.
+
+**`create_voucher_at_price`** — the same checks, plus the registry price must equal `expected_price` at execution (`PriceChanged`). Use it when the funder was shown a quote before signing: if the clinic changed the price in between, in either direction, nothing is escrowed and the client can re-quote. The old `create_voucher` entry point is unchanged and still reads the current price; it remains suitable for callers that do not show a price first.
 
 **`reduce_amount`** — caller is the funder of this voucher (`NotAuthorized`); status is `Funded` (`InvalidStatus`); `new_amount` > 0 (`InvalidAmount`) and strictly below the escrowed amount (`AmountNotReduced`); the service is still listed (`ServiceNotOffered`); and `new_amount` ≥ the price the registry lists **at call time** (`AmountBelowPrice`). The difference goes straight back to the funder and the escrow keeps the rest; no fee is taken on money that never became care, and the `open_escrow` total follows the difference down. The price at call time is the floor, not the price at funding time: a clinic that has raised its price cannot have a funded voucher reduced below that price, and a clinic that has lowered it frees the funder to reduce further. A voucher whose service has been delisted cannot be reduced at all — there is no floor to reduce towards — and is refunded at expiry instead. Once the clinic has claimed the voucher the amount is what the clinic expects to be paid, so the reduction is closed.
 
@@ -345,6 +352,7 @@ rejects the voucher's own provider even if it holds that role.
 |  |  | 29 | `InvalidPresenceProof` |
 |  |  | 30 | `NoPresenceCommitment` |
 |  |  | 31 | `InvalidDisputeWindow` |
+|  |  | 42 | `PriceChanged` |
 
 ### Events
 
@@ -364,6 +372,8 @@ rejects the voucher's own provider even if it holds that role.
 | `escrow_cap_changed` | `admin` | `max` |
 
 > Fields listed under **Topics** are published in the event's topic list, **not** in its data map. An indexer reading them off the data map gets `undefined`.
+>
+> The complete per-event reference, with decoded JS examples, is in [Reading contract events](events.md).
 >
 > Every event in this table has a snapshot test that reads the decoded XDR and asserts the exact topic list and data map — `*_event_snapshot` in each contract's `src/test.rs`. Changing a field name, moving a field between topic and data, or adding a field fails that test with a message naming `TOPIC_FIELDS` in `sci-healthcare-backend/src/stellar/events.ts`.
 >

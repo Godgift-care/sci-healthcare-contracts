@@ -96,6 +96,8 @@ Stellar transaction fees are paid in XLM and are a fraction of a cent. At the ti
 
 This matters more than it sounds. A voucher's whole lifecycle is four transactions: create, claim, attest, settle. On a chain where a transaction costs $0.50, that is $2.00 of overhead on a $3.00 consultation, and the product does not exist. Here it is a rounding error.
 
+The other running cost is storage rent: every voucher, provider, service and receipt is a ledger entry that rents space for its TTL. [Storage and rent costs](costs.md) lists the measured size and rent of each object and shows how to reproduce the numbers.
+
 ## Who pays what
 
 | Action | Who submits | Who pays the network fee |

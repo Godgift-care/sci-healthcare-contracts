@@ -150,6 +150,10 @@ impl VoucherEscrow {
     /// The funder need not be the patient. A relative sending from abroad
     /// funds a voucher exactly the same way, which is the point: this is a
     /// remittance that can only be spent on the care it was sent for.
+    ///
+    /// The registry price is read when this call executes. A client that
+    /// showed a price before signing should use `create_voucher_at_price`
+    /// instead, so a price change in between cannot silently apply.
     pub fn create_voucher(
         env: Env,
         funder: Address,
@@ -168,6 +172,37 @@ impl VoucherEscrow {
             amount,
             expires_at,
             VoucherOptions::default(),
+            None,
+        )
+    }
+
+    /// Escrows `amount` only if the registry still lists `expected_price`.
+    ///
+    /// Use this when a price was shown to the funder before they signed: if
+    /// the clinic changed the price between the quote and this call, the call
+    /// fails with `PriceChanged` and nothing is escrowed. `create_voucher`
+    /// keeps reading the current price for callers that do not care.
+    #[allow(clippy::too_many_arguments)]
+    pub fn create_voucher_at_price(
+        env: Env,
+        funder: Address,
+        beneficiary_ref: BytesN<32>,
+        provider: Address,
+        service_code: u32,
+        amount: i128,
+        expires_at: u64,
+        expected_price: i128,
+    ) -> Result<u64, VoucherError> {
+        Self::fund(
+            &env,
+            funder,
+            beneficiary_ref,
+            provider,
+            service_code,
+            amount,
+            expires_at,
+            VoucherOptions::default(),
+            Some(expected_price),
         )
     }
 
@@ -202,6 +237,7 @@ impl VoucherEscrow {
             amount,
             expires_at,
             options,
+            None,
         )
     }
 
@@ -840,6 +876,7 @@ impl VoucherEscrow {
         amount: i128,
         expires_at: u64,
         options: VoucherOptions,
+        expected_price: Option<i128>,
     ) -> Result<u64, VoucherError> {
         funder.require_auth();
 
@@ -869,6 +906,13 @@ impl VoucherEscrow {
         let price = registry.get_service_price(&provider, &service_code);
         if price == 0 {
             return Err(VoucherError::ServiceNotOffered);
+        }
+        // The funder signed a specific price. Reject before any money moves
+        // if the clinic has changed it since, in either direction.
+        if let Some(expected) = expected_price {
+            if price != expected {
+                return Err(VoucherError::PriceChanged);
+            }
         }
         if amount < price {
             return Err(VoucherError::AmountBelowPrice);

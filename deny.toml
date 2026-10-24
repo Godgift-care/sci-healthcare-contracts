@@ -21,9 +21,17 @@ all-features = true
 
 [advisories]
 version = 2
-# Nothing is ignored today. Any future exception must be listed here with a
-# `reason` string, and the reason is reviewed like any other code.
-ignore = []
+# Any exception must be listed here with a `reason` string, and the reason is
+# reviewed like any other code.
+ignore = [
+    # crypto-bigint 0.5.5 secret-dependent branches. It reaches us only through
+    # soroban-env-host -> k256 0.13.4 -> elliptic-curve 0.13.8 -> crypto-bigint
+    # 0.5.5, and the fix (0.7.6) is semver-incompatible with elliptic-curve
+    # 0.13, so there is no upgrade path until Soroban moves off k256 0.13. The
+    # crate is host-side only: the wasm32v1-none contract artefacts do not run
+    # this code, so the side channel is not reachable from a deployed contract.
+    { id = "RUSTSEC-2026-0387", reason = "transitive via soroban-env-host -> k256 0.13.4 -> crypto-bigint 0.5.5; host-only, no 0.5.x fix" },
+]
 # Only report crates that are unmaintained when they are workspace members.
 # The transitive graph carries unmaintained helper crates pulled in by the
 # Soroban SDK, and flagging all of them buries the signal.
