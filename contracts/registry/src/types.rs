@@ -109,6 +109,9 @@ pub enum RegistryError {
     /// `upsert_service` may lower a listed price at once, but a rise has to
     /// go through `schedule_service_price`.
     PriceIncreaseNeedsNotice = 13,
+    UnknownCategory = 90,
+    CategoryDeprecated = 91,
+    CategoryExists = 92,
 }
 
 /// Maps the shared helpers' failures onto this contract's error numbers, so

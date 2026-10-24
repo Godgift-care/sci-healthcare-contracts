@@ -49,6 +49,15 @@ pub use storage::MAX_PROVIDERS_PAGE;
 #[contract]
 pub struct Registry;
 
+
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct Category {
+    pub code: u32,
+    pub label: String,
+    pub active: bool,
+}
+
 #[contractimpl]
 impl Registry {
     /// Sets the administrator. Callable exactly once.
@@ -199,6 +208,26 @@ impl Registry {
     /// `PriceIncreaseNeedsNotice`: use `schedule_service_price`, so a funder
     /// never sees one price and finds another minutes later. A price already
     /// scheduled is left in place.
+       fn check_category(env: &Env, code: u32) -> Result<(), Error> {
+        let gate: bool = env
+            .storage()
+            .persistent()
+            .get(&DataKey::CategoryGate)
+            .unwrap_or(false);
+        if !gate {
+            return Ok(());
+        }
+        match env
+            .storage()
+            .persistent()
+            .get::<DataKey, Category>(&DataKey::Category(code))
+        {
+            None => Err(Error::UnknownCategory),
+            Some(c) if !c.active => Err(Error::CategoryDeprecated),
+            Some(_) => Ok(()),
+        }
+    }
+   
     pub fn upsert_service(
         env: Env,
         provider_addr: Address,
@@ -234,15 +263,19 @@ impl Registry {
                     ..existing
                 }
             }
-            Err(_) => ServiceItem {
-                code,
-                label: label.clone(),
-                price,
-                active: true,
-                available: true,
-                pending_price: 0,
-                effective_at: 0,
-            },
+        
+        Err(_) => {
+                Self::check_category(&env, code)?;
+                ServiceItem {
+                    code,
+                    label: label.clone(),
+                    price,
+                    active: true,
+                    available: true,
+                    pending_price: 0,
+                    effective_at: 0,
+                }
+            }
         };
         write_service(&env, &provider_addr, code, &item);
         extend_instance(&env);
@@ -403,6 +436,64 @@ impl Registry {
         extend_instance(&env);
         AttesterRemoved { attester }.publish(&env);
         Ok(())
+    }
+
+            /// Adds an active service category. Admin only.
+    pub fn add_category(
+        env: Env,
+        admin: Address,
+        code: u32,
+        label: String,
+    ) -> Result<(), RegistryError> {
+        Self::require_admin(&env, &admin)?;
+        if label.is_empty() {
+            return Err(RegistryError::EmptyName);
+        }
+        let key = CategoryKey::Item(code);
+        if env.storage().instance().has(&key) {
+            return Err(RegistryError::CategoryExists);
+        }
+        env.storage().instance().set(
+            &key,
+            &Category {
+                code,
+                label,
+                active: true,
+            },
+        );
+        extend_instance(&env);
+        Ok(())
+    }
+
+    /// Marks a category inactive, so new services can no longer use it. Admin only.
+    pub fn deprecate_category(env: Env, admin: Address, code: u32) -> Result<(), RegistryError> {
+        Self::require_admin(&env, &admin)?;
+        let key = CategoryKey::Item(code);
+        let mut cat: Category = env
+            .storage()
+            .instance()
+            .get(&key)
+            .ok_or(RegistryError::UnknownCategory)?;
+        cat.active = false;
+        env.storage().instance().set(&key, &cat);
+        extend_instance(&env);
+        Ok(())
+    }
+
+    /// Turns category enforcement on or off. Off by default. Admin only.
+    pub fn set_category_gate(env: Env, admin: Address, enabled: bool) -> Result<(), RegistryError> {
+        Self::require_admin(&env, &admin)?;
+        env.storage().instance().set(&CategoryKey::Gate, &enabled);
+        extend_instance(&env);
+        Ok(())
+    }
+
+    pub fn get_category(env: Env, code: u32) -> Option<Category> {
+        env.storage().instance().get(&CategoryKey::Item(code))
+    }
+
+    pub fn is_category_active(env: Env, code: u32) -> bool {
+        Self::get_category(env, code).is_some_and(|c| c.active)
     }
 
     /// Nominates a new admin. Takes effect only once they accept.
@@ -571,6 +662,25 @@ impl Registry {
     }
 
     // ----- internal -----
+        fn check_category(env: &Env, code: u32) -> Result<(), RegistryError> {
+        let gate: bool = env
+            .storage()
+            .instance()
+            .get(&CategoryKey::Gate)
+            .unwrap_or(false);
+        if !gate {
+            return Ok(());
+        }
+        match env
+            .storage()
+            .instance()
+            .get::<CategoryKey, Category>(&CategoryKey::Item(code))
+        {
+            None => Err(RegistryError::UnknownCategory),
+            Some(c) if !c.active => Err(RegistryError::CategoryDeprecated),
+            Some(_) => Ok(()),
+        }
+    }
 
     fn require_admin(env: &Env, admin: &Address) -> Result<(), RegistryError> {
         let stored = read_admin(env)?;

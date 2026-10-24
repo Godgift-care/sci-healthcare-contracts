@@ -1944,3 +1944,134 @@ fn capacity_changed_event_snapshot() {
     );
     assert_eq!(field_u32(&e, "max_outstanding"), 12);
 }
+
+
+// ----- service categories -----
+
+#[test]
+fn category_gate_off_allows_any_code() {
+    let f = setup();
+    let provider = register_active_provider(&f);
+    f.client.upsert_service(
+        &provider,
+        &999u32,
+        &String::from_str(&f.env, "Any"),
+        &100i128,
+    );
+}
+
+#[test]
+fn category_gate_on_rejects_unknown_category() {
+    let f = setup();
+    let provider = register_active_provider(&f);
+    f.client.set_category_gate(&f.admin, &true);
+
+    let err = f
+        .client
+        .try_upsert_service(
+            &provider,
+            &999u32,
+            &String::from_str(&f.env, "Any"),
+            &100i128,
+        )
+        .err()
+        .unwrap()
+        .unwrap();
+    assert_eq!(err, RegistryError::UnknownCategory);
+}
+
+#[test]
+fn category_gate_on_accepts_active_category() {
+    let f = setup();
+    let provider = register_active_provider(&f);
+    f.client
+        .add_category(&f.admin, &1u32, &String::from_str(&f.env, "Consultation"));
+    f.client.set_category_gate(&f.admin, &true);
+
+    f.client.upsert_service(
+        &provider,
+        &1u32,
+        &String::from_str(&f.env, "GP visit"),
+        &100i128,
+    );
+    assert!(f.client.is_category_active(&1u32));
+}
+
+#[test]
+fn deprecated_category_blocks_new_services() {
+    let f = setup();
+    let provider = register_active_provider(&f);
+    f.client
+        .add_category(&f.admin, &1u32, &String::from_str(&f.env, "Consultation"));
+    f.client.deprecate_category(&f.admin, &1u32);
+    f.client.set_category_gate(&f.admin, &true);
+
+    let err = f
+        .client
+        .try_upsert_service(
+            &provider,
+            &1u32,
+            &String::from_str(&f.env, "GP visit"),
+            &100i128,
+        )
+        .err()
+        .unwrap()
+        .unwrap();
+    assert_eq!(err, RegistryError::CategoryDeprecated);
+    assert!(!f.client.is_category_active(&1u32));
+}
+
+#[test]
+fn existing_service_unaffected_after_deprecation() {
+    let f = setup();
+    let provider = register_active_provider(&f);
+    let label = String::from_str(&f.env, "GP visit");
+    f.client
+        .add_category(&f.admin, &1u32, &String::from_str(&f.env, "Consultation"));
+    f.client.set_category_gate(&f.admin, &true);
+    f.client.upsert_service(&provider, &1u32, &label, &100i128);
+
+    f.client.deprecate_category(&f.admin, &1u32);
+
+    // A price cut on the already-listed service still works.
+    f.client.upsert_service(&provider, &1u32, &label, &90i128);
+    assert_eq!(f.client.get_service_price(&provider, &1u32), 90i128);
+}
+
+#[test]
+fn duplicate_category_rejected() {
+    let f = setup();
+    f.client
+        .add_category(&f.admin, &1u32, &String::from_str(&f.env, "Consultation"));
+    let err = f
+        .client
+        .try_add_category(&f.admin, &1u32, &String::from_str(&f.env, "Again"))
+        .err()
+        .unwrap()
+        .unwrap();
+    assert_eq!(err, RegistryError::CategoryExists);
+}
+
+#[test]
+fn deprecating_unknown_category_fails() {
+    let f = setup();
+    let err = f
+        .client
+        .try_deprecate_category(&f.admin, &7u32)
+        .err()
+        .unwrap()
+        .unwrap();
+    assert_eq!(err, RegistryError::UnknownCategory);
+}
+
+#[test]
+fn non_admin_cannot_manage_categories() {
+    let f = setup();
+    let stranger = Address::generate(&f.env);
+    let label = String::from_str(&f.env, "Consultation");
+    assert!(f
+        .client
+        .try_add_category(&stranger, &1u32, &label)
+        .is_err());
+    assert!(f.client.try_set_category_gate(&stranger, &true).is_err());
+}
