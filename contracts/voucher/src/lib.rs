@@ -843,6 +843,12 @@ impl VoucherEscrow {
     ) -> Result<u64, VoucherError> {
         funder.require_auth();
 
+        // A clinic funding its own voucher could claim and settle care it
+        // never gave.
+        if funder == provider {
+            return Err(VoucherError::SelfFunded);
+        }
+
         if amount <= 0 {
             return Err(VoucherError::InvalidAmount);
         }
