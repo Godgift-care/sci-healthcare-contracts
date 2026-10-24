@@ -54,8 +54,8 @@ use soroban_sdk::{contract, contractimpl, token, Address, Bytes, BytesN, Env, St
 pub use events::{
     AdminChanged, AdminProposed, AttestationCapChanged, DisputeResolved,
     DisputeWindowBoundsChanged, EscrowCapChanged, Initialized, VoucherAmountReduced,
-    VoucherAttested, VoucherClaimed, VoucherCreated, VoucherDisputed, VoucherRedirected,
-    VoucherRefunded, VoucherSettled,
+    VoucherAttested, VoucherClaimed, VoucherCreated, VoucherDeclined, VoucherDisputed,
+    VoucherRedirected, VoucherRefunded, VoucherSettled,
 };
 pub use interfaces::{ReceiptClient, RegistryClient};
 pub use types::{Config, DataKey, Exposure, Voucher, VoucherError, VoucherOptions, VoucherStatus};
@@ -374,6 +374,38 @@ impl VoucherEscrow {
         secret: Bytes,
     ) -> Result<(), VoucherError> {
         Self::claim_voucher(&env, provider, voucher_id, Some(secret))
+    }
+
+    /// Declines a funded voucher the clinic cannot provide and returns the
+    /// full amount to the funder.
+    pub fn decline(
+        env: Env,
+        provider: Address,
+        voucher_id: u64,
+        reason_code: u32,
+    ) -> Result<(), VoucherError> {
+        provider.require_auth();
+
+        let mut voucher = read_voucher(&env, voucher_id)?;
+        if voucher.provider != provider {
+            return Err(VoucherError::NotAuthorized);
+        }
+        if voucher.status != VoucherStatus::Funded {
+            return Err(VoucherError::InvalidStatus);
+        }
+
+        let config = read_config(&env)?;
+        Self::pay_back(&env, &config, &mut voucher)?;
+
+        VoucherDeclined {
+            provider,
+            voucher_id,
+            reason_code,
+            service_code: voucher.service_code,
+            amount: voucher.amount,
+        }
+        .publish(&env);
+        Ok(())
     }
 
     /// Attests that the service was delivered, opening the dispute window.
