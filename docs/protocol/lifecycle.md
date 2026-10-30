@@ -16,8 +16,9 @@ A voucher is one commitment to pay one clinic for one service. It moves through 
     │  clinic inactive)  Disputed <───────────────┘
     ▼                       │
  Refunded  <──── resolve ────┴──── resolve ────> Settled
-    ▲
-    └── refund (Claimed, never attested, 7 days past expiry)
+    ▲                       ▲
+    ├── refund (Claimed, never attested, 7 days past expiry)
+    └── refund (Disputed, 30 days after dispute)
 ```
 
 `Settled` and `Refunded` are terminal. Nothing leaves them.
@@ -58,7 +59,7 @@ The dispute window closed and `settle` ran. The clinic received the amount less 
 
 ### Disputed
 
-The funder contested the claim. Funds stay in escrow until the admin resolves it in favour of one party or the other. The admin cannot send the money anywhere else.
+The funder contested the claim. Funds stay in escrow until the admin resolves it in favour of one party or the other. The admin cannot send the money anywhere else. The voucher records when it was disputed; if it remains unresolved for 30 days (`DISPUTE_RESOLUTION_SECS`), anyone may call `refund` to return the full amount to the funder.
 
 A dispute carries a `reason_code`. The contract stores and emits it without interpreting it; the app, the indexer and whoever resolves disputes share this convention:
 
@@ -73,11 +74,11 @@ New codes may be added. Existing codes are never renumbered.
 
 ### Refunded
 
-The voucher expired unclaimed, the clinic was no longer active before it could be claimed, it was claimed but never attested within the grace period, or a dispute was resolved in the funder's favour. The **full** amount goes back — no fee is taken on care that did not happen.
+The voucher expired unclaimed, the clinic was no longer active before it could be claimed, it was claimed but never attested within the grace period, a dispute was resolved in the funder's favour, or anyone refunded an unresolved dispute after 30 days. The **full** amount goes back — no fee is taken on care that did not happen.
 
 ## The dispute sequence
 
-Everyone in a dispute has a fixed part to play, and only the admin can move the money once it is disputed:
+Everyone in a dispute has a fixed part to play: the admin can resolve it, and if the admin does not act within 30 days anyone can refund it to the funder:
 
 ```mermaid
 sequenceDiagram
@@ -100,13 +101,19 @@ sequenceDiagram
     alt Funder disputes in time
         Funder->>Voucher: dispute(funder, voucher_id, reason_code)
         Voucher-->>Funder: Disputed (funds stay in escrow)
-        Note over Voucher: Only the admin can move the money now,<br/>and only to the funder or the clinic.
-        Admin->>Voucher: resolve_dispute(admin, voucher_id, refund_funder)
-        alt refund_funder = true
+        alt Admin resolves before a refund
+            Note over Voucher: Admin can route funds only<br/>to the funder or the clinic.
+            Admin->>Voucher: resolve_dispute(admin, voucher_id, refund_funder)
+            alt refund_funder = true
+                Voucher-->>Funder: VoucherRefunded (full amount, no fee)
+            else refund_funder = false
+                Voucher-->>Clinic: VoucherSettled (amount less fee)
+                Voucher->>Voucher: mint care receipt
+            end
+        else Dispute remains unresolved for 30 days
+            Note over Funder,Voucher: refund is permissionless
+            Funder->>Voucher: refund(voucher_id)
             Voucher-->>Funder: VoucherRefunded (full amount, no fee)
-        else refund_funder = false
-            Voucher-->>Clinic: VoucherSettled (amount less fee)
-            Voucher->>Voucher: mint care receipt
         end
     else Window closes with no dispute
         Note over Funder,Voucher: settle is permissionless
@@ -116,6 +123,8 @@ sequenceDiagram
 ```
 
 A funder may also open a dispute straight after `claim`, before any attestation: `dispute` accepts a voucher in `Claimed`. The same sequence then applies, with the admin resolving it.
+
+If the admin does not resolve a dispute within 30 days, anyone may call `refund` and the full amount returns to the funder. A refund and an admin resolution compete for the same disputed voucher: whichever succeeds first closes it.
 
 If the clinic claims but no attester ever confirms delivery, the dispute window never opens. Instead, `refund` lets anyone return the full amount to the funder once the voucher is seven days past its expiry (`CLAIM_GRACE_SECS`). The clinic cannot keep the money by staying silent.
 
