@@ -59,3 +59,9 @@ Anyone claiming a public blockchain gives patients anonymity is either mistaken 
 ## The database
 
 The indexer's database stores nothing that is not already public on chain. That is a deliberate constraint, and it means a breach of that database is not a health-data breach. It is a breach of a cache of public information.
+
+
+
+## Service categories
+
+The category catalogue is public on-chain data. Category labels must stay coarse (for example "Laboratory", never a specific test or condition), because a category on a voucher is visible to everyone.
