@@ -232,13 +232,15 @@ npm run lifecycle -- settle <voucher-id>         # finish a voucher later, if th
 | --- | --- | --- |
 | `initialize(admin)` | once | Sets the administrator |
 | `register_provider(owner, name, country)` | owner | Self-registers a clinic as `Pending` |
-| `set_provider_status(admin, provider, status)` | admin | `Pending` → `Active` → `Suspended` |
+| `set_provider_status(caller, provider, status)` | admin or verifier | `Pending` → `Active` → `Suspended` |
 | `upsert_service(provider, code, label, price)` | provider | Lists a billable service or lowers its price; requires `Active` |
 | `schedule_service_price(provider, code, price, effective_at)` | provider | Schedules a price change at least 24 h ahead |
 | `remove_service(provider, code)` | provider | Delists a service |
 | `set_service_available(provider, code, available)` | provider | Pauses or resumes a service without delisting it |
 | `add_attester(admin, attester)` | admin | Grants attester rights |
 | `remove_attester(admin, attester)` | admin | Revokes them |
+| `add_verifier(admin, verifier)` | admin | Grants verifier rights |
+| `remove_verifier(admin, verifier)` | admin | Revokes them |
 | `propose_admin(admin, new_admin)` | admin | Nominates a new admin |
 | `accept_admin(new_admin)` | nominee | Completes the two-step handover |
 | `is_active_provider(provider)` | view | The check `voucher` relies on |
@@ -246,6 +248,7 @@ npm run lifecycle -- settle <voucher-id>         # finish a voucher later, if th
 | `is_service_available(provider, code)` | view | Listed, active and not paused |
 | `get_upcoming_price(provider, code)` | view | Scheduled price and when it applies, or `(0, 0)` |
 | `is_attester(addr)` | view | Attester check |
+| `is_verifier(addr)` | view | Verifier check |
 
 ### `voucher`
 

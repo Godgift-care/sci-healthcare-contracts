@@ -106,7 +106,7 @@ for n in $(seq 1 "$CLINICS"); do
       --name "$name" --country "$country" >/dev/null
     printf '  %-22s %s registered\n' "$id" "$country"
   fi
-  inv "$REGISTRY_CONTRACT_ID" "$ADMIN" -- set_provider_status --admin "$ADMIN_ADDR" \
+  inv "$REGISTRY_CONTRACT_ID" "$ADMIN" -- set_provider_status --caller "$ADMIN_ADDR" \
     --provider_addr "$addr" --status 1 >/dev/null
   for svc in "${SERVICES[@]}"; do
     IFS=: read -r code label price <<<"$svc"
