@@ -20,6 +20,8 @@ const ATTESTER_SHARE_BPS: u32 = 50;
 const START_TIME: u64 = 1_700_000_000;
 const CONSULT: u32 = 101;
 const CONSULT_PRICE: i128 = 30_000_000; // 3.00 USDC at 7 decimals
+const MAX_OVERPAID: i128 = CONSULT_PRICE + CONSULT_PRICE / 5;
+const MID_OVERPAID: i128 = CONSULT_PRICE + CONSULT_PRICE / 10;
 
 struct Fixture {
     env: Env,
@@ -505,6 +507,65 @@ fn cannot_underfund_below_list_price() {
 }
 
 #[test]
+fn funding_at_max_overpayment_is_accepted() {
+    let f = setup();
+    let id = fund_overpaid(&f, MAX_OVERPAID);
+
+    assert_eq!(f.voucher.get_voucher(&id).amount, MAX_OVERPAID);
+    assert_escrow(&f, MAX_OVERPAID);
+}
+
+#[test]
+fn cannot_fund_above_max_overpayment() {
+    let f = setup();
+    let amount = MAX_OVERPAID + 1;
+    let err = f
+        .voucher
+        .try_create_voucher(
+            &f.funder,
+            &patient(&f.env),
+            &f.provider,
+            &CONSULT,
+            &amount,
+            &(START_TIME + 1000),
+        )
+        .err()
+        .unwrap()
+        .unwrap();
+
+    assert_eq!(err, VoucherError::AmountAboveMaxPrice);
+    assert_eq!(f.voucher.next_voucher_id(), 1, "no voucher was written");
+    assert_escrow(&f, 0);
+}
+
+#[test]
+fn overpayment_limit_rejects_overflowing_price_math() {
+    let f = setup();
+    f.registry.remove_service(&f.provider, &CONSULT);
+    f.registry.upsert_service(
+        &f.provider,
+        &CONSULT,
+        &String::from_str(&f.env, "Outpatient consult"),
+        &i128::MAX,
+    );
+
+    let err = f
+        .voucher
+        .try_create_voucher(
+            &f.funder,
+            &patient(&f.env),
+            &f.provider,
+            &CONSULT,
+            &i128::MAX,
+            &(START_TIME + 1000),
+        )
+        .err()
+        .unwrap()
+        .unwrap();
+    assert_eq!(err, VoucherError::MathOverflow);
+}
+
+#[test]
 fn rejects_non_positive_amount() {
     let f = setup();
     let err = f
@@ -552,7 +613,7 @@ fn rejects_expiry_in_the_past() {
 fn reduce_to_the_listed_price_succeeds() {
     let f = setup();
     let before = f.token.balance(&f.funder);
-    let overpaid = CONSULT_PRICE * 2;
+    let overpaid = MAX_OVERPAID;
     let id = fund_overpaid(&f, overpaid);
     assert_eq!(f.token.balance(&f.funder), before - overpaid);
 
@@ -577,13 +638,12 @@ fn reduce_to_the_listed_price_succeeds() {
 fn reducing_twice_returns_the_difference_each_time() {
     let f = setup();
     let before = f.token.balance(&f.funder);
-    let overpaid = CONSULT_PRICE * 3;
+    let overpaid = MAX_OVERPAID;
     let id = fund_overpaid(&f, overpaid);
 
-    f.voucher
-        .reduce_amount(&f.funder, &id, &(CONSULT_PRICE * 2));
-    assert_eq!(f.token.balance(&f.funder), before - CONSULT_PRICE * 2);
-    assert_eq!(f.voucher.get_voucher(&id).amount, CONSULT_PRICE * 2);
+    f.voucher.reduce_amount(&f.funder, &id, &MID_OVERPAID);
+    assert_eq!(f.token.balance(&f.funder), before - MID_OVERPAID);
+    assert_eq!(f.voucher.get_voucher(&id).amount, MID_OVERPAID);
 
     f.voucher.reduce_amount(&f.funder, &id, &CONSULT_PRICE);
     // The funder recovers exactly the difference each time, and the escrow
@@ -597,7 +657,7 @@ fn reducing_twice_returns_the_difference_each_time() {
 #[test]
 fn cannot_reduce_below_the_listed_price() {
     let f = setup();
-    let overpaid = CONSULT_PRICE * 2;
+    let overpaid = MAX_OVERPAID;
     let id = fund_overpaid(&f, overpaid);
 
     let err = f
@@ -616,7 +676,7 @@ fn cannot_reduce_below_the_listed_price() {
 #[test]
 fn cannot_reduce_after_the_voucher_is_claimed() {
     let f = setup();
-    let id = fund_overpaid(&f, CONSULT_PRICE * 2);
+    let id = fund_overpaid(&f, MAX_OVERPAID);
     f.voucher.claim(&f.provider, &id);
 
     let err = f
@@ -626,13 +686,13 @@ fn cannot_reduce_after_the_voucher_is_claimed() {
         .unwrap()
         .unwrap();
     assert_eq!(err, VoucherError::InvalidStatus);
-    assert_eq!(f.voucher.get_voucher(&id).amount, CONSULT_PRICE * 2);
+    assert_eq!(f.voucher.get_voucher(&id).amount, MAX_OVERPAID);
 }
 
 #[test]
 fn cannot_reduce_after_the_voucher_is_settled() {
     let f = setup();
-    let id = fund_overpaid(&f, CONSULT_PRICE * 2);
+    let id = fund_overpaid(&f, MAX_OVERPAID);
     f.voucher.claim(&f.provider, &id);
     f.voucher.attest(&f.attester, &id);
     advance(&f.env, DISPUTE_WINDOW + 1);
@@ -650,7 +710,7 @@ fn cannot_reduce_after_the_voucher_is_settled() {
 #[test]
 fn only_the_funder_can_reduce_the_amount() {
     let f = setup();
-    let id = fund_overpaid(&f, CONSULT_PRICE * 2);
+    let id = fund_overpaid(&f, MAX_OVERPAID);
     let stranger = Address::generate(&f.env);
 
     let err = f
@@ -660,13 +720,13 @@ fn only_the_funder_can_reduce_the_amount() {
         .unwrap()
         .unwrap();
     assert_eq!(err, VoucherError::NotAuthorized);
-    assert_eq!(f.voucher.get_voucher(&id).amount, CONSULT_PRICE * 2);
+    assert_eq!(f.voucher.get_voucher(&id).amount, MAX_OVERPAID);
 }
 
 #[test]
 fn cannot_reduce_to_the_same_or_a_higher_amount() {
     let f = setup();
-    let overpaid = CONSULT_PRICE * 2;
+    let overpaid = MAX_OVERPAID;
     let id = fund_overpaid(&f, overpaid);
 
     let err = f
@@ -690,7 +750,7 @@ fn cannot_reduce_to_the_same_or_a_higher_amount() {
 #[test]
 fn rejects_a_non_positive_new_amount() {
     let f = setup();
-    let id = fund_overpaid(&f, CONSULT_PRICE * 2);
+    let id = fund_overpaid(&f, MAX_OVERPAID);
 
     let err = f
         .voucher
@@ -707,7 +767,7 @@ fn rejects_a_non_positive_new_amount() {
         .unwrap()
         .unwrap();
     assert_eq!(err, VoucherError::InvalidAmount);
-    assert_eq!(f.voucher.get_voucher(&id).amount, CONSULT_PRICE * 2);
+    assert_eq!(f.voucher.get_voucher(&id).amount, MAX_OVERPAID);
 }
 
 #[test]
@@ -715,7 +775,7 @@ fn cannot_reduce_when_the_service_is_no_longer_offered() {
     // No listed price means no floor to reduce towards. The funder can
     // still refund the voucher at expiry.
     let f = setup();
-    let id = fund_overpaid(&f, CONSULT_PRICE * 2);
+    let id = fund_overpaid(&f, MAX_OVERPAID);
     f.registry.remove_service(&f.provider, &CONSULT);
 
     let err = f
@@ -725,14 +785,14 @@ fn cannot_reduce_when_the_service_is_no_longer_offered() {
         .unwrap()
         .unwrap();
     assert_eq!(err, VoucherError::ServiceNotOffered);
-    assert_eq!(f.voucher.get_voucher(&id).amount, CONSULT_PRICE * 2);
+    assert_eq!(f.voucher.get_voucher(&id).amount, MAX_OVERPAID);
 }
 
 #[test]
 fn reduce_uses_the_price_at_call_time() {
     // A clinic that lowers its price frees the funder to reduce further.
     let f = setup();
-    let overpaid = CONSULT_PRICE * 2;
+    let overpaid = MAX_OVERPAID;
     let id = fund_overpaid(&f, overpaid);
     let cheaper = CONSULT_PRICE / 2;
 
@@ -751,7 +811,7 @@ fn reduce_uses_the_price_at_call_time() {
 fn cannot_reduce_below_a_price_the_clinic_has_raised() {
     // The floor is the price at call time, not the price at funding time.
     let f = setup();
-    let overpaid = CONSULT_PRICE * 2;
+    let overpaid = MAX_OVERPAID;
     let id = fund_overpaid(&f, overpaid);
     let effective_at = START_TIME + MIN_PRICE_NOTICE_SECS;
     f.registry
@@ -771,7 +831,7 @@ fn cannot_reduce_below_a_price_the_clinic_has_raised() {
 #[test]
 fn a_reduced_voucher_settles_at_the_reduced_amount() {
     let f = setup();
-    let id = fund_overpaid(&f, CONSULT_PRICE * 2);
+    let id = fund_overpaid(&f, MAX_OVERPAID);
     f.voucher.reduce_amount(&f.funder, &id, &CONSULT_PRICE);
 
     f.voucher.claim(&f.provider, &id);
@@ -796,7 +856,7 @@ fn a_reduced_voucher_settles_at_the_reduced_amount() {
 #[test]
 fn amount_reduced_event_snapshot() {
     let f = setup();
-    let overpaid = CONSULT_PRICE * 2;
+    let overpaid = MAX_OVERPAID;
     let id = fund_overpaid(&f, overpaid);
 
     f.voucher.reduce_amount(&f.funder, &id, &CONSULT_PRICE);
@@ -963,7 +1023,6 @@ fn quote_equals_settlement_for_every_amount() {
     // division rounds the fee down), amounts that land exactly on a unit,
     // ordinary prices, and the largest amount the fixture can fund.
     const CHEAP: u32 = 202;
-    const CHEAP_PRICE: i128 = 1;
     // The funder starts with 1_000_000_000 units, so this is the maximum
     // amount a single voucher can carry in this fixture.
     const MAX_AMOUNT: i128 = 1_000_000_000;
@@ -989,7 +1048,9 @@ fn quote_equals_settlement_for_every_amount() {
             &f.provider,
             &CHEAP,
             &String::from_str(&f.env, "Cheap service"),
-            &CHEAP_PRICE,
+            // Priced at the amount: a voucher can be at most
+            // MAX_OVERPAY_BPS above its listed price.
+            &amount,
         );
 
         let (fee, net) = f.voucher.quote(&amount);
@@ -2554,7 +2615,7 @@ fn run_case(f: &AuthFixture, function: &str) -> std::vec::Vec<Address> {
             fund_with(&f.f, &VoucherOptions::default());
         }
         "reduce_amount" => {
-            let id = fund_overpaid(&f.f, CONSULT_PRICE * 2);
+            let id = fund_overpaid(&f.f, MAX_OVERPAID);
             voucher.reduce_amount(&f.f.funder, &id, &CONSULT_PRICE);
         }
         "redirect" => {
@@ -3670,7 +3731,7 @@ fn clawback_then_resolving_a_dispute_returns_escrow_shortfall() {
 fn clawback_then_reducing_the_amount_returns_escrow_shortfall() {
     let f = setup();
     let issuer = issuer_with_clawback(&f);
-    let id = fund_overpaid(&f, CONSULT_PRICE * 2);
+    let id = fund_overpaid(&f, MAX_OVERPAID);
     issuer.clawback(&f.voucher.address, &1);
 
     let err = f
@@ -3680,7 +3741,7 @@ fn clawback_then_reducing_the_amount_returns_escrow_shortfall() {
         .unwrap()
         .unwrap();
     assert_eq!(err, VoucherError::EscrowShortfall);
-    assert_eq!(f.voucher.get_voucher(&id).amount, CONSULT_PRICE * 2);
+    assert_eq!(f.voucher.get_voucher(&id).amount, MAX_OVERPAID);
 }
 
 #[test]
@@ -3850,20 +3911,22 @@ fn math_overflow_in_fee_calculation() {
         &fee_account,
     );
 
-    let id = voucher.create_voucher(
-        &funder,
-        &patient(&env),
-        &provider,
-        &CONSULT,
-        &i128::MAX,
-        &(START_TIME + 30 * 24 * 60 * 60),
-    );
-    // settle() calls fee_for internally which can overflow
-    voucher.claim(&provider, &id);
-    voucher.attest(&attester, &id);
-    advance(&env, DISPUTE_WINDOW + 1);
-    let err = voucher.try_settle(&id).err().unwrap().unwrap();
-    assert_eq!(err, VoucherError::MathOverflow);
+    // The overpayment cap refuses an amount this far above the listed price
+    // when the voucher is funded, so the fee arithmetic at settlement never
+    // sees it.
+    let err = voucher
+        .try_create_voucher(
+            &funder,
+            &patient(&env),
+            &provider,
+            &CONSULT,
+            &i128::MAX,
+            &(START_TIME + 30 * 24 * 60 * 60),
+        )
+        .err()
+        .unwrap()
+        .unwrap();
+    assert_eq!(err, VoucherError::AmountAboveMaxPrice);
 }
 
 // ----- clinic capacity and per-clinic escrow cap -----
@@ -4102,8 +4165,9 @@ fn split_resolution_releases_open_escrow_and_exposure() {
 #[test]
 fn reducing_a_voucher_lowers_the_clinics_exposure() {
     let f = setup();
-    fund_overpaid(&f, CONSULT_PRICE * 2);
-    let id = fund_overpaid(&f, CONSULT_PRICE * 2);
+    let overpaid = CONSULT_PRICE * 6 / 5;
+    fund_overpaid(&f, overpaid);
+    let id = fund_overpaid(&f, overpaid);
 
     f.voucher.reduce_amount(&f.funder, &id, &CONSULT_PRICE);
 
@@ -4111,9 +4175,9 @@ fn reducing_a_voucher_lowers_the_clinics_exposure() {
         f.voucher.get_exposure(&f.provider),
         Exposure {
             vouchers: 2,
-            value: 3 * CONSULT_PRICE
+            value: overpaid + CONSULT_PRICE
         }
     );
     let (open_escrow, _) = f.voucher.escrow_summary();
-    assert_eq!(open_escrow, 3 * CONSULT_PRICE);
+    assert_eq!(open_escrow, overpaid + CONSULT_PRICE);
 }
