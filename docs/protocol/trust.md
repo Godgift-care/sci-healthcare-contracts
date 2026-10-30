@@ -18,7 +18,7 @@ Everything below is about narrowing the room to lie, not eliminating it.
 These hold regardless of who behaves badly:
 
 1. **Funds can only reach the named clinic or return to the funder.** There is no third destination. Not the admin, not the protocol, not an attester.
-2. **The clinic being paid cannot attest its own delivery.** The contract checks this explicitly and rejects it, even if that clinic address has been granted an attester role.
+2. **A clinic cannot fund a voucher to itself or attest its own delivery.** The contract rejects both, even if that clinic address has been granted an attester role.
 3. **A clinic cannot be paid without an attestation.** No path exists from `Funded` or `Claimed` straight to `Settled`.
 4. **Money cannot be released early.** `settle` fails while the dispute window is open.
 5. **An unattested voucher always returns to the funder.** Unclaimed, it is refundable at expiry — or immediately if the clinic is no longer active. Claimed but never attested, seven days after expiry. Nobody can prevent that — `refund` needs no authorisation.
