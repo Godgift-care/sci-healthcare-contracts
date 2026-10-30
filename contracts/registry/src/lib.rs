@@ -46,6 +46,15 @@ pub const MIN_PRICE_NOTICE_SECS: u64 = 24 * 60 * 60;
 /// Most providers one `list_providers` call may return.
 pub use storage::MAX_PROVIDERS_PAGE;
 
+/// A scheduled price at least this many times the current one is treated as
+/// a probable typo and rejected unless the caller passes
+/// `confirm_large_change = true`.
+///
+/// The comparison is against the price funders see today, not against a price
+/// that is already scheduled. Lowering a price, or scheduling the current
+/// price to call a change off, never needs the flag.
+pub const MAX_PRICE_JUMP: u32 = 5;
+
 #[contract]
 pub struct Registry;
 
@@ -264,12 +273,18 @@ impl Registry {
     /// returning the current price; from then on it returns this one.
     /// Scheduling again replaces the earlier schedule, and scheduling the
     /// current price is how a clinic calls one off.
+    ///
+    /// A price of `MAX_PRICE_JUMP` times the current price or more is rejected
+    /// with `LargePriceJumpNeedsConfirmation` unless `confirm_large_change`
+    /// is `true`. A 5x increase is almost always a mistyped zero, and every
+    /// funder that day would pay it, so the clinic has to say so explicitly.
     pub fn schedule_service_price(
         env: Env,
         provider_addr: Address,
         code: u32,
         price: i128,
         effective_at: u64,
+        confirm_large_change: bool,
     ) -> Result<(), RegistryError> {
         provider_addr.require_auth();
 
@@ -281,6 +296,16 @@ impl Registry {
             return Err(RegistryError::ProviderNotActive);
         }
         let mut item = read_service(&env, &provider_addr, code)?;
+
+        // A jump of MAX_PRICE_JUMP times or more is treated as a typo until
+        // the clinic acknowledges it. `checked_mul` means an overflow is also
+        // a large jump rather than a panic.
+        let threshold = item.price.checked_mul(MAX_PRICE_JUMP as i128);
+        match threshold {
+            Some(limit) if price < limit => {}
+            _ if confirm_large_change => {}
+            _ => return Err(RegistryError::LargePriceJumpNeedsConfirmation),
+        }
 
         let earliest = env
             .ledger()

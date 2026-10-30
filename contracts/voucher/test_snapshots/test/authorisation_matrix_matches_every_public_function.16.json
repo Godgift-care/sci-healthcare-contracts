@@ -160,16 +160,13 @@
           "function": {
             "contract_fn": {
               "contract_address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAATYON",
-              "function_name": "set_dispute_window_bounds",
+              "function_name": "set_attestation_cap",
               "args": [
                 {
                   "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM"
                 },
                 {
-                  "u64": "60"
-                },
-                {
-                  "u64": "3600"
+                  "u32": 10
                 }
               ]
             }
@@ -695,6 +692,18 @@
                       "key": {
                         "vec": [
                           {
+                            "symbol": "AttestationCap"
+                          }
+                        ]
+                      },
+                      "val": {
+                        "u32": 10
+                      }
+                    },
+                    {
+                      "key": {
+                        "vec": [
+                          {
                             "symbol": "Config"
                           }
                         ]
@@ -764,25 +773,6 @@
                             "val": {
                               "address": "CDS3FDGQ4JA2V3F26Y4BMWWJEC5TT26RJBN7KIQKUMVO2MAOCMDTSZ7A"
                             }
-                          }
-                        ]
-                      }
-                    },
-                    {
-                      "key": {
-                        "vec": [
-                          {
-                            "symbol": "DisputeWindowBounds"
-                          }
-                        ]
-                      },
-                      "val": {
-                        "vec": [
-                          {
-                            "u64": "60"
-                          },
-                          {
-                            "u64": "3600"
                           }
                         ]
                       }
@@ -1053,7 +1043,7 @@
           "v0": {
             "topics": [
               {
-                "symbol": "dispute_window_bounds_changed"
+                "symbol": "attestation_cap_changed"
               },
               {
                 "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM"
@@ -1063,18 +1053,10 @@
               "map": [
                 {
                   "key": {
-                    "symbol": "max"
+                    "symbol": "cap"
                   },
                   "val": {
-                    "u64": "3600"
-                  }
-                },
-                {
-                  "key": {
-                    "symbol": "min"
-                  },
-                  "val": {
-                    "u64": "60"
+                    "u32": 10
                   }
                 }
               ]
