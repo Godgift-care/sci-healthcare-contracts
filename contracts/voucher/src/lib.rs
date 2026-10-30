@@ -52,7 +52,7 @@ use soroban_sdk::{contract, contractimpl, token, Address, Bytes, BytesN, Env, St
 
 #[allow(unused_imports)]
 pub use events::{
-    AdminChanged, AdminProposed, AttestationCapChanged, DisputeResolved,
+    AdminChanged, AdminProposed, AttestationCapChanged, ClaimReleased, DisputeResolved,
     DisputeWindowBoundsChanged, EscrowCapChanged, Initialized, VoucherAmountReduced,
     VoucherAttested, VoucherClaimed, VoucherCreated, VoucherDisputed, VoucherRedirected,
     VoucherRefunded, VoucherSettled,
@@ -374,6 +374,37 @@ impl VoucherEscrow {
         secret: Bytes,
     ) -> Result<(), VoucherError> {
         Self::claim_voucher(&env, provider, voucher_id, Some(secret))
+    }
+
+    /// Provider releases an active claim when the patient did not attend or
+    /// the claim was made in error.
+    ///
+    /// Resets the voucher status back to `Funded` and clears `claimed_at`,
+    /// allowing the voucher to be claimed again or refunded once expired.
+    /// Rejects if called by anyone other than the assigned provider
+    /// (`NotAuthorized`) or if the voucher is not in `Claimed` status
+    /// (`InvalidStatus`), such as if it is already attested, funded, or refunded.
+    pub fn release_claim(env: Env, provider: Address, voucher_id: u64) -> Result<(), VoucherError> {
+        provider.require_auth();
+
+        let mut voucher = read_voucher(&env, voucher_id)?;
+        if voucher.provider != provider {
+            return Err(VoucherError::NotAuthorized);
+        }
+        if voucher.status != VoucherStatus::Claimed {
+            return Err(VoucherError::InvalidStatus);
+        }
+
+        voucher.status = VoucherStatus::Funded;
+        voucher.claimed_at = 0;
+        write_voucher(&env, &voucher);
+
+        ClaimReleased {
+            provider,
+            voucher_id,
+        }
+        .publish(&env);
+        Ok(())
     }
 
     /// Attests that the service was delivered, opening the dispute window.

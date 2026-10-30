@@ -1139,6 +1139,155 @@ fn cannot_claim_twice() {
     assert_eq!(err, VoucherError::InvalidStatus);
 }
 
+// ----- release claim -----
+
+#[test]
+fn release_claim_resets_voucher_to_funded_and_clears_claimed_at() {
+    let f = setup();
+    let id = fund(&f);
+    f.voucher.claim(&f.provider, &id);
+
+    let claimed = f.voucher.get_voucher(&id);
+    assert_eq!(claimed.status, VoucherStatus::Claimed);
+    assert_eq!(claimed.claimed_at, START_TIME);
+
+    f.voucher.release_claim(&f.provider, &id);
+
+    let e = one_event(&f);
+    assert_name_and_topic(&e, "claim_released");
+    assert_eq!(field_u64(&e, "voucher_id"), id);
+    assert_eq!(field_names(&e), ["voucher_id"]);
+
+    let released = f.voucher.get_voucher(&id);
+    assert_eq!(released.status, VoucherStatus::Funded);
+    assert_eq!(released.claimed_at, 0);
+}
+
+#[test]
+fn non_provider_cannot_release_claim() {
+    let f = setup();
+    let id = fund(&f);
+    f.voucher.claim(&f.provider, &id);
+
+    let impostor = Address::generate(&f.env);
+    let err = f
+        .voucher
+        .try_release_claim(&impostor, &id)
+        .err()
+        .unwrap()
+        .unwrap();
+    assert_eq!(err, VoucherError::NotAuthorized);
+
+    let err = f
+        .voucher
+        .try_release_claim(&f.funder, &id)
+        .err()
+        .unwrap()
+        .unwrap();
+    assert_eq!(err, VoucherError::NotAuthorized);
+
+    assert_eq!(f.voucher.get_voucher(&id).status, VoucherStatus::Claimed);
+}
+
+#[test]
+fn cannot_release_claim_when_already_attested() {
+    let f = setup();
+    let id = fund(&f);
+    f.voucher.claim(&f.provider, &id);
+    f.voucher.attest(&f.attester, &id);
+
+    let err = f
+        .voucher
+        .try_release_claim(&f.provider, &id)
+        .err()
+        .unwrap()
+        .unwrap();
+    assert_eq!(err, VoucherError::InvalidStatus);
+    assert_eq!(f.voucher.get_voucher(&id).status, VoucherStatus::Attested);
+}
+
+#[test]
+fn cannot_release_claim_when_not_claimed() {
+    let f = setup();
+    let id = fund(&f);
+
+    // Funded state
+    let err = f
+        .voucher
+        .try_release_claim(&f.provider, &id)
+        .err()
+        .unwrap()
+        .unwrap();
+    assert_eq!(err, VoucherError::InvalidStatus);
+
+    // Refunded state
+    advance(&f.env, 31 * 24 * 60 * 60);
+    f.voucher.refund(&id);
+    assert_eq!(f.voucher.get_voucher(&id).status, VoucherStatus::Refunded);
+
+    let err = f
+        .voucher
+        .try_release_claim(&f.provider, &id)
+        .err()
+        .unwrap()
+        .unwrap();
+    assert_eq!(err, VoucherError::InvalidStatus);
+}
+
+#[test]
+fn released_voucher_can_be_reclaimed_or_refunded() {
+    let f = setup();
+    let id = fund(&f);
+    f.voucher.claim(&f.provider, &id);
+    f.voucher.release_claim(&f.provider, &id);
+
+    // Reclaim post-release
+    f.voucher.claim(&f.provider, &id);
+    let reclaimed = f.voucher.get_voucher(&id);
+    assert_eq!(reclaimed.status, VoucherStatus::Claimed);
+    assert_ne!(reclaimed.claimed_at, 0);
+
+    // Release again
+    f.voucher.release_claim(&f.provider, &id);
+    assert_eq!(f.voucher.get_voucher(&id).status, VoucherStatus::Funded);
+
+    // Refund post-release once expired
+    advance(&f.env, 31 * 24 * 60 * 60);
+    f.voucher.refund(&id);
+    assert_eq!(f.voucher.get_voucher(&id).status, VoucherStatus::Refunded);
+}
+
+#[test]
+fn released_voucher_with_presence_commitment_can_be_reclaimed_with_proof() {
+    let f = setup();
+    let secret = Bytes::from_slice(&f.env, b"patient secret");
+    let id = fund_with(
+        &f,
+        &VoucherOptions {
+            presence_commitment: Some(commit(&f.env, &secret)),
+            dispute_window: None,
+        },
+    );
+    f.voucher.claim_with_proof(&f.provider, &id, &secret);
+    assert_eq!(f.voucher.get_voucher(&id).status, VoucherStatus::Claimed);
+
+    f.voucher.release_claim(&f.provider, &id);
+    assert_eq!(f.voucher.get_voucher(&id).status, VoucherStatus::Funded);
+
+    // Cannot plain claim
+    let err = f
+        .voucher
+        .try_claim(&f.provider, &id)
+        .err()
+        .unwrap()
+        .unwrap();
+    assert_eq!(err, VoucherError::PresenceProofRequired);
+
+    // Reclaim with proof succeeds
+    f.voucher.claim_with_proof(&f.provider, &id, &secret);
+    assert_eq!(f.voucher.get_voucher(&id).status, VoucherStatus::Claimed);
+}
+
 // ----- attestation -----
 
 #[test]
@@ -2411,6 +2560,10 @@ const AUTH_MATRIX: &[AuthCase] = &[
         auth: signer("`provider`", provider_addr),
     },
     AuthCase {
+        function: "release_claim",
+        auth: signer("`provider`", provider_addr),
+    },
+    AuthCase {
         function: "attest",
         auth: signer("`attester`", attester_addr),
     },
@@ -2589,6 +2742,11 @@ fn run_case(f: &AuthFixture, function: &str) -> std::vec::Vec<Address> {
                 },
             );
             voucher.claim_with_proof(&f.f.provider, &id, &secret);
+        }
+        "release_claim" => {
+            let id = fund(&f.f);
+            voucher.claim(&f.f.provider, &id);
+            voucher.release_claim(&f.f.provider, &id);
         }
         "set_dispute_window_bounds" => {
             voucher.set_dispute_window_bounds(&f.f.admin, &60, &(60 * 60));
