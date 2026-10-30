@@ -29,6 +29,8 @@ pub struct ProviderStatusChanged {
     #[topic]
     pub provider: Address,
     pub status: ProviderStatus,
+    /// Why the status changed, as documented in `docs/protocol/trust.md`.
+    pub reason_code: u32,
 }
 
 #[contractevent]

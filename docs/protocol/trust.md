@@ -50,6 +50,23 @@ The admin key is a single point of failure today. Moving it to a multisig is a d
 
 If a clinic is verified that should not have been, funders can send money to it. Verification is an off-chain process — checking a licence, visiting a site — and the registry only records its outcome.
 
+Every status change in the registry records **why**, as a `reason_code` stored on the provider and emitted in `provider_status_changed`. A suspended clinic reads its code and knows what to fix; a funder reading the registry's history can tell a fraud suspension from expired paperwork. The registry is deliberately dumb about the values — it stores and publishes the code, it does not interpret it — so apps must map the codes themselves:
+
+#### Reason codes
+
+| Code | Meaning |
+| --- | --- |
+| 0 | No status change yet (set at registration) |
+| 1 | Verified |
+| 2 | Documents expired |
+| 3 | Complaint under review |
+| 4 | Fraud |
+| 5 | Closed (given when a clinic retires itself) |
+
+Codes are **added, never renumbered or reused**. A retired code keeps its meaning for every deployment and every historical event, so an audit of last year's suspensions still reads correctly. New meanings get new codes appended here in the same pull request that first emits them.
+
+The other thing the registry records about status is what it refuses: `set_provider_status` only accepts `Pending → Active`, `Pending → Suspended`, `Active → Suspended` and `Suspended → Active` (see the [status lifecycle](../developers/contracts.md#status-lifecycle)), so the event history contains no no-op changes and no backwards moves nobody can explain. A clinic that closes retires itself; nothing — not even the admin — can bring a retired clinic back, so no reason code is ever an exit from `Retired`.
+
 ### The settlement token's issuer
 
 USDC is a regulated stablecoin, and its issuer can **claw back** funds from any balance and **freeze** (deauthorize) one. Escrowed vouchers sit in the voucher contract's own token balance, so the issuer can reach them; nothing in the contract can prevent that. What the contract does is behave predictably when it happens:
