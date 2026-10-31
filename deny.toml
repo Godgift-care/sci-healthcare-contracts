@@ -21,9 +21,28 @@ all-features = true
 
 [advisories]
 version = 2
-# Nothing is ignored today. Any future exception must be listed here with a
-# `reason` string, and the reason is reviewed like any other code.
-ignore = []
+# Any exception must be listed here with a `reason` string, and the reason is
+# reviewed like any other code.
+ignore = [
+    # crypto-bigint 0.5.5: several operations meant to be constant-time can
+    # take secret-dependent branches.
+    #
+    # Not reachable from the deployed contracts. The wasm graph does not
+    # contain it at all:
+    #     cargo tree -p sci-voucher --target wasm32v1-none --edges normal     #         -i crypto-bigint   ->   "nothing to print"
+    # It enters only through soroban-env-host (k256 -> ecdsa ->
+    # elliptic-curve), which is the local test and simulation harness, so no
+    # on-chain code path executes it.
+    #
+    # There is also no upgrade available to take: elliptic-curve 0.13.8
+    # requires crypto-bigint ^0.5, the resolution is pinned transitively by
+    # soroban-sdk =29.0.1, and the version the advisory recommends (0.7.6)
+    # was yanked by its author.
+    #
+    # Revisit when soroban-sdk ships an elliptic-curve built on
+    # crypto-bigint >=0.7, then drop this entry.
+    { id = "RUSTSEC-2026-0387", reason = "test-harness-only via soroban-env-host; absent from the wasm32v1-none graph; no non-yanked upgrade reachable under soroban-sdk 29.0.1" },
+]
 # Only report crates that are unmaintained when they are workspace members.
 # The transitive graph carries unmaintained helper crates pulled in by the
 # Soroban SDK, and flagging all of them buries the signal.
