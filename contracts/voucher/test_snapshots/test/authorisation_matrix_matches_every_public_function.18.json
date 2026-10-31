@@ -160,13 +160,13 @@
           "function": {
             "contract_fn": {
               "contract_address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAATYON",
-              "function_name": "propose_admin",
+              "function_name": "set_max_escrow_per_provider",
               "args": [
                 {
                   "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM"
                 },
                 {
-                  "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAXI7N"
+                  "i128": "30000000"
                 }
               ]
             }
@@ -769,12 +769,12 @@
                       "key": {
                         "vec": [
                           {
-                            "symbol": "PendingAdmin"
+                            "symbol": "EscrowCap"
                           }
                         ]
                       },
                       "val": {
-                        "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAXI7N"
+                        "i128": "30000000"
                       }
                     }
                   ]
@@ -1043,7 +1043,7 @@
           "v0": {
             "topics": [
               {
-                "symbol": "admin_proposed"
+                "symbol": "escrow_cap_changed"
               },
               {
                 "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM"
@@ -1053,10 +1053,10 @@
               "map": [
                 {
                   "key": {
-                    "symbol": "pending_admin"
+                    "symbol": "max"
                   },
                   "val": {
-                    "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAXI7N"
+                    "i128": "30000000"
                   }
                 }
               ]

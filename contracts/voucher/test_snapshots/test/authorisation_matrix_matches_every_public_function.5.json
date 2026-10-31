@@ -175,7 +175,7 @@
                   "u32": 101
                 },
                 {
-                  "i128": "60000000"
+                  "i128": "30000000"
                 },
                 {
                   "u64": "1702592000"
@@ -197,7 +197,7 @@
                       "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAATYON"
                     },
                     {
-                      "i128": "60000000"
+                      "i128": "30000000"
                     }
                   ]
                 }
@@ -215,7 +215,7 @@
           "function": {
             "contract_fn": {
               "contract_address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAATYON",
-              "function_name": "reduce_amount",
+              "function_name": "reassign",
               "args": [
                 {
                   "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFCT4"
@@ -224,7 +224,7 @@
                   "u64": "1"
                 },
                 {
-                  "i128": "30000000"
+                  "bytes": "0707070707070707070707070707070707070707070707070707070707070707"
                 }
               ]
             }
@@ -819,7 +819,7 @@
                     "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFCT4"
                   },
                   {
-                    "bytes": "0909090909090909090909090909090909090909090909090909090909090909"
+                    "bytes": "0707070707070707070707070707070707070707070707070707070707070707"
                   },
                   {
                     "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHK3M"
@@ -1285,42 +1285,13 @@
     {
       "event": {
         "ext": "v0",
-        "contract_id": "CDS3FDGQ4JA2V3F26Y4BMWWJEC5TT26RJBN7KIQKUMVO2MAOCMDTSZ7A",
-        "type": "contract",
-        "body": {
-          "v0": {
-            "topics": [
-              {
-                "symbol": "transfer"
-              },
-              {
-                "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAATYON"
-              },
-              {
-                "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFCT4"
-              },
-              {
-                "string": "aaa:GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAPP4V"
-              }
-            ],
-            "data": {
-              "i128": "30000000"
-            }
-          }
-        }
-      },
-      "failed_call": false
-    },
-    {
-      "event": {
-        "ext": "v0",
         "contract_id": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAATYON",
         "type": "contract",
         "body": {
           "v0": {
             "topics": [
               {
-                "symbol": "voucher_amount_reduced"
+                "symbol": "voucher_reassigned"
               },
               {
                 "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFCT4"
@@ -1330,34 +1301,18 @@
               "map": [
                 {
                   "key": {
-                    "symbol": "amount"
+                    "symbol": "new_ref"
                   },
                   "val": {
-                    "i128": "30000000"
+                    "bytes": "0707070707070707070707070707070707070707070707070707070707070707"
                   }
                 },
                 {
                   "key": {
-                    "symbol": "previous_amount"
+                    "symbol": "old_ref"
                   },
                   "val": {
-                    "i128": "60000000"
-                  }
-                },
-                {
-                  "key": {
-                    "symbol": "refunded"
-                  },
-                  "val": {
-                    "i128": "30000000"
-                  }
-                },
-                {
-                  "key": {
-                    "symbol": "service_code"
-                  },
-                  "val": {
-                    "u32": 101
+                    "bytes": "0909090909090909090909090909090909090909090909090909090909090909"
                   }
                 },
                 {
