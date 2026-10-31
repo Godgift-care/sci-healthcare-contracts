@@ -99,6 +99,9 @@
                 },
                 {
                   "u32": 1
+                },
+                {
+                  "u32": 0
                 }
               ]
             }
@@ -124,6 +127,9 @@
                 },
                 {
                   "u32": 1
+                },
+                {
+                  "u32": 0
                 }
               ]
             }
@@ -150,6 +156,9 @@
                 },
                 {
                   "u32": 2
+                },
+                {
+                  "u32": 0
                 }
               ]
             }
@@ -176,6 +185,9 @@
                 },
                 {
                   "u32": 1
+                },
+                {
+                  "u32": 0
                 }
               ]
             }
@@ -330,6 +342,14 @@
                   },
                   {
                     "key": {
+                      "symbol": "reason_code"
+                    },
+                    "val": {
+                      "u32": 0
+                    }
+                  },
+                  {
+                    "key": {
                       "symbol": "registered_at"
                     },
                     "val": {
@@ -398,6 +418,14 @@
                   },
                   {
                     "key": {
+                      "symbol": "reason_code"
+                    },
+                    "val": {
+                      "u32": 0
+                    }
+                  },
+                  {
+                    "key": {
                       "symbol": "registered_at"
                     },
                     "val": {
@@ -462,6 +490,14 @@
                     },
                     "val": {
                       "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAK3IM"
+                    }
+                  },
+                  {
+                    "key": {
+                      "symbol": "reason_code"
+                    },
+                    "val": {
+                      "u32": 0
                     }
                   },
                   {
