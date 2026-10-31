@@ -160,13 +160,16 @@
           "function": {
             "contract_fn": {
               "contract_address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAATYON",
-              "function_name": "set_max_escrow_per_provider",
+              "function_name": "set_dispute_window_bounds",
               "args": [
                 {
                   "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM"
                 },
                 {
-                  "i128": "30000000"
+                  "u64": "60"
+                },
+                {
+                  "u64": "3600"
                 }
               ]
             }
@@ -769,12 +772,19 @@
                       "key": {
                         "vec": [
                           {
-                            "symbol": "EscrowCap"
+                            "symbol": "DisputeWindowBounds"
                           }
                         ]
                       },
                       "val": {
-                        "i128": "30000000"
+                        "vec": [
+                          {
+                            "u64": "60"
+                          },
+                          {
+                            "u64": "3600"
+                          }
+                        ]
                       }
                     }
                   ]
@@ -1043,7 +1053,7 @@
           "v0": {
             "topics": [
               {
-                "symbol": "escrow_cap_changed"
+                "symbol": "dispute_window_bounds_changed"
               },
               {
                 "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM"
@@ -1056,7 +1066,15 @@
                     "symbol": "max"
                   },
                   "val": {
-                    "i128": "30000000"
+                    "u64": "3600"
+                  }
+                },
+                {
+                  "key": {
+                    "symbol": "min"
+                  },
+                  "val": {
+                    "u64": "60"
                   }
                 }
               ]

@@ -44,6 +44,14 @@ pub struct VoucherClaimed {
 
 #[contractevent]
 #[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ClaimReleased {
+    #[topic]
+    pub provider: Address,
+    pub voucher_id: u64,
+}
+
+#[contractevent]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct VoucherAttested {
     #[topic]
     pub attester: Address,
