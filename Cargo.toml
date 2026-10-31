@@ -16,7 +16,7 @@ license = "Apache-2.0"
 repository = "https://github.com/Godgift-care/sci-healthcare-contracts"
 
 [workspace.dependencies]
-soroban-sdk = "27.0.6"
+soroban-sdk = "29.0.1"
 # The path dependencies carry a version so that `cargo deny` does not read
 # them as wildcard requirements (see deny.toml). Keep these in step with
 # workspace.package.version when the workspace version is bumped.
