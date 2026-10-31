@@ -160,7 +160,7 @@
           "function": {
             "contract_fn": {
               "contract_address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAATYON",
-              "function_name": "create_voucher_with_options",
+              "function_name": "create_voucher",
               "args": [
                 {
                   "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFCT4"
@@ -179,24 +179,6 @@
                 },
                 {
                   "u64": "1702592000"
-                },
-                {
-                  "map": [
-                    {
-                      "key": {
-                        "symbol": "dispute_window"
-                      },
-                      "val": "void"
-                    },
-                    {
-                      "key": {
-                        "symbol": "presence_commitment"
-                      },
-                      "val": {
-                        "bytes": "98674f7a8bc35ee7bd499a22673abd361b19a3ab6de9b181c0af357082517e61"
-                      }
-                    }
-                  ]
                 }
               ]
             }
@@ -233,16 +215,13 @@
           "function": {
             "contract_fn": {
               "contract_address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAATYON",
-              "function_name": "claim_with_proof",
+              "function_name": "claim",
               "args": [
                 {
                   "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHK3M"
                 },
                 {
                   "u64": "1"
-                },
-                {
-                  "bytes": "70617469656e7420736563726574"
                 }
               ]
             }
@@ -803,48 +782,6 @@
                     },
                     "val": {
                       "u32": 1
-                    }
-                  }
-                ]
-              }
-            }
-          },
-          "ext": "v0"
-        },
-        "live_until": 1555200
-      },
-      {
-        "entry": {
-          "last_modified_ledger_seq": 0,
-          "data": {
-            "contract_data": {
-              "ext": "v0",
-              "contract": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAATYON",
-              "key": {
-                "vec": [
-                  {
-                    "symbol": "Options"
-                  },
-                  {
-                    "u64": "1"
-                  }
-                ]
-              },
-              "durability": "persistent",
-              "val": {
-                "map": [
-                  {
-                    "key": {
-                      "symbol": "dispute_window"
-                    },
-                    "val": "void"
-                  },
-                  {
-                    "key": {
-                      "symbol": "presence_commitment"
-                    },
-                    "val": {
-                      "bytes": "98674f7a8bc35ee7bd499a22673abd361b19a3ab6de9b181c0af357082517e61"
                     }
                   }
                 ]

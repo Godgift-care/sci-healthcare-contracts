@@ -245,6 +245,100 @@ fn voucher_ids_increment() {
 }
 
 #[test]
+fn create_voucher_at_price_funds_at_the_agreed_price() {
+    let f = setup();
+    let before = f.token.balance(&f.funder);
+
+    let id = f.voucher.create_voucher_at_price(
+        &f.funder,
+        &patient(&f.env),
+        &f.provider,
+        &CONSULT,
+        &CONSULT_PRICE,
+        &(START_TIME + 30 * 24 * 60 * 60),
+        &CONSULT_PRICE,
+    );
+
+    let voucher = f.voucher.get_voucher(&id);
+    assert_eq!(voucher.status, VoucherStatus::Funded);
+    assert_eq!(voucher.amount, CONSULT_PRICE);
+    assert_eq!(f.token.balance(&f.funder), before - CONSULT_PRICE);
+    assert_escrow(&f, CONSULT_PRICE);
+}
+
+#[test]
+fn create_voucher_at_price_rejects_a_raised_price() {
+    let f = setup();
+    let before = f.token.balance(&f.funder);
+    let effective_at = START_TIME + MIN_PRICE_NOTICE_SECS;
+
+    f.registry.schedule_service_price(
+        &f.provider,
+        &CONSULT,
+        &(CONSULT_PRICE * 2),
+        &effective_at,
+        &false,
+    );
+    advance(&f.env, MIN_PRICE_NOTICE_SECS);
+
+    let err = f
+        .voucher
+        .try_create_voucher_at_price(
+            &f.funder,
+            &patient(&f.env),
+            &f.provider,
+            &CONSULT,
+            &CONSULT_PRICE,
+            &(START_TIME + 30 * 24 * 60 * 60),
+            &CONSULT_PRICE,
+        )
+        .err()
+        .unwrap()
+        .unwrap();
+    assert_eq!(err, VoucherError::PriceChanged);
+
+    // Nothing moved and no voucher was written.
+    assert_eq!(f.token.balance(&f.funder), before);
+    assert_escrow(&f, 0);
+    assert_eq!(f.voucher.next_voucher_id(), 1);
+}
+
+#[test]
+fn create_voucher_at_price_rejects_a_lowered_price() {
+    let f = setup();
+    // The clinic lowers the price between the quote and the signing call. The
+    // funder did not agree to the new terms, so the call is rejected even
+    // though the amount would still cover it.
+    f.registry.upsert_service(
+        &f.provider,
+        &CONSULT,
+        &String::from_str(&f.env, "Outpatient consult"),
+        &(CONSULT_PRICE / 2),
+    );
+
+    let err = f
+        .voucher
+        .try_create_voucher_at_price(
+            &f.funder,
+            &patient(&f.env),
+            &f.provider,
+            &CONSULT,
+            &CONSULT_PRICE,
+            &(START_TIME + 30 * 24 * 60 * 60),
+            &CONSULT_PRICE,
+        )
+        .err()
+        .unwrap()
+        .unwrap();
+    assert_eq!(err, VoucherError::PriceChanged);
+
+    // The old entry point is unchanged: it funds at the current price.
+    let id = fund(&f);
+    assert_eq!(f.voucher.get_voucher(&id).amount, CONSULT_PRICE);
+    assert!(f.token.balance(&f.funder) > 0);
+}
+
+#[test]
 fn funder_need_not_be_beneficiary() {
     // A relative abroad funds care for someone at home. Same code path.
     let f = setup();
@@ -462,8 +556,13 @@ fn pausing_a_service_does_not_affect_funded_vouchers() {
 fn scheduled_price_rise_applies_to_funding_at_the_effective_time() {
     let f = setup();
     let effective_at = START_TIME + MIN_PRICE_NOTICE_SECS;
-    f.registry
-        .schedule_service_price(&f.provider, &CONSULT, &(CONSULT_PRICE * 2), &effective_at);
+    f.registry.schedule_service_price(
+        &f.provider,
+        &CONSULT,
+        &(CONSULT_PRICE * 2),
+        &effective_at,
+        &false,
+    );
 
     // Before the effective time the listed price still funds.
     assert_eq!(fund(&f), 1);
@@ -754,8 +853,13 @@ fn cannot_reduce_below_a_price_the_clinic_has_raised() {
     let overpaid = CONSULT_PRICE * 2;
     let id = fund_overpaid(&f, overpaid);
     let effective_at = START_TIME + MIN_PRICE_NOTICE_SECS;
-    f.registry
-        .schedule_service_price(&f.provider, &CONSULT, &(CONSULT_PRICE * 3), &effective_at);
+    f.registry.schedule_service_price(
+        &f.provider,
+        &CONSULT,
+        &(CONSULT_PRICE * 3),
+        &effective_at,
+        &false,
+    );
     f.env.ledger().with_mut(|li| li.timestamp = effective_at);
 
     let err = f
@@ -2395,6 +2499,10 @@ const AUTH_MATRIX: &[AuthCase] = &[
         auth: signer("`funder`", funder_addr),
     },
     AuthCase {
+        function: "create_voucher_at_price",
+        auth: signer("`funder`", funder_addr),
+    },
+    AuthCase {
         function: "reduce_amount",
         auth: signer("`funder`", funder_addr),
     },
@@ -2552,6 +2660,17 @@ fn run_case(f: &AuthFixture, function: &str) -> std::vec::Vec<Address> {
         }
         "create_voucher_with_options" => {
             fund_with(&f.f, &VoucherOptions::default());
+        }
+        "create_voucher_at_price" => {
+            voucher.create_voucher_at_price(
+                &f.f.funder,
+                &patient(env),
+                &f.f.provider,
+                &CONSULT,
+                &CONSULT_PRICE,
+                &(START_TIME + 30 * 24 * 60 * 60),
+                &CONSULT_PRICE,
+            );
         }
         "reduce_amount" => {
             let id = fund_overpaid(&f.f, CONSULT_PRICE * 2);
@@ -4117,3 +4236,5 @@ fn reducing_a_voucher_lowers_the_clinics_exposure() {
     let (open_escrow, _) = f.voucher.escrow_summary();
     assert_eq!(open_escrow, 3 * CONSULT_PRICE);
 }
+#[cfg(test)]
+mod costs;

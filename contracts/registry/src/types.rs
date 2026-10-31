@@ -109,6 +109,10 @@ pub enum RegistryError {
     /// `upsert_service` may lower a listed price at once, but a rise has to
     /// go through `schedule_service_price`.
     PriceIncreaseNeedsNotice = 13,
+    /// A scheduled price of `MAX_PRICE_JUMP` times the current price or more
+    /// needs the explicit `confirm_large_change` flag. Large jumps are almost
+    /// always a typo, and a typo here overcharges every funder that day.
+    LargePriceJumpNeedsConfirmation = 14,
 }
 
 /// Maps the shared helpers' failures onto this contract's error numbers, so

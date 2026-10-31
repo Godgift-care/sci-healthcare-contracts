@@ -234,7 +234,7 @@ npm run lifecycle -- settle <voucher-id>         # finish a voucher later, if th
 | `register_provider(owner, name, country)` | owner | Self-registers a clinic as `Pending` |
 | `set_provider_status(admin, provider, status)` | admin | `Pending` → `Active` → `Suspended` |
 | `upsert_service(provider, code, label, price)` | provider | Lists a billable service or lowers its price; requires `Active` |
-| `schedule_service_price(provider, code, price, effective_at)` | provider | Schedules a price change at least 24 h ahead |
+| `schedule_service_price(provider, code, price, effective_at, confirm_large_change)` | provider | Schedules a price change at least 24 h ahead; a 5× rise needs `confirm_large_change = true` |
 | `remove_service(provider, code)` | provider | Delists a service |
 | `set_service_available(provider, code, available)` | provider | Pauses or resumes a service without delisting it |
 | `add_attester(admin, attester)` | admin | Grants attester rights |
@@ -253,6 +253,7 @@ npm run lifecycle -- settle <voucher-id>         # finish a voucher later, if th
 | --- | --- | --- |
 | `initialize(admin, registry, receipt_book, token, dispute_window, fee_bps, attester_share_bps, fee_account)` | once | Fixes protocol config; fee capped at 10%, attester share at the fee |
 | `create_voucher(funder, beneficiary_ref, provider, service_code, amount, expires_at)` | funder | Escrows funds against one service at one active provider |
+| `create_voucher_at_price(funder, beneficiary_ref, provider, service_code, amount, expires_at, expected_price)` | funder | Same, but fails with `PriceChanged` if the registry price moved since the quote |
 | `reduce_amount(funder, voucher_id, new_amount)` | funder | Returns an overpayment to the funder while the voucher is still `Funded` |
 | `claim(provider, voucher_id)` | provider | Marks the patient as presented |
 | `attest(attester, voucher_id)` | attester | Confirms delivery; opens the dispute window |
