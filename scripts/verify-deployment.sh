@@ -13,6 +13,7 @@
 # Environment (expected values; defaults are what scripts/deploy.sh uses):
 #   FEE_BPS          expected protocol fee           (default 100)
 #   DISPUTE_WINDOW   expected dispute window, s      (default 259200)
+#   MAX_VOUCHER_AMOUNT expected single voucher cap   (default 1000000000)
 #   FEE_ACCOUNT      expected fee account            (default ADMIN_ADDRESS)
 #   SOURCE           identity used to simulate reads (default sci-admin)
 #
@@ -62,6 +63,7 @@ done
 SOURCE="${SOURCE:-sci-admin}"
 EXPECT_FEE_BPS="${FEE_BPS:-100}"
 EXPECT_WINDOW="${DISPUTE_WINDOW:-259200}"
+EXPECT_MAX_VOUCHER_AMOUNT="${MAX_VOUCHER_AMOUNT:-1000000000}"
 EXPECT_FEE_ACCOUNT="${FEE_ACCOUNT:-$ADMIN_ADDRESS}"
 
 view() { # <contract-id> <function> -> raw JSON, or nothing if the call fails
@@ -92,6 +94,7 @@ check "voucher.admin is ADMIN_ADDRESS"           "$ADMIN_ADDRESS"        "$(fiel
 check "voucher.fee_bps is $EXPECT_FEE_BPS"       "$EXPECT_FEE_BPS"       "$(field fee_bps)"
 check "voucher.fee_account"                      "$EXPECT_FEE_ACCOUNT"   "$(field fee_account)"
 check "voucher.dispute_window is ${EXPECT_WINDOW}s" "$EXPECT_WINDOW"     "$(field dispute_window)"
+check "voucher.max_amount is $EXPECT_MAX_VOUCHER_AMOUNT" "$EXPECT_MAX_VOUCHER_AMOUNT" "$(field max_amount)"
 
 unquote() { jq -r '.' 2>/dev/null || true; }
 check "receipt minter is the voucher"  "$VOUCHER_CONTRACT_ID" "$(view "$RECEIPT_CONTRACT_ID" get_minter | unquote)"

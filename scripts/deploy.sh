@@ -56,6 +56,7 @@ ISSUER="${ISSUER:-sci-issuer}"
 DISPUTE_WINDOW="${DISPUTE_WINDOW:-259200}"   # 72 hours, in seconds
 FEE_BPS="${FEE_BPS:-100}"                    # 1%
 ATTESTER_SHARE_BPS="${ATTESTER_SHARE_BPS:-50}" # half the fee, in bps of the amount
+MAX_VOUCHER_AMOUNT="${MAX_VOUCHER_AMOUNT:-1000000000}" # 100 USDC, in stroops
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 WASM_DIR="$ROOT/dist"
@@ -176,6 +177,7 @@ run stellar contract invoke --id "$VOUCHER_ID" --source-account "$ADMIN" \
   --registry "$REGISTRY_ID" \
   --receipt_book "$RECEIPT_ID" \
   --token "$USDC_ID" \
+  --max_amount "$MAX_VOUCHER_AMOUNT" \
   --dispute_window "$DISPUTE_WINDOW" \
   --fee_bps "$FEE_BPS" \
   --attester_share_bps "$ATTESTER_SHARE_BPS" \
