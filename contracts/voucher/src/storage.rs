@@ -17,7 +17,10 @@ use crate::types::{
 /// still takes and returns `Voucher`; only the bytes at rest change.
 ///
 /// Field order is part of the storage format: never reorder, only append.
-#[contracttype(export = false)]
+///
+/// Not in the contract spec: it is `pub(crate)` and never crosses the
+/// contract boundary, which is what soroban-sdk 29 keys the spec off.
+#[contracttype]
 #[derive(Clone)]
 pub(crate) struct StoredVoucher(
     Address,         // funder
