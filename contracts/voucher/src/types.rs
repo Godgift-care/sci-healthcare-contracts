@@ -201,6 +201,9 @@ pub enum VoucherError {
     /// The chosen dispute window is outside the allowed bounds, or the bounds
     /// themselves are invalid.
     InvalidDisputeWindow = 31,
+    /// The receipt book refused the care receipt for a settled voucher; the
+    /// settlement rolls back.
+    ReceiptMintFailed = 41,
 }
 
 /// Maps the shared helpers' failures onto this contract's error numbers, so
