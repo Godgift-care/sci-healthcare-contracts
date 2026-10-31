@@ -65,7 +65,11 @@ say "Building contracts ($TARGET, release profile)"
   cd "$ROOT"
   # RUSTFLAGS changes the crate hash, so this is a separate build from a
   # plain `cargo build`.
-  RUSTFLAGS="${RUSTFLAGS:-}$REMAP" cargo build --target "$TARGET" --release --locked
+  # soroban-sdk 29 refuses to build a contract unless the build system
+  # declares it does its own spec shaking; stellar-cli 25.2+ sets this. We
+  # build with plain cargo and wasm-opt, so set it here: the release, the
+  # deployment and CI all go through this script and get the same bytes.
+  SOROBAN_SDK_BUILD_SYSTEM_SUPPORTS_SPEC_SHAKING_V2=1     RUSTFLAGS="${RUSTFLAGS:-}$REMAP" cargo build --target "$TARGET" --release --locked
 )
 
 say "Optimising"
