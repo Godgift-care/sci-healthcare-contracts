@@ -1294,7 +1294,10 @@
                   {
                     "u64": "0"
                   },
-                  "void"
+                  "void",
+                  {
+                    "u32": 0
+                  }
                 ]
               }
             }
@@ -1358,6 +1361,9 @@
                   },
                   {
                     "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAK3IM"
+                  },
+                  {
+                    "u32": 0
                   }
                 ]
               }
