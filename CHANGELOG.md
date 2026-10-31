@@ -1,7 +1,7 @@
 # Changelog
 
 ## Unreleased
-
+- registry: add admin-managed service category catalogue (`add_category`, `deprecate_category`, `set_category_gate`); `upsert_service` can require an active category for new services behind a gate that is off by default (#31)
 ### Added
 - **registry:** `providers_in(country, start, limit)` looks up active clinics by country without an indexer. `register_provider` seeds a per-country count, `set_provider_status` adds a clinic to its country's index when it becomes `Active` and removes it (swap-and-pop) when it stops being `Active`, and `providers_in` pages the result with `limit` capped at `MAX_PROVIDERS_PAGE`. Closes #34.
 - **receipt:** `provider_stats(provider)` returns `(count, total_amount)` — a clinic's on-chain track record, readable by anyone without an indexer. `mint` now maintains both counters per provider: the existing `ProviderCount(provider)` index length, and a new `ProviderTotal(provider)` running total of the amounts, both kept with overflow-checked arithmetic so a count or total that would wrap is refused with the new `MathOverflow` (#9) instead of understating what a clinic was paid. Both entries are TTL-extended on `provider_stats` reads like every other persistent entry, and a provider with no receipts reports `(0, 0)`. Closes #57.

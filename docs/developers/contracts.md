@@ -50,7 +50,9 @@ pub struct ServiceItem {
 | `initialize` | `admin: Address` | `()` | once | `AlreadyInitialized` |
 | `register_provider` | `owner, name, country` | `()` | `owner` | `EmptyName`, `InvalidCountry`, `ProviderExists` |
 | `set_provider_status` | `admin, provider_addr, status` | `()` | `admin` | `NotAuthorized`, `ProviderNotFound` |
-| `upsert_service` | `provider_addr, code, label, price` | `()` | `provider_addr` | `InvalidPrice`, `EmptyName`, `ProviderNotActive`, `PriceIncreaseNeedsNotice` |
+| `upsert_service` | `provider_addr, code, label, price` | `()` | `provider_addr` | `InvalidPrice`, `EmptyName`, 
+
+`ProviderNotActive`, `PriceIncreaseNeedsNotice` |
 | `schedule_service_price` | `provider_addr, code, price, effective_at` | `()` | `provider_addr` | `InvalidPrice`, `ProviderNotActive`, `ServiceNotFound`, `PriceNoticeTooShort` |
 | `remove_service` | `provider_addr, code` | `()` | `provider_addr` | `ServiceNotFound` |
 | `set_service_available` | `provider_addr, code, available: bool` | `()` | `provider_addr` | `ServiceNotFound` |
@@ -73,6 +75,22 @@ pub struct ServiceItem {
 | `get_capacity` | `provider_addr` | `u32` | view | — |
 | `get_admin` | — | `Address` | view | `NotInitialized` |
 | `version` | — | `String` | view | — |
+
+
+### Service categories
+
+Provider-chosen service codes are free-form `u32`s, so the same code can mean different things at different clinics. The registry holds an admin-managed catalogue of coarse categories so codes are comparable across clinics.
+
+| Function | Auth | Purpose |
+| --- | --- | --- |
+| `add_category(admin, code, label)` | admin | Adds an active category; fails with `CategoryExists` if the code is taken |
+| `deprecate_category(admin, code)` | admin | Marks a category inactive; new services can no longer use it |
+| `set_category_gate(admin, enabled)` | admin | Turns enforcement on or off (default: off) |
+| `get_category(code)` / `is_category_active(code)` | view | Read a category |
+
+When the gate is on, `upsert_service` rejects a **new** service whose code is unknown (`UnknownCategory`) or deprecated (`CategoryDeprecated`). Services listed before the gate was enabled, and price updates on them, are unaffected.
+
+Seeded categories (`scripts/seed.sh`): 1 Consultation, 2 Laboratory, 3 Imaging, 4 Medication, 5 Procedure, 6 Dental, 7 Vision. They are intentionally coarse and never name a condition or test result; see [privacy](../protocol/privacy.md).
 
 `get_service_price` returns `0` when the service is absent or inactive. It exists so `voucher` can validate pricing over an interface of primitives only, without the two contracts sharing types.
 
