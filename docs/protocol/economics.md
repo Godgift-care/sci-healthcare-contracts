@@ -5,6 +5,12 @@ nav_order: 3
 
 # Economics
 
+## Per-voucher exposure cap
+
+Each voucher is limited to the configured `max_amount`, expressed in the settlement token's smallest unit. The default deployment cap is **100 USDC** (`1,000,000,000` stroops). A voucher exactly at the cap is accepted; a larger voucher is rejected before funds are transferred. This bounds the protocol's exposure to any single funding or settlement mistake while keeping the limit adjustable as operational confidence grows.
+
+Changing the cap requires an admin to schedule a positive value at least 24 hours ahead. The active cap remains unchanged until anyone activates the proposal after its effective time. Replacing a pending proposal restarts the notice period, and a lower cap affects only newly created vouchers, not vouchers already escrowed.
+
 ## The fee
 
 The protocol takes a fee in basis points on settlement only. The production configuration is **100 basis points — 1%**. The contract caps it at 1000 bps (10%) and this ceiling is enforced at initialisation, so a misconfigured deployment cannot charge more.

@@ -114,6 +114,7 @@ voucher.initialize(
     &registry_addr,
     &receipt_addr,
     &token_addr,
+    &1_000_000_000i128,
     &DISPUTE_WINDOW,
     &FEE_BPS,
     &fee_account,
