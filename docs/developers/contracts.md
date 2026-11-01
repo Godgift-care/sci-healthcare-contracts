@@ -231,6 +231,7 @@ pub struct Exposure {            // a clinic's open vouchers
 | `redirect` | `funder, voucher_id, new_provider` | `()` | `funder` |
 | `claim` | `provider, voucher_id` | `()` | `provider` |
 | `claim_with_proof` | `provider, voucher_id, secret: Bytes` | `()` | `provider` |
+| `decline` | `provider, voucher_id, reason_code` | `()` | `provider` |
 | `attest` | `attester, voucher_id` | `()` | `attester` |
 | `dispute` | `funder, voucher_id, reason_code` | `()` | `funder` |
 | `settle` | `voucher_id` | `()` | **none** |
@@ -274,6 +275,7 @@ Every public function, with the exact signer it demands. `AUTH_MATRIX` in `contr
 | `redirect` | `funder` |
 | `claim` | `provider` |
 | `claim_with_proof` | `provider` |
+| `decline` | `provider` |
 | `attest` | `attester` |
 | `dispute` | `funder` |
 | `settle` | none (permissionless) |
@@ -318,6 +320,10 @@ rejects the voucher's own provider even if it holds that role.
 **`claim`** — caller is the named provider; provider is still `Active` in the registry; status is `Funded`; not expired; the voucher has no presence commitment (`PresenceProofRequired`).
 
 **`claim_with_proof`** — the same checks as `claim`, for a voucher funded with a `presence_commitment`: `sha256(secret)` must equal it (`InvalidPresenceProof`), and a voucher without one is `NoPresenceCommitment`. The funder gives the secret to the patient, so a claim shows the clinic had the patient in front of it rather than only saying so. The secret becomes public with the claim; it was only ever good for that voucher.
+
+**`decline`** — caller is the named provider; status is `Funded`. Returns the full escrow to the funder immediately, with no fee, and records the clinic's `reason_code` in `voucher_declined`. The existing `voucher_refunded` event is also emitted for the refund. The indexer needs `voucher_declined: ['provider']` in `TOPIC_FIELDS` in `sci-healthcare-backend/src/stellar/events.ts`.
+
+**`attest`** — caller is a registry attester; caller is **not** the provider; status is `Claimed`; the attester has attestations left today. Stores the attester on the voucher and sets `dispute_deadline = now + dispute_window`.
 
 **`attest`** — caller is a registry attester; caller is **not** the provider; status is `Claimed`; the attester has attestations left today. Stores the attester on the voucher and sets `dispute_deadline = now + window`, where `window` is the voucher's own `dispute_window` if it was funded with one and `Config.dispute_window` otherwise.
 
@@ -373,6 +379,7 @@ rejects the voucher's own provider even if it holds that role.
 | --- | --- | --- |
 | `voucher_created` | `funder`, `provider`, `beneficiary_ref` | `voucher_id`, `service_code`, `amount`, `created_at`, `expires_at` |
 | `voucher_claimed` | `provider` | `voucher_id`, `claimed_at`, `service_code`, `amount` |
+| `voucher_declined` | `provider` | `voucher_id`, `reason_code`, `service_code`, `amount` |
 | `voucher_attested` | `attester` | `voucher_id`, `attested_at`, `dispute_deadline`, `service_code`, `amount`, `remaining_today` |
 | `voucher_disputed` | `funder` | `voucher_id`, `reason_code`, `service_code`, `amount` |
 | `voucher_settled` | `provider` | `voucher_id`, `net`, `fee`, `service_code`, `amount`, `attester_share` |
