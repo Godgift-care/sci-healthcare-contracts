@@ -71,6 +71,17 @@ A dispute carries a `reason_code`. The contract stores and emits it without inte
 
 New codes may be added. Existing codes are never renumbered.
 
+The clinic may respond once with `respond_to_dispute(provider, voucher_id, response_code)`. The contract stores the nonzero code on the voucher and emits `dispute_responded`; the admin can consider both codes when resolving the case. Codes are categories, not free text:
+
+| Code | Meaning |
+| --- | --- |
+| 1 | The clinic states the patient was seen |
+| 2 | The clinic states care was delivered as described |
+| 3 | The clinic states the service listed on the voucher was provided |
+| 4 | Another response |
+
+Zero means no response. New codes may be added, but existing codes are never renumbered. The contract stores these codes without validating their meaning.
+
 ### Refunded
 
 The voucher expired unclaimed, the clinic was no longer active before it could be claimed, it was claimed but never attested within the grace period, or a dispute was resolved in the funder's favour. The **full** amount goes back — no fee is taken on care that did not happen.

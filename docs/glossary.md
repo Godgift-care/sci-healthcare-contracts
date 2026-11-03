@@ -111,6 +111,11 @@ A number attached to a dispute describing why the funder objects: 1 = the patien
 
 Used in: [How a voucher works — Disputed](protocol/lifecycle.md#disputed).
 
+### Response code (`response_code`)
+A nonzero number the clinic submits once while a voucher is `Disputed`; 0 means no response. Codes describe the clinic's position without storing free text or clinical details: 1 = the patient was seen, 2 = care was delivered as described, 3 = the service listed on the voucher was provided, 4 = another response. The contract stores and emits the code without interpreting it; existing codes are never renumbered.
+
+Used in: [How a voucher works — Disputed](protocol/lifecycle.md#disputed), [Contract reference — respond_to_dispute](developers/contracts.md#respond_to_dispute).
+
 ### Registry
 The contract that records who is allowed to do what: clinics (`Provider`), their services, attesters and the admin. It answers `is_active_provider` and `is_attester`, which the voucher contract checks on every call.
 
