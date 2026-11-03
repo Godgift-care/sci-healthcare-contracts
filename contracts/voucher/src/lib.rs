@@ -79,6 +79,9 @@ const MAX_FEE_BPS: u32 = 1_000;
 /// the funder noticed and disputed. The grace period gives an attester
 /// that is merely slow time to confirm care that happened near expiry.
 pub const CLAIM_GRACE_SECS: u64 = 7 * 24 * 60 * 60;
+/// How long an admin has to resolve a dispute before anyone may refund it
+/// to the funder. Thirty days.
+pub const DISPUTE_RESOLUTION_SECS: u64 = 30 * 24 * 60 * 60;
 /// Attestations one attester may make per UTC day until the admin sets
 /// another cap with `set_attestation_cap`.
 ///
@@ -464,6 +467,7 @@ impl VoucherEscrow {
         }
 
         voucher.status = VoucherStatus::Disputed;
+        voucher.disputed_at = now;
         write_voucher(&env, &voucher);
 
         VoucherDisputed {
@@ -508,6 +512,9 @@ impl VoucherEscrow {
     ///   never lock the funder's money forever. Suspension does not shorten
     ///   this path: care may already have been given before the clinic was
     ///   suspended, and an attester may still confirm it.
+    /// - A `Disputed` voucher is refundable to the funder once
+    ///   `DISPUTE_RESOLUTION_SECS` have passed after the dispute, if the
+    ///   admin has not resolved it.
     ///
     /// Permissionless for the same reason as `settle`.
     pub fn refund(env: Env, voucher_id: u64) -> Result<(), VoucherError> {
@@ -923,6 +930,7 @@ impl VoucherEscrow {
             claimed_at: 0,
             attested_at: 0,
             dispute_deadline: 0,
+            disputed_at: 0,
             attester: None,
         };
         write_voucher(env, &voucher);
@@ -1037,6 +1045,10 @@ impl VoucherEscrow {
             VoucherStatus::Claimed => voucher
                 .expires_at
                 .checked_add(CLAIM_GRACE_SECS)
+                .ok_or(VoucherError::MathOverflow),
+            VoucherStatus::Disputed => voucher
+                .disputed_at
+                .checked_add(DISPUTE_RESOLUTION_SECS)
                 .ok_or(VoucherError::MathOverflow),
             _ => Err(VoucherError::InvalidStatus),
         }
