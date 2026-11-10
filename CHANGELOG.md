@@ -3,6 +3,7 @@
 ## Unreleased
 
 ### Changed
+- **registry:** cap clinic names at `MAX_NAME_LEN` (64 bytes) and service labels at `MAX_LABEL_LEN` (48 bytes). `register_provider` and `upsert_service` reject values exceeding these limits with `ValueTooLong` (#15), preventing bloated storage rent and bounded read costs for indexers and callers. Closes #22.
 - **registry:** `register_provider` now accepts a country only in the shape of an ISO 3166-1 alpha-2 code: exactly two ASCII uppercase letters. `ng`, `N1`, two spaces and multi-byte characters that happen to occupy two bytes are refused with the existing `InvalidCountry`, so `ng` and `NG` can no longer register as two different countries and junk codes cannot break the app's or indexer's country filter. Checking a code against the full ISO list stays an off-chain concern. Closes #23.
 - **registry:** `set_provider_status` rejects status changes that carry no information. Only `Pending → Active`, `Pending → Suspended`, `Active → Suspended` and `Suspended → Active` are accepted; everything else — setting the same status twice, the backwards `Active → Pending`, and any move into or out of `Retired` — fails with the new `InvalidTransition` (#14), so the event history the indexer and auditors read contains no no-op or unexplained entries. See the [status lifecycle](docs/developers/contracts.md#status-lifecycle) for the full transition table. Closes #25.
 

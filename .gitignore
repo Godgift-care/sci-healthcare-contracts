@@ -3,9 +3,9 @@ node_modules/
 dist/
 *.wasm
 lcov.info
-.env
 # Written by scripts/deploy.sh and scripts/e2e-local.sh against a local node;
 # deployments/testnet.env is the one that is committed.
 deployments/local.env
 .stellar/
 .DS_Store
+config.bat

@@ -49,10 +49,10 @@ pub struct ServiceItem {
 | Function | Parameters | Returns | Auth | Errors |
 | --- | --- | --- | --- | --- |
 | `initialize` | `admin: Address` | `()` | once | `AlreadyInitialized` |
-| `register_provider` | `owner, name, country` | `()` | `owner` | `EmptyName`, `InvalidCountry`, `ProviderExists` |
+| `register_provider` | `owner, name, country` | `()` | `owner` | `EmptyName`, `InvalidCountry`, `ProviderExists`, `ValueTooLong` |
 | `set_provider_status` | `admin, provider_addr, status, reason_code: u32` | `()` | `admin` | `NotAuthorized`, `ProviderNotFound`, `InvalidTransition` |
 | `retire` | `owner, reason_code: u32` | `()` | `owner` | `ProviderNotFound`, `InvalidTransition` |
-| `upsert_service` | `provider_addr, code, label, price` | `()` | `provider_addr` | `InvalidPrice`, `EmptyName`, `ProviderNotActive`, `PriceIncreaseNeedsNotice` |
+| `upsert_service` | `provider_addr, code, label, price` | `()` | `provider_addr` | `InvalidPrice`, `EmptyName`, `ProviderNotActive`, `PriceIncreaseNeedsNotice`, `ValueTooLong` |
 | `schedule_service_price` | `provider_addr, code, price, effective_at` | `()` | `provider_addr` | `InvalidPrice`, `ProviderNotActive`, `ServiceNotFound`, `PriceNoticeTooShort` |
 | `remove_service` | `provider_addr, code` | `()` | `provider_addr` | `ServiceNotFound` |
 | `set_service_available` | `provider_addr, code, available: bool` | `()` | `provider_addr` | `ServiceNotFound` |
@@ -161,6 +161,7 @@ A signer is not the same as a role: `admin` must be the stored admin **and** sig
 | 12 | `PriceNoticeTooShort` |
 | 13 | `PriceIncreaseNeedsNotice` |
 | 14 | `InvalidTransition` |
+| 15 | `ValueTooLong` |
 
 ### Events
 
