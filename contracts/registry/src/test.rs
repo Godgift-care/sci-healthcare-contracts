@@ -6,8 +6,8 @@ use soroban_sdk::{
 };
 
 use crate::{
-    ProviderStatus, Registry, RegistryClient, RegistryError, MAX_PROVIDERS_PAGE,
-    MIN_PRICE_NOTICE_SECS,
+    ProviderStatus, Registry, RegistryClient, RegistryError, MAX_LABEL_LEN, MAX_NAME_LEN,
+    MAX_PROVIDERS_PAGE, MIN_PRICE_NOTICE_SECS,
 };
 
 /// Reason codes as documented in `docs/protocol/trust.md`: codes are added,
@@ -151,6 +151,41 @@ fn empty_name_rejected() {
 }
 
 #[test]
+fn name_at_max_length_is_accepted() {
+    let f = setup();
+    let provider = Address::generate(&f.env);
+    let name_64 = "1234567890123456789012345678901234567890123456789012345678901234";
+    assert_eq!(name_64.len() as u32, MAX_NAME_LEN);
+    f.client.register_provider(
+        &provider,
+        &String::from_str(&f.env, name_64),
+        &String::from_str(&f.env, "NG"),
+    );
+
+    let stored = f.client.get_provider(&provider);
+    assert_eq!(stored.name, String::from_str(&f.env, name_64));
+}
+
+#[test]
+fn name_over_max_length_is_rejected() {
+    let f = setup();
+    let provider = Address::generate(&f.env);
+    let name_65 = "12345678901234567890123456789012345678901234567890123456789012345";
+    assert_eq!(name_65.len() as u32, MAX_NAME_LEN + 1);
+    let err = f
+        .client
+        .try_register_provider(
+            &provider,
+            &String::from_str(&f.env, name_65),
+            &String::from_str(&f.env, "NG"),
+        )
+        .err()
+        .unwrap()
+        .unwrap();
+    assert_eq!(err, RegistryError::ValueTooLong);
+}
+
+#[test]
 fn admin_activates_provider() {
     let f = setup();
     let provider = register_active_provider(&f);
@@ -247,6 +282,66 @@ fn upsert_cannot_raise_price_without_notice() {
         .unwrap();
     assert_eq!(err, RegistryError::PriceIncreaseNeedsNotice);
     assert_eq!(f.client.get_service_price(&provider, &202u32), 10_000_000);
+}
+
+#[test]
+fn service_label_at_max_length_is_accepted() {
+    let f = setup();
+    let provider = register_active_provider(&f);
+    let label_48 = "123456789012345678901234567890123456789012345678";
+    assert_eq!(label_48.len() as u32, MAX_LABEL_LEN);
+    f.client.upsert_service(
+        &provider,
+        &101u32,
+        &String::from_str(&f.env, label_48),
+        &30_000_000i128,
+    );
+
+    let item = f.client.get_service(&provider, &101u32);
+    assert_eq!(item.label, String::from_str(&f.env, label_48));
+}
+
+#[test]
+fn service_label_over_max_length_is_rejected() {
+    let f = setup();
+    let provider = register_active_provider(&f);
+    let label_49 = "1234567890123456789012345678901234567890123456789";
+    assert_eq!(label_49.len() as u32, MAX_LABEL_LEN + 1);
+    let err = f
+        .client
+        .try_upsert_service(
+            &provider,
+            &101u32,
+            &String::from_str(&f.env, label_49),
+            &30_000_000i128,
+        )
+        .err()
+        .unwrap()
+        .unwrap();
+    assert_eq!(err, RegistryError::ValueTooLong);
+}
+
+#[test]
+fn updating_existing_service_with_over_max_label_is_rejected() {
+    let f = setup();
+    let provider = register_active_provider(&f);
+    let valid_label = String::from_str(&f.env, "Initial Consult");
+    f.client
+        .upsert_service(&provider, &101u32, &valid_label, &30_000_000i128);
+
+    let label_49 = "1234567890123456789012345678901234567890123456789";
+    let err = f
+        .client
+        .try_upsert_service(
+            &provider,
+            &101u32,
+            &String::from_str(&f.env, label_49),
+            &25_000_000i128,
+        )
+        .err()
+        .unwrap()
+        .unwrap();
+    assert_eq!(err, RegistryError::ValueTooLong);
 }
 
 /// Lists one service at `PRICE` at a provider and starts the clock at

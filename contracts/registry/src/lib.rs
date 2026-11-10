@@ -43,6 +43,12 @@ use storage::{
 /// 24 hours, so a funder who has just seen a price can still pay it.
 pub const MIN_PRICE_NOTICE_SECS: u64 = 24 * 60 * 60;
 
+/// Maximum length in bytes for a clinic name.
+pub const MAX_NAME_LEN: u32 = 64;
+
+/// Maximum length in bytes for a service label.
+pub const MAX_LABEL_LEN: u32 = 48;
+
 /// Most providers one `list_providers` call may return.
 pub use storage::MAX_PROVIDERS_PAGE;
 
@@ -76,6 +82,9 @@ impl Registry {
 
         if name.is_empty() {
             return Err(RegistryError::EmptyName);
+        }
+        if name.len() > MAX_NAME_LEN {
+            return Err(RegistryError::ValueTooLong);
         }
         // ISO 3166-1 alpha-2 is exactly two ASCII uppercase letters — never
         // two arbitrary characters. A lowercase "ng", a digit, two spaces or
@@ -274,6 +283,9 @@ impl Registry {
         }
         if label.is_empty() {
             return Err(RegistryError::EmptyName);
+        }
+        if label.len() > MAX_LABEL_LEN {
+            return Err(RegistryError::ValueTooLong);
         }
 
         let provider = read_provider(&env, &provider_addr)?;

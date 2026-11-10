@@ -149,6 +149,8 @@ pub enum RegistryError {
     /// The requested provider status change is not one of the allowed
     /// transitions, or would leave `Retired`.
     InvalidTransition = 14,
+    /// A string value (clinic name or service label) exceeds its maximum length.
+    ValueTooLong = 15,
 }
 
 /// Maps the shared helpers' failures onto this contract's error numbers, so
