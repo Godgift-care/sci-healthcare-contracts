@@ -209,6 +209,11 @@ jobs:
   doc:
     name: doc
     runs-on: ubuntu-latest
+    # The deploy step pushes the built rustdoc to the gh-pages branch. The
+    # repository's default token is read-only, so without this the push is
+    # refused with a 403 and every push to main fails.
+    permissions:
+      contents: write
     steps:
       - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@1.96.0
@@ -217,7 +222,7 @@ jobs:
         run: cargo doc --no-deps --workspace --document-private-items
       - name: Deploy docs
         if: github.ref == 'refs/heads/main' && github.event_name == 'push'
-        uses: peaceiris/actions-gh-pages@v3
+        uses: peaceiris/actions-gh-pages@v4
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           publish_dir: ./target/doc
@@ -230,7 +235,7 @@ jobs:
         working-directory: examples
     steps:
       - uses: actions/checkout@v5
-      - uses: actions/setup-node@v5
+      - uses: actions/setup-node@v7
         with:
           node-version: '22'
           cache: npm
