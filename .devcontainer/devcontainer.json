@@ -4,6 +4,11 @@
     "dockerfile": "Dockerfile"
   },
   "remoteUser": "vscode",
+  // The GitHub CLI, for `gh repo fork` and `gh pr create` from a codespace.
+  "features": {
+    "ghcr.io/devcontainers/features/github-cli:1": {}
+  },
+
   // Fetch dependencies once, so `cargo test` and `just wasm` start building
   // straight away.
   "postCreateCommand": "cargo fetch",

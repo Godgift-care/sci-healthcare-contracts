@@ -56,10 +56,12 @@ stellar contract invoke --id "$REGISTRY_CONTRACT_ID" --source-account "$CLINIC_I
   --name "Ikeja General Clinic" --country "NG" 2>&1 | quiet
 
 # ProviderStatus is a unit enum with explicit discriminants, so the CLI
-# takes the integer: 0 Pending, 1 Active, 2 Suspended.
+# takes the integer: 0 Pending, 1 Active, 2 Suspended, 3 Retired.
+# reason_code 1 = verified (docs/protocol/trust.md).
 say "Activating provider"
 stellar contract invoke --id "$REGISTRY_CONTRACT_ID" --source-account "$ADMIN" $N \
-  -- set_provider_status --admin "$ADMIN_ADDR" --provider_addr "$CLINIC" --status 1 2>&1 | quiet
+  -- set_provider_status --admin "$ADMIN_ADDR" --provider_addr "$CLINIC" \
+  --status 1 --reason_code 1 2>&1 | quiet
 
 say "Listing services"
 stellar contract invoke --id "$REGISTRY_CONTRACT_ID" --source-account "$CLINIC_ID" $N \
