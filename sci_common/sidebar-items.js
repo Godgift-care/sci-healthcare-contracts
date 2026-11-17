@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"constant":["ATTESTATIONS_TTL","DAY_IN_LEDGERS","INSTANCE_TTL_EXTEND","INSTANCE_TTL_THRESHOLD","PERSISTENT_TTL_EXTEND","PERSISTENT_TTL_THRESHOLD"],"enum":["CommonError"],"fn":["extend_instance","extend_persistent","propose_admin","read_admin","read_pending_admin","require_admin","take_pending_admin","write_admin"]};

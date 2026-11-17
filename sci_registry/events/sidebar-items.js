@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"struct":["AdminChanged","AdminProposed","AttesterAdded","AttesterRemoved","CapacityChanged","Initialized","ProviderRegistered","ProviderStatusChanged","ServiceAvailabilityChanged","ServicePriceScheduled","ServiceRemoved","ServiceUpserted"]};

@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"struct":["ReceiptClient","RegistryClient"],"trait":["ReceiptInterface","RegistryInterface"]};

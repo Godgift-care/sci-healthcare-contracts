@@ -1,0 +1,2 @@
+createSrcSidebar('[["sci_common",["",[],["lib.rs"]]],["sci_faucet",["",[],["lib.rs"]]],["sci_receipt",["",[],["lib.rs"]]],["sci_registry",["",[],["events.rs","lib.rs","storage.rs","types.rs"]]],["sci_sponsor",["",[],["events.rs","interfaces.rs","lib.rs","storage.rs","types.rs"]]],["sci_voucher",["",[],["events.rs","interfaces.rs","lib.rs","storage.rs","types.rs"]]]]');
+//{"start":19,"fragment_lengths":[33,34,35,72,87,87]}

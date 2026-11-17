@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["VoucherError"],"struct":["RegistryClient","VoucherClient"],"trait":["RegistryInterface","VoucherInterface"]};

@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"constant":["DAY_IN_LEDGERS","DRIP_TTL_EXTEND","DRIP_TTL_THRESHOLD","INSTANCE_TTL_EXTEND","INSTANCE_TTL_THRESHOLD","LIFETIME_TTL_EXTEND","LIFETIME_TTL_THRESHOLD","SECONDS_PER_DAY"],"enum":["DataKey","FaucetError"],"struct":["DripChanged","Dripped","Faucet","FaucetArgs","FaucetClient","FaucetConfig"]};

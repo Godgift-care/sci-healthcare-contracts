@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["DataKey","SponsorError"],"struct":["Config","MatchRecord","OpenMatch","Rules","SponsorAccount","Totals"]};

@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"struct":["AdminChanged","AdminProposed","AttestationCapChanged","DisputeResolved","DisputeWindowBoundsChanged","EscrowCapChanged","Initialized","VoucherAmountReduced","VoucherAttested","VoucherClaimed","VoucherCreated","VoucherDisputed","VoucherRedirected","VoucherRefunded","VoucherSettled"]};

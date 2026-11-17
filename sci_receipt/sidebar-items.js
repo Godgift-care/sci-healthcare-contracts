@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"constant":["MAX_RECEIPTS_PAGE","RECEIPT_NAME","RECEIPT_SYMBOL","RECEIPT_URI_BASE"],"enum":["DataKey","ReceiptError"],"struct":["AdminChanged","AdminProposed","Initialized","MinterChanged","MinterProposed","Receipt","ReceiptBook","ReceiptBookArgs","ReceiptBookClient","ReceiptMinted"]};

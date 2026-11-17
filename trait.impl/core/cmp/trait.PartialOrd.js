@@ -1,0 +1,9 @@
+(function() {
+    const implementors = Object.fromEntries([["sci_faucet",[["impl <a class=\"trait\" href=\"https://doc.rust-lang.org/1.96.0/core/cmp/trait.PartialOrd.html\" title=\"trait core::cmp::PartialOrd\">PartialOrd</a> for <a class=\"enum\" href=\"sci_faucet/enum.FaucetError.html\" title=\"enum sci_faucet::FaucetError\">FaucetError</a>",0]]],["sci_receipt",[["impl <a class=\"trait\" href=\"https://doc.rust-lang.org/1.96.0/core/cmp/trait.PartialOrd.html\" title=\"trait core::cmp::PartialOrd\">PartialOrd</a> for <a class=\"enum\" href=\"sci_receipt/enum.ReceiptError.html\" title=\"enum sci_receipt::ReceiptError\">ReceiptError</a>",0]]],["sci_registry",[["impl <a class=\"trait\" href=\"https://doc.rust-lang.org/1.96.0/core/cmp/trait.PartialOrd.html\" title=\"trait core::cmp::PartialOrd\">PartialOrd</a> for <a class=\"enum\" href=\"sci_registry/enum.RegistryError.html\" title=\"enum sci_registry::RegistryError\">RegistryError</a>",0]]],["sci_sponsor",[["impl <a class=\"trait\" href=\"https://doc.rust-lang.org/1.96.0/core/cmp/trait.PartialOrd.html\" title=\"trait core::cmp::PartialOrd\">PartialOrd</a> for <a class=\"enum\" href=\"sci_sponsor/enum.SponsorError.html\" title=\"enum sci_sponsor::SponsorError\">SponsorError</a>",0]]],["sci_voucher",[["impl <a class=\"trait\" href=\"https://doc.rust-lang.org/1.96.0/core/cmp/trait.PartialOrd.html\" title=\"trait core::cmp::PartialOrd\">PartialOrd</a> for <a class=\"enum\" href=\"sci_voucher/enum.VoucherError.html\" title=\"enum sci_voucher::VoucherError\">VoucherError</a>",0]]]]);
+    if (window.register_implementors) {
+        window.register_implementors(implementors);
+    } else {
+        window.pending_implementors = implementors;
+    }
+})()
+//{"start":59,"fragment_lengths":[291,298,304,298,298]}

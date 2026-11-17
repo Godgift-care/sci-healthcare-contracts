@@ -1,0 +1,228 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `contracts/sponsor/src/types.rs`."><title>types.rs - source</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2"href="../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../../static.files/rustdoc-17e0aaed.css"><meta name="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="sci_sponsor" data-themes="" data-resource-suffix="" data-rustdoc-version="1.96.0 (ac68faa20 2026-05-25)" data-channel="1.96.0" data-search-js="search-b5634cc7.js" data-stringdex-js="stringdex-2da4960a.js" data-settings-js="settings-170eb4bf.js" ><script src="../../static.files/storage-41dd4d93.js"></script><script defer src="../../static.files/src-script-813739b1.js"></script><script defer src="../../src-files.js"></script><script defer src="../../static.files/main-5013f961.js"></script><noscript><link rel="stylesheet" href="../../static.files/noscript-f7c3ffd8.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-eab170b8.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-044be391.svg"></head><body class="rustdoc src"><a class="skip-main-content" href="#main-content">Skip to main content</a><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"><div class="src-sidebar-title"><h2>Files</h2></div></nav><div class="sidebar-resizer" title="Drag to resize sidebar"></div><main><section id="main-content" class="content" tabindex="-1"><div class="main-heading"><h1><div class="sub-heading">sci_sponsor/</div>types.rs</h1><rustdoc-toolbar></rustdoc-toolbar></div><div class="example-wrap digits-3"><pre class="rust"><code><a href=#1 id=1 data-nosnippet>1</a><span class="kw">use </span>soroban_sdk::{contracterror, contracttype, Address, String, Vec};
+<a href=#2 id=2 data-nosnippet>2</a>
+<a href=#3 id=3 data-nosnippet>3</a><span class="doccomment">/// Addresses and switches this contract works with.
+<a href=#4 id=4 data-nosnippet>4</a></span><span class="attr">#[contracttype]
+<a href=#5 id=5 data-nosnippet>5</a>#[derive(Clone, Debug, PartialEq, Eq)]
+<a href=#6 id=6 data-nosnippet>6</a></span><span class="kw">pub struct </span>Config {
+<a href=#7 id=7 data-nosnippet>7</a>    <span class="doccomment">/// Address allowed to pause the desk and to hand the role on.
+<a href=#8 id=8 data-nosnippet>8</a>    </span><span class="kw">pub </span>admin: Address,
+<a href=#9 id=9 data-nosnippet>9</a>    <span class="doccomment">/// The provider registry: service prices, service availability and the
+<a href=#10 id=10 data-nosnippet>10</a>    /// country a clinic is registered in.
+<a href=#11 id=11 data-nosnippet>11</a>    </span><span class="kw">pub </span>registry: Address,
+<a href=#12 id=12 data-nosnippet>12</a>    <span class="doccomment">/// The voucher contract that escrows the money and runs the care
+<a href=#13 id=13 data-nosnippet>13</a>    /// lifecycle. A matching voucher is an ordinary voucher, funded by this
+<a href=#14 id=14 data-nosnippet>14</a>    /// contract.
+<a href=#15 id=15 data-nosnippet>15</a>    </span><span class="kw">pub </span>voucher: Address,
+<a href=#16 id=16 data-nosnippet>16</a>    <span class="doccomment">/// The settlement token both contracts move.
+<a href=#17 id=17 data-nosnippet>17</a>    </span><span class="kw">pub </span>token: Address,
+<a href=#18 id=18 data-nosnippet>18</a>    <span class="doccomment">/// While true, deposits and matches are rejected for everyone. The
+<a href=#19 id=19 data-nosnippet>19</a>    /// admin can still withdraw: pausing stops money going out, it does not
+<a href=#20 id=20 data-nosnippet>20</a>    /// trap money already here.
+<a href=#21 id=21 data-nosnippet>21</a>    </span><span class="kw">pub </span>paused: bool,
+<a href=#22 id=22 data-nosnippet>22</a>}
+<a href=#23 id=23 data-nosnippet>23</a>
+<a href=#24 id=24 data-nosnippet>24</a><span class="doccomment">/// The conditions a sponsor sets for the vouchers it will match.
+<a href=#25 id=25 data-nosnippet>25</a>///
+<a href=#26 id=26 data-nosnippet>26</a>/// A sponsor picks the rules it wants and the desk honours them on every
+<a href=#27 id=27 data-nosnippet>27</a>/// match. The rules are the sponsor's own: one sponsor's cap never applies
+<a href=#28 id=28 data-nosnippet>28</a>/// to another's money.
+<a href=#29 id=29 data-nosnippet>29</a></span><span class="attr">#[contracttype]
+<a href=#30 id=30 data-nosnippet>30</a>#[derive(Clone, Debug, PartialEq, Eq)]
+<a href=#31 id=31 data-nosnippet>31</a></span><span class="kw">pub struct </span>Rules {
+<a href=#32 id=32 data-nosnippet>32</a>    <span class="doccomment">/// The match as a share of the matched voucher's amount, in basis
+<a href=#33 id=33 data-nosnippet>33</a>    /// points. `10_000` is one-for-one: the sponsor adds as much as the
+<a href=#34 id=34 data-nosnippet>34</a>    /// funder put in. `20_000` is two-for-one.
+<a href=#35 id=35 data-nosnippet>35</a>    </span><span class="kw">pub </span>match_bps: u32,
+<a href=#36 id=36 data-nosnippet>36</a>    <span class="doccomment">/// The most the sponsor will add for any one voucher, whatever the
+<a href=#37 id=37 data-nosnippet>37</a>    /// ratio works out to.
+<a href=#38 id=38 data-nosnippet>38</a>    </span><span class="kw">pub </span>cap_per_voucher: i128,
+<a href=#39 id=39 data-nosnippet>39</a>    <span class="doccomment">/// The least a voucher may be worth to qualify. Zero means no minimum.
+<a href=#40 id=40 data-nosnippet>40</a>    </span><span class="kw">pub </span>min_voucher_amount: i128,
+<a href=#41 id=41 data-nosnippet>41</a>    <span class="doccomment">/// How long a voucher must have been funded before it qualifies, in
+<a href=#42 id=42 data-nosnippet>42</a>    /// seconds. Zero means a voucher can be matched as soon as it exists.
+<a href=#43 id=43 data-nosnippet>43</a>    ///
+<a href=#44 id=44 data-nosnippet>44</a>    /// This is the anti-farming wait: a voucher that appeared a second ago
+<a href=#45 id=45 data-nosnippet>45</a>    /// and is about to be claimed by the clinic that funded it cannot be
+<a href=#46 id=46 data-nosnippet>46</a>    /// matched in the same breath.
+<a href=#47 id=47 data-nosnippet>47</a>    </span><span class="kw">pub </span>min_voucher_age_secs: u64,
+<a href=#48 id=48 data-nosnippet>48</a>    <span class="doccomment">/// The countries a matched clinic may be registered in, as ISO 3166-1
+<a href=#49 id=49 data-nosnippet>49</a>    /// alpha-2 codes. Empty means any country qualifies.
+<a href=#50 id=50 data-nosnippet>50</a>    </span><span class="kw">pub </span>eligible_countries: Vec&lt;String&gt;,
+<a href=#51 id=51 data-nosnippet>51</a>    <span class="doccomment">/// The service codes that qualify. Empty means any service qualifies.
+<a href=#52 id=52 data-nosnippet>52</a>    </span><span class="kw">pub </span>eligible_service_codes: Vec&lt;u32&gt;,
+<a href=#53 id=53 data-nosnippet>53</a>}
+<a href=#54 id=54 data-nosnippet>54</a>
+<a href=#55 id=55 data-nosnippet>55</a><span class="doccomment">/// A match the sponsor has made whose matching voucher is still open.
+<a href=#56 id=56 data-nosnippet>56</a>///
+<a href=#57 id=57 data-nosnippet>57</a>/// The desk keeps these so it can tell, later, whether the money went to
+<a href=#58 id=58 data-nosnippet>58</a>/// the clinic or came back.
+<a href=#59 id=59 data-nosnippet>59</a></span><span class="attr">#[contracttype]
+<a href=#60 id=60 data-nosnippet>60</a>#[derive(Clone, Debug, PartialEq, Eq)]
+<a href=#61 id=61 data-nosnippet>61</a></span><span class="kw">pub struct </span>OpenMatch {
+<a href=#62 id=62 data-nosnippet>62</a>    <span class="doccomment">/// The id of the matching voucher this contract funded.
+<a href=#63 id=63 data-nosnippet>63</a>    </span><span class="kw">pub </span>matched_voucher_id: u64,
+<a href=#64 id=64 data-nosnippet>64</a>    <span class="doccomment">/// What the match cost the sponsor.
+<a href=#65 id=65 data-nosnippet>65</a>    </span><span class="kw">pub </span>amount: i128,
+<a href=#66 id=66 data-nosnippet>66</a>}
+<a href=#67 id=67 data-nosnippet>67</a>
+<a href=#68 id=68 data-nosnippet>68</a><span class="doccomment">/// One sponsor's budget and rules.
+<a href=#69 id=69 data-nosnippet>69</a></span><span class="attr">#[contracttype]
+<a href=#70 id=70 data-nosnippet>70</a>#[derive(Clone, Debug, PartialEq, Eq)]
+<a href=#71 id=71 data-nosnippet>71</a></span><span class="kw">pub struct </span>SponsorAccount {
+<a href=#72 id=72 data-nosnippet>72</a>    <span class="doccomment">/// The sponsor this account belongs to.
+<a href=#73 id=73 data-nosnippet>73</a>    </span><span class="kw">pub </span>sponsor: Address,
+<a href=#74 id=74 data-nosnippet>74</a>    <span class="doccomment">/// Everything the sponsor has ever deposited.
+<a href=#75 id=75 data-nosnippet>75</a>    </span><span class="kw">pub </span>deposited: i128,
+<a href=#76 id=76 data-nosnippet>76</a>    <span class="doccomment">/// Everything the sponsor has ever committed to a match. A refunded
+<a href=#77 id=77 data-nosnippet>77</a>    /// match stays counted here; the refund is counted in `refunded`.
+<a href=#78 id=78 data-nosnippet>78</a>    </span><span class="kw">pub </span>committed: i128,
+<a href=#79 id=79 data-nosnippet>79</a>    <span class="doccomment">/// Money that came back from a matching voucher and is available again.
+<a href=#80 id=80 data-nosnippet>80</a>    </span><span class="kw">pub </span>refunded: i128,
+<a href=#81 id=81 data-nosnippet>81</a>    <span class="doccomment">/// Everything the sponsor has ever withdrawn.
+<a href=#82 id=82 data-nosnippet>82</a>    </span><span class="kw">pub </span>withdrawn: i128,
+<a href=#83 id=83 data-nosnippet>83</a>    <span class="doccomment">/// The rules the sponsor set. A `match_bps` of zero means no rules have
+<a href=#84 id=84 data-nosnippet>84</a>    /// been set yet: a ratio of zero is not a rule the desk accepts, so it
+<a href=#85 id=85 data-nosnippet>85</a>    /// can stand for "not set" without a second field.
+<a href=#86 id=86 data-nosnippet>86</a>    </span><span class="kw">pub </span>rules: Rules,
+<a href=#87 id=87 data-nosnippet>87</a>    <span class="doccomment">/// Matches whose matching voucher is still open.
+<a href=#88 id=88 data-nosnippet>88</a>    </span><span class="kw">pub </span>open_matches: Vec&lt;OpenMatch&gt;,
+<a href=#89 id=89 data-nosnippet>89</a>}
+<a href=#90 id=90 data-nosnippet>90</a>
+<a href=#91 id=91 data-nosnippet>91</a><span class="doccomment">/// The desk's totals across every sponsor.
+<a href=#92 id=92 data-nosnippet>92</a>///
+<a href=#93 id=93 data-nosnippet>93</a>/// Kept next to the per-sponsor accounts so the solvency view does not have
+<a href=#94 id=94 data-nosnippet>94</a>/// to walk every sponsor.
+<a href=#95 id=95 data-nosnippet>95</a></span><span class="attr">#[contracttype]
+<a href=#96 id=96 data-nosnippet>96</a>#[derive(Clone, Debug, PartialEq, Eq)]
+<a href=#97 id=97 data-nosnippet>97</a></span><span class="kw">pub struct </span>Totals {
+<a href=#98 id=98 data-nosnippet>98</a>    <span class="kw">pub </span>deposited: i128,
+<a href=#99 id=99 data-nosnippet>99</a>    <span class="kw">pub </span>committed: i128,
+<a href=#100 id=100 data-nosnippet>100</a>    <span class="kw">pub </span>refunded: i128,
+<a href=#101 id=101 data-nosnippet>101</a>    <span class="kw">pub </span>withdrawn: i128,
+<a href=#102 id=102 data-nosnippet>102</a>}
+<a href=#103 id=103 data-nosnippet>103</a>
+<a href=#104 id=104 data-nosnippet>104</a><span class="doccomment">/// A match, and the voucher it produced.
+<a href=#105 id=105 data-nosnippet>105</a></span><span class="attr">#[contracttype]
+<a href=#106 id=106 data-nosnippet>106</a>#[derive(Clone, Debug, PartialEq, Eq)]
+<a href=#107 id=107 data-nosnippet>107</a></span><span class="kw">pub struct </span>MatchRecord {
+<a href=#108 id=108 data-nosnippet>108</a>    <span class="doccomment">/// The voucher that was matched.
+<a href=#109 id=109 data-nosnippet>109</a>    </span><span class="kw">pub </span>original_voucher_id: u64,
+<a href=#110 id=110 data-nosnippet>110</a>    <span class="doccomment">/// The matching voucher this contract funded.
+<a href=#111 id=111 data-nosnippet>111</a>    </span><span class="kw">pub </span>matched_voucher_id: u64,
+<a href=#112 id=112 data-nosnippet>112</a>    <span class="doccomment">/// The sponsor whose budget paid for it.
+<a href=#113 id=113 data-nosnippet>113</a>    </span><span class="kw">pub </span>sponsor: Address,
+<a href=#114 id=114 data-nosnippet>114</a>    <span class="doccomment">/// What the match cost the sponsor.
+<a href=#115 id=115 data-nosnippet>115</a>    </span><span class="kw">pub </span>amount: i128,
+<a href=#116 id=116 data-nosnippet>116</a>    <span class="doccomment">/// The clinic the care goes to.
+<a href=#117 id=117 data-nosnippet>117</a>    </span><span class="kw">pub </span>provider: Address,
+<a href=#118 id=118 data-nosnippet>118</a>    <span class="doccomment">/// The service the care is for.
+<a href=#119 id=119 data-nosnippet>119</a>    </span><span class="kw">pub </span>service_code: u32,
+<a href=#120 id=120 data-nosnippet>120</a>    <span class="doccomment">/// When the match was made.
+<a href=#121 id=121 data-nosnippet>121</a>    </span><span class="kw">pub </span>matched_at: u64,
+<a href=#122 id=122 data-nosnippet>122</a>}
+<a href=#123 id=123 data-nosnippet>123</a>
+<a href=#124 id=124 data-nosnippet>124</a><span class="attr">#[contracttype]
+<a href=#125 id=125 data-nosnippet>125</a>#[derive(Clone)]
+<a href=#126 id=126 data-nosnippet>126</a></span><span class="kw">pub enum </span>DataKey {
+<a href=#127 id=127 data-nosnippet>127</a>    <span class="doccomment">/// Addresses and switches.
+<a href=#128 id=128 data-nosnippet>128</a>    </span>Config,
+<a href=#129 id=129 data-nosnippet>129</a>    <span class="doccomment">/// Address nominated by `propose_admin`, awaiting `accept_admin`.
+<a href=#130 id=130 data-nosnippet>130</a>    </span>PendingAdmin,
+<a href=#131 id=131 data-nosnippet>131</a>    <span class="doccomment">/// One sponsor's budget and rules.
+<a href=#132 id=132 data-nosnippet>132</a>    </span>Sponsor(Address),
+<a href=#133 id=133 data-nosnippet>133</a>    <span class="doccomment">/// The match a voucher received, keyed by the original voucher id.
+<a href=#134 id=134 data-nosnippet>134</a>    </span>Match(u64),
+<a href=#135 id=135 data-nosnippet>135</a>    <span class="doccomment">/// The original voucher id a matching voucher belongs to, keyed by the
+<a href=#136 id=136 data-nosnippet>136</a>    /// matching voucher id.
+<a href=#137 id=137 data-nosnippet>137</a>    </span>OriginalOf(u64),
+<a href=#138 id=138 data-nosnippet>138</a>    <span class="doccomment">/// Totals across every sponsor.
+<a href=#139 id=139 data-nosnippet>139</a>    </span>Totals,
+<a href=#140 id=140 data-nosnippet>140</a>}
+<a href=#141 id=141 data-nosnippet>141</a>
+<a href=#142 id=142 data-nosnippet>142</a><span class="attr">#[contracterror]
+<a href=#143 id=143 data-nosnippet>143</a>#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
+<a href=#144 id=144 data-nosnippet>144</a>#[repr(u32)]
+<a href=#145 id=145 data-nosnippet>145</a></span><span class="kw">pub enum </span>SponsorError {
+<a href=#146 id=146 data-nosnippet>146</a>    AlreadyInitialized = <span class="number">1</span>,
+<a href=#147 id=147 data-nosnippet>147</a>    NotInitialized = <span class="number">2</span>,
+<a href=#148 id=148 data-nosnippet>148</a>    NotAuthorized = <span class="number">3</span>,
+<a href=#149 id=149 data-nosnippet>149</a>    <span class="doccomment">/// The amount deposited or withdrawn was not positive.
+<a href=#150 id=150 data-nosnippet>150</a>    </span>InvalidAmount = <span class="number">4</span>,
+<a href=#151 id=151 data-nosnippet>151</a>    <span class="doccomment">/// The rules are outside what the desk will accept.
+<a href=#152 id=152 data-nosnippet>152</a>    </span>InvalidRules = <span class="number">5</span>,
+<a href=#153 id=153 data-nosnippet>153</a>    <span class="doccomment">/// The sponsor has not set any rules yet, so nothing is eligible.
+<a href=#154 id=154 data-nosnippet>154</a>    </span>RulesNotSet = <span class="number">6</span>,
+<a href=#155 id=155 data-nosnippet>155</a>    <span class="doccomment">/// The voucher does not exist in the voucher contract.
+<a href=#156 id=156 data-nosnippet>156</a>    </span>VoucherNotFound = <span class="number">7</span>,
+<a href=#157 id=157 data-nosnippet>157</a>    <span class="doccomment">/// The voucher is not `Funded`, so it cannot be matched.
+<a href=#158 id=158 data-nosnippet>158</a>    </span>VoucherNotFunded = <span class="number">8</span>,
+<a href=#159 id=159 data-nosnippet>159</a>    <span class="doccomment">/// The voucher has expired.
+<a href=#160 id=160 data-nosnippet>160</a>    </span>VoucherExpired = <span class="number">9</span>,
+<a href=#161 id=161 data-nosnippet>161</a>    <span class="doccomment">/// The voucher has already been matched.
+<a href=#162 id=162 data-nosnippet>162</a>    </span>AlreadyMatched = <span class="number">10</span>,
+<a href=#163 id=163 data-nosnippet>163</a>    <span class="doccomment">/// The sponsor tried to match a voucher it funded itself, or one this
+<a href=#164 id=164 data-nosnippet>164</a>    /// contract funded.
+<a href=#165 id=165 data-nosnippet>165</a>    </span>SelfMatchNotAllowed = <span class="number">11</span>,
+<a href=#166 id=166 data-nosnippet>166</a>    <span class="doccomment">/// The clinic is not registered in one of the sponsor's countries.
+<a href=#167 id=167 data-nosnippet>167</a>    </span>CountryNotEligible = <span class="number">12</span>,
+<a href=#168 id=168 data-nosnippet>168</a>    <span class="doccomment">/// The service is not one the sponsor matches.
+<a href=#169 id=169 data-nosnippet>169</a>    </span>ServiceNotEligible = <span class="number">13</span>,
+<a href=#170 id=170 data-nosnippet>170</a>    <span class="doccomment">/// The voucher was funded too recently to qualify.
+<a href=#171 id=171 data-nosnippet>171</a>    </span>VoucherTooNew = <span class="number">14</span>,
+<a href=#172 id=172 data-nosnippet>172</a>    <span class="doccomment">/// The voucher is worth less than the sponsor's minimum.
+<a href=#173 id=173 data-nosnippet>173</a>    </span>VoucherTooSmall = <span class="number">15</span>,
+<a href=#174 id=174 data-nosnippet>174</a>    <span class="doccomment">/// The match works out below the service price, and a voucher cannot be
+<a href=#175 id=175 data-nosnippet>175</a>    /// funded below the price of the care it pays for.
+<a href=#176 id=176 data-nosnippet>176</a>    </span>MatchBelowPrice = <span class="number">16</span>,
+<a href=#177 id=177 data-nosnippet>177</a>    <span class="doccomment">/// The sponsor's budget cannot cover this match.
+<a href=#178 id=178 data-nosnippet>178</a>    </span>BudgetExhausted = <span class="number">17</span>,
+<a href=#179 id=179 data-nosnippet>179</a>    <span class="doccomment">/// The withdrawal is larger than the sponsor's unused budget.
+<a href=#180 id=180 data-nosnippet>180</a>    </span>WithdrawExceedsBudget = <span class="number">18</span>,
+<a href=#181 id=181 data-nosnippet>181</a>    <span class="doccomment">/// The sponsor already has as many open matches as the desk allows.
+<a href=#182 id=182 data-nosnippet>182</a>    </span>TooManyOpenMatches = <span class="number">19</span>,
+<a href=#183 id=183 data-nosnippet>183</a>    <span class="doccomment">/// The desk is paused; deposits and matches are rejected.
+<a href=#184 id=184 data-nosnippet>184</a>    </span>Paused = <span class="number">20</span>,
+<a href=#185 id=185 data-nosnippet>185</a>    <span class="doccomment">/// The voucher contract refused the matching voucher.
+<a href=#186 id=186 data-nosnippet>186</a>    </span>VoucherCallFailed = <span class="number">21</span>,
+<a href=#187 id=187 data-nosnippet>187</a>    <span class="doccomment">/// The clinic is not active in the registry, so it cannot be paid.
+<a href=#188 id=188 data-nosnippet>188</a>    </span>ProviderNotEligible = <span class="number">22</span>,
+<a href=#189 id=189 data-nosnippet>189</a>    <span class="doccomment">/// The clinic has paused this service, so it cannot be funded.
+<a href=#190 id=190 data-nosnippet>190</a>    </span>ServiceUnavailable = <span class="number">23</span>,
+<a href=#191 id=191 data-nosnippet>191</a>    <span class="doccomment">/// The match works out to nothing, because the ratio is small and the
+<a href=#192 id=192 data-nosnippet>192</a>    /// voucher is small.
+<a href=#193 id=193 data-nosnippet>193</a>    </span>MatchTooSmall = <span class="number">24</span>,
+<a href=#194 id=194 data-nosnippet>194</a>    <span class="doccomment">/// A counter would have to exceed the largest amount the token can
+<a href=#195 id=195 data-nosnippet>195</a>    /// represent.
+<a href=#196 id=196 data-nosnippet>196</a>    </span>MathOverflow = <span class="number">25</span>,
+<a href=#197 id=197 data-nosnippet>197</a>    <span class="doccomment">/// There is no admin nomination waiting to be accepted.
+<a href=#198 id=198 data-nosnippet>198</a>    </span>NoPendingAdmin = <span class="number">26</span>,
+<a href=#199 id=199 data-nosnippet>199</a>}
+<a href=#200 id=200 data-nosnippet>200</a>
+<a href=#201 id=201 data-nosnippet>201</a><span class="doccomment">/// Maps the shared helpers' failures onto this contract's error numbers, so
+<a href=#202 id=202 data-nosnippet>202</a>/// callers keep seeing the same codes they did before the helpers were shared.
+<a href=#203 id=203 data-nosnippet>203</a></span><span class="kw">impl </span>From&lt;sci_common::CommonError&gt; <span class="kw">for </span>SponsorError {
+<a href=#204 id=204 data-nosnippet>204</a>    <span class="kw">fn </span>from(error: sci_common::CommonError) -&gt; <span class="self">Self </span>{
+<a href=#205 id=205 data-nosnippet>205</a>        <span class="kw">match </span>error {
+<a href=#206 id=206 data-nosnippet>206</a>            sci_common::CommonError::NotAuthorized =&gt; SponsorError::NotAuthorized,
+<a href=#207 id=207 data-nosnippet>207</a>            sci_common::CommonError::NoPendingAdmin =&gt; SponsorError::NoPendingAdmin,
+<a href=#208 id=208 data-nosnippet>208</a>        }
+<a href=#209 id=209 data-nosnippet>209</a>    }
+<a href=#210 id=210 data-nosnippet>210</a>}
+<a href=#211 id=211 data-nosnippet>211</a>
+<a href=#212 id=212 data-nosnippet>212</a><span class="attr">#[cfg(test)]
+<a href=#213 id=213 data-nosnippet>213</a></span><span class="kw">mod </span>error_conversion_tests {
+<a href=#214 id=214 data-nosnippet>214</a>    <span class="kw">use </span>super::<span class="kw-2">*</span>;
+<a href=#215 id=215 data-nosnippet>215</a>
+<a href=#216 id=216 data-nosnippet>216</a>    <span class="attr">#[test]
+<a href=#217 id=217 data-nosnippet>217</a>    </span><span class="kw">fn </span>not_authorized_maps() {
+<a href=#218 id=218 data-nosnippet>218</a>        <span class="kw">let </span>err: SponsorError = sci_common::CommonError::NotAuthorized.into();
+<a href=#219 id=219 data-nosnippet>219</a>        <span class="macro">assert_eq!</span>(err, SponsorError::NotAuthorized);
+<a href=#220 id=220 data-nosnippet>220</a>    }
+<a href=#221 id=221 data-nosnippet>221</a>
+<a href=#222 id=222 data-nosnippet>222</a>    <span class="attr">#[test]
+<a href=#223 id=223 data-nosnippet>223</a>    </span><span class="kw">fn </span>no_pending_admin_maps() {
+<a href=#224 id=224 data-nosnippet>224</a>        <span class="kw">let </span>err: SponsorError = sci_common::CommonError::NoPendingAdmin.into();
+<a href=#225 id=225 data-nosnippet>225</a>        <span class="macro">assert_eq!</span>(err, SponsorError::NoPendingAdmin);
+<a href=#226 id=226 data-nosnippet>226</a>    }
+<a href=#227 id=227 data-nosnippet>227</a>}
+</code></pre></div></section></main></body></html>
