@@ -10,6 +10,15 @@ use crate::{
     MIN_PRICE_NOTICE_SECS,
 };
 
+/// Reason codes as documented in `docs/protocol/trust.md`: codes are added,
+/// never renumbered. `1` is "verified" — the routine reason an admin
+/// activates a freshly verified clinic.
+const REASON_VERIFIED: u32 = 1;
+
+/// A different code, so the event snapshot proves `reason_code` is what the
+/// caller passed rather than a constant. `3` is "complaint under review".
+const REASON_SUSPENDED_WHILE_TESTING: u32 = 3;
+
 struct Fixture {
     env: Env,
     client: RegistryClient<'static>,
@@ -36,8 +45,12 @@ fn activate(f: &Fixture, provider: &Address) {
         &String::from_str(&f.env, "Ikeja General Clinic"),
         &String::from_str(&f.env, "NG"),
     );
-    f.client
-        .set_provider_status(&f.admin, provider, &ProviderStatus::Active);
+    f.client.set_provider_status(
+        &f.admin,
+        provider,
+        &ProviderStatus::Active,
+        &REASON_VERIFIED,
+    );
 }
 
 fn register_active_provider(f: &Fixture) -> Address {
@@ -152,7 +165,12 @@ fn non_admin_cannot_change_status() {
 
     let err = f
         .client
-        .try_set_provider_status(&impostor, &provider, &ProviderStatus::Suspended)
+        .try_set_provider_status(
+            &impostor,
+            &provider,
+            &ProviderStatus::Suspended,
+            &REASON_VERIFIED,
+        )
         .err()
         .unwrap()
         .unwrap();
@@ -163,8 +181,12 @@ fn non_admin_cannot_change_status() {
 fn suspended_provider_is_not_active() {
     let f = setup();
     let provider = register_active_provider(&f);
-    f.client
-        .set_provider_status(&f.admin, &provider, &ProviderStatus::Suspended);
+    f.client.set_provider_status(
+        &f.admin,
+        &provider,
+        &ProviderStatus::Suspended,
+        &REASON_VERIFIED,
+    );
     assert!(!f.client.is_active_provider(&provider));
 }
 
@@ -367,8 +389,12 @@ fn schedule_rejects_bad_input() {
         .unwrap();
     assert_eq!(err, RegistryError::ServiceNotFound);
 
-    f.client
-        .set_provider_status(&f.admin, &provider, &ProviderStatus::Suspended);
+    f.client.set_provider_status(
+        &f.admin,
+        &provider,
+        &ProviderStatus::Suspended,
+        &REASON_VERIFIED,
+    );
     let err = f
         .client
         .try_schedule_service_price(&provider, &CONSULT, &PRICE, &effective_at)
@@ -412,8 +438,12 @@ fn suspended_provider_cannot_reprice() {
         &String::from_str(&f.env, "Consult"),
         &30_000_000i128,
     );
-    f.client
-        .set_provider_status(&f.admin, &provider, &ProviderStatus::Suspended);
+    f.client.set_provider_status(
+        &f.admin,
+        &provider,
+        &ProviderStatus::Suspended,
+        &REASON_VERIFIED,
+    );
 
     let err = f
         .client
@@ -698,9 +728,9 @@ fn providers_in_tracks_active_status() {
         &String::from_str(&f.env, "NG"),
     );
     f.client
-        .set_provider_status(&f.admin, &a, &ProviderStatus::Active);
+        .set_provider_status(&f.admin, &a, &ProviderStatus::Active, &0u32);
     f.client
-        .set_provider_status(&f.admin, &b, &ProviderStatus::Active);
+        .set_provider_status(&f.admin, &b, &ProviderStatus::Active, &0u32);
     // c stays Pending.
 
     let ng = f
@@ -712,7 +742,7 @@ fn providers_in_tracks_active_status() {
 
     // Suspending b removes it; only a remains.
     f.client
-        .set_provider_status(&f.admin, &b, &ProviderStatus::Suspended);
+        .set_provider_status(&f.admin, &b, &ProviderStatus::Suspended, &0u32);
     let ng = f
         .client
         .providers_in(&String::from_str(&f.env, "NG"), &0u32, &10u32);
@@ -721,7 +751,7 @@ fn providers_in_tracks_active_status() {
 
     // Reactivating b re-adds it once.
     f.client
-        .set_provider_status(&f.admin, &b, &ProviderStatus::Active);
+        .set_provider_status(&f.admin, &b, &ProviderStatus::Active, &0u32);
     let ng = f
         .client
         .providers_in(&String::from_str(&f.env, "NG"), &0u32, &10u32);
@@ -753,7 +783,7 @@ fn providers_in_pages() {
             &String::from_str(&f.env, "NG"),
         );
         f.client
-            .set_provider_status(&f.admin, &provider, &ProviderStatus::Active);
+            .set_provider_status(&f.admin, &provider, &ProviderStatus::Active, &0u32);
         providers.push_back(provider);
     }
 
@@ -1080,6 +1110,10 @@ const AUTH_MATRIX: &[AuthCase] = &[
         auth: signer("`admin`", admin_addr),
     },
     AuthCase {
+        function: "retire",
+        auth: signer("`owner`", provider_addr),
+    },
+    AuthCase {
         function: "upsert_service",
         auth: signer("`provider_addr`", provider_addr),
     },
@@ -1205,7 +1239,16 @@ fn run_case(f: &AuthFixture, function: &str) -> std::vec::Vec<Address> {
         }
         "set_provider_status" => {
             activate(&f.f, &f.provider);
-            client.set_provider_status(&f.f.admin, &f.provider, &ProviderStatus::Suspended);
+            client.set_provider_status(
+                &f.f.admin,
+                &f.provider,
+                &ProviderStatus::Suspended,
+                &REASON_VERIFIED,
+            );
+        }
+        "retire" => {
+            activate(&f.f, &f.provider);
+            client.retire(&f.provider, &REASON_VERIFIED);
         }
         "upsert_service" => {
             activate(&f.f, &f.provider);
@@ -1602,18 +1645,23 @@ fn provider_status_changed_event_snapshot() {
     let f = setup();
     let provider = register_active_provider(&f);
 
-    f.client
-        .set_provider_status(&f.admin, &provider, &ProviderStatus::Suspended);
+    f.client.set_provider_status(
+        &f.admin,
+        &provider,
+        &ProviderStatus::Suspended,
+        &REASON_SUSPENDED_WHILE_TESTING,
+    );
 
     let e = one_event(&f);
     assert_layout(
         &e,
         "provider_status_changed",
         &[ScVal::from(&provider)],
-        &["status"],
+        &["reason_code", "status"],
     );
     // Unit enum with explicit discriminants: Suspended is 2.
     assert_eq!(field_u32(&e, "status"), 2);
+    assert_eq!(field_u32(&e, "reason_code"), REASON_SUSPENDED_WHILE_TESTING);
 }
 
 #[test]
@@ -1821,10 +1869,18 @@ fn provider_service_and_attester_survive_sixty_days_of_activity() {
         if day == 3 {
             // A suspension and reinstatement mid-way: normal admin writes
             // extend the whole contract instance, not just one entry.
-            f.client
-                .set_provider_status(&f.admin, &provider, &ProviderStatus::Suspended);
-            f.client
-                .set_provider_status(&f.admin, &provider, &ProviderStatus::Active);
+            f.client.set_provider_status(
+                &f.admin,
+                &provider,
+                &ProviderStatus::Suspended,
+                &REASON_VERIFIED,
+            );
+            f.client.set_provider_status(
+                &f.admin,
+                &provider,
+                &ProviderStatus::Active,
+                &REASON_VERIFIED,
+            );
         }
     }
 
@@ -1943,4 +1999,358 @@ fn capacity_changed_event_snapshot() {
         &["max_outstanding"],
     );
     assert_eq!(field_u32(&e, "max_outstanding"), 12);
+}
+
+// ----- country codes -----
+//
+// The app and the indexer group clinics by country code, so the registry
+// accepts only what can be a country: two ASCII uppercase letters. What
+// breaks if this is wrong: "ng" and "NG" showing up as two countries, or
+// junk codes breaking the filter entirely.
+//
+// Checking against the full ISO list is an off-chain concern; the shape is
+// not.
+
+#[test]
+fn country_codes_need_two_uppercase_ascii_letters() {
+    let f = setup();
+    let name = String::from_str(&f.env, "Clinic");
+
+    // Two-character codes that are not ISO alpha-2: lowercase, a digit,
+    // whitespace, mixed case, and a two-byte non-ASCII character ("é" is
+    // exactly two UTF-8 bytes, so byte length alone would let it through).
+    for bad in ["ng", "N1", "  ", "nG", "é"] {
+        let provider = Address::generate(&f.env);
+        let country = String::from_str(&f.env, bad);
+        let err = f
+            .client
+            .try_register_provider(&provider, &name, &country)
+            .err()
+            .unwrap()
+            .unwrap();
+        assert_eq!(
+            err,
+            RegistryError::InvalidCountry,
+            "`{bad}` must be refused"
+        );
+        assert!(!f.client.is_active_provider(&provider));
+    }
+
+    // The right shape, whatever the full ISO list says: accepted.
+    for good in ["NG", "KE", "GB"] {
+        let provider = Address::generate(&f.env);
+        let country = String::from_str(&f.env, good);
+        f.client.register_provider(&provider, &name, &country);
+        assert_eq!(f.client.get_provider(&provider).country, country);
+    }
+}
+
+// ----- status transitions -----
+//
+// Only four transitions carry real information; every other pair of states
+// — including same-to-same and anything touching `Retired` — must be
+// refused with `InvalidTransition` instead of emitting an event that
+// misleads the indexer. One test per pair of the 4x4 state machine.
+//
+// What breaks if this is wrong: an audit of the registry's history shows
+// status changes that never happened, or a backwards `Active → Pending`
+// nobody can explain.
+
+/// A fresh provider left in `status`, ready for one transition attempt.
+fn provider_in(f: &Fixture, status: ProviderStatus) -> Address {
+    let provider = Address::generate(&f.env);
+    f.client.register_provider(
+        &provider,
+        &String::from_str(&f.env, "Clinic"),
+        &String::from_str(&f.env, "NG"),
+    );
+    match status {
+        ProviderStatus::Pending => {}
+        ProviderStatus::Retired => f.client.retire(&provider, &REASON_VERIFIED),
+        other => f
+            .client
+            .set_provider_status(&f.admin, &provider, &other, &REASON_VERIFIED),
+    }
+    provider
+}
+
+/// The admin attempts `provider → to`, returning the typed error.
+fn try_transition(f: &Fixture, provider: &Address, to: &ProviderStatus) -> RegistryError {
+    f.client
+        .try_set_provider_status(&f.admin, provider, to, &REASON_VERIFIED)
+        .err()
+        .unwrap()
+        .unwrap()
+}
+
+fn assert_allowed(from: ProviderStatus, to: ProviderStatus) {
+    let f = setup();
+    let provider = provider_in(&f, from);
+    f.client
+        .set_provider_status(&f.admin, &provider, &to, &REASON_VERIFIED);
+    assert_eq!(f.client.get_provider(&provider).status, to);
+}
+
+fn assert_rejected(from: ProviderStatus, to: ProviderStatus) {
+    let f = setup();
+    let provider = provider_in(&f, from);
+    assert_eq!(
+        try_transition(&f, &provider, &to),
+        RegistryError::InvalidTransition,
+        "`{from:?} → {to:?}` must be refused"
+    );
+    // The failed call changed nothing.
+    assert_eq!(f.client.get_provider(&provider).status, from);
+}
+
+#[test]
+fn pending_to_active_is_allowed() {
+    assert_allowed(ProviderStatus::Pending, ProviderStatus::Active);
+}
+
+#[test]
+fn pending_to_suspended_is_allowed() {
+    assert_allowed(ProviderStatus::Pending, ProviderStatus::Suspended);
+}
+
+#[test]
+fn active_to_suspended_is_allowed() {
+    assert_allowed(ProviderStatus::Active, ProviderStatus::Suspended);
+}
+
+#[test]
+fn suspended_to_active_is_allowed() {
+    assert_allowed(ProviderStatus::Suspended, ProviderStatus::Active);
+}
+
+#[test]
+fn pending_to_pending_is_rejected() {
+    assert_rejected(ProviderStatus::Pending, ProviderStatus::Pending);
+}
+
+#[test]
+fn active_to_active_is_rejected() {
+    assert_rejected(ProviderStatus::Active, ProviderStatus::Active);
+}
+
+#[test]
+fn suspended_to_suspended_is_rejected() {
+    assert_rejected(ProviderStatus::Suspended, ProviderStatus::Suspended);
+}
+
+#[test]
+fn retired_to_retired_is_rejected() {
+    assert_rejected(ProviderStatus::Retired, ProviderStatus::Retired);
+}
+
+#[test]
+fn active_to_pending_is_rejected() {
+    assert_rejected(ProviderStatus::Active, ProviderStatus::Pending);
+}
+
+#[test]
+fn suspended_to_pending_is_rejected() {
+    assert_rejected(ProviderStatus::Suspended, ProviderStatus::Pending);
+}
+
+#[test]
+fn pending_to_retired_is_rejected_for_the_admin() {
+    // Only the clinic's own owner retires it, via `retire`.
+    assert_rejected(ProviderStatus::Pending, ProviderStatus::Retired);
+}
+
+#[test]
+fn active_to_retired_is_rejected_for_the_admin() {
+    assert_rejected(ProviderStatus::Active, ProviderStatus::Retired);
+}
+
+#[test]
+fn suspended_to_retired_is_rejected_for_the_admin() {
+    assert_rejected(ProviderStatus::Suspended, ProviderStatus::Retired);
+}
+
+#[test]
+fn retired_to_pending_is_rejected() {
+    assert_rejected(ProviderStatus::Retired, ProviderStatus::Pending);
+}
+
+#[test]
+fn retired_to_active_is_rejected() {
+    assert_rejected(ProviderStatus::Retired, ProviderStatus::Active);
+}
+
+#[test]
+fn retired_to_suspended_is_rejected() {
+    assert_rejected(ProviderStatus::Retired, ProviderStatus::Suspended);
+}
+
+// ----- reason codes -----
+//
+// Every status change records why, on the provider and in the event, so a
+// suspended clinic knows what to fix and a funder can tell fraud from
+// paperwork. Codes are documented in `docs/protocol/trust.md` and are
+// added, never renumbered.
+
+/// `5` is "closed" — the reason a clinic gives when it retires.
+const REASON_CLOSED: u32 = 5;
+
+#[test]
+fn reason_code_is_recorded_on_every_status_change() {
+    let f = setup();
+    let provider = Address::generate(&f.env);
+    f.client.register_provider(
+        &provider,
+        &String::from_str(&f.env, "Clinic"),
+        &String::from_str(&f.env, "NG"),
+    );
+    // No status change has happened yet.
+    assert_eq!(f.client.get_provider(&provider).reason_code, 0);
+
+    f.client.set_provider_status(
+        &f.admin,
+        &provider,
+        &ProviderStatus::Active,
+        &REASON_VERIFIED,
+    );
+    assert_eq!(
+        f.client.get_provider(&provider).reason_code,
+        REASON_VERIFIED
+    );
+
+    f.client.set_provider_status(
+        &f.admin,
+        &provider,
+        &ProviderStatus::Suspended,
+        &REASON_SUSPENDED_WHILE_TESTING,
+    );
+    assert_eq!(
+        f.client.get_provider(&provider).reason_code,
+        REASON_SUSPENDED_WHILE_TESTING
+    );
+
+    f.client.set_provider_status(
+        &f.admin,
+        &provider,
+        &ProviderStatus::Active,
+        &REASON_VERIFIED,
+    );
+    assert_eq!(
+        f.client.get_provider(&provider).reason_code,
+        REASON_VERIFIED
+    );
+}
+
+// ----- retiring -----
+//
+// A clinic that closes must be able to leave the registry itself, and
+// staying left behind means funders keep sending money it will never claim.
+// `Retired` is terminal: neither the clinic nor the admin can leave it.
+
+#[test]
+fn owner_retires_a_clinic_and_it_leaves_the_registry() {
+    let f = setup();
+    let provider = register_active_provider(&f);
+
+    f.client.retire(&provider, &REASON_CLOSED);
+
+    let stored = f.client.get_provider(&provider);
+    assert_eq!(stored.status, ProviderStatus::Retired);
+    assert_eq!(stored.reason_code, REASON_CLOSED);
+    // Not billable: `voucher` refuses to fund a retired clinic.
+    assert!(!f.client.is_active_provider(&provider));
+}
+
+#[test]
+fn retire_needs_the_owners_signature() {
+    let f = setup();
+    let provider = register_active_provider(&f);
+
+    // With no address authorized, the host refuses `owner.require_auth()`:
+    // an unsigned retirement must not go through. (That the demanded signer
+    // is the clinic's own address and nobody else's is asserted exactly by
+    // the authorisation matrix, which records one signer for `retire`.)
+    f.env.mock_auths(&[]);
+    assert!(
+        f.client.try_retire(&provider, &REASON_CLOSED).is_err(),
+        "an unsigned retirement must not go through"
+    );
+
+    // And `retire` keys the clinic off the caller's own address, so an
+    // impostor can only name themselves — they cannot reach someone else's
+    // clinic record at all.
+    let impostor = Address::generate(&f.env);
+    f.env.mock_all_auths();
+    let err = f
+        .client
+        .try_retire(&impostor, &REASON_CLOSED)
+        .err()
+        .unwrap()
+        .unwrap();
+    assert_eq!(err, RegistryError::ProviderNotFound);
+
+    assert!(f.client.is_active_provider(&provider));
+}
+
+#[test]
+fn retiring_twice_is_rejected() {
+    let f = setup();
+    let provider = register_active_provider(&f);
+    f.client.retire(&provider, &REASON_CLOSED);
+
+    let err = f
+        .client
+        .try_retire(&provider, &REASON_CLOSED)
+        .err()
+        .unwrap()
+        .unwrap();
+    assert_eq!(err, RegistryError::InvalidTransition);
+    assert_eq!(
+        f.client.get_provider(&provider).status,
+        ProviderStatus::Retired
+    );
+}
+
+#[test]
+fn a_retired_clinic_cannot_be_brought_back_by_the_admin() {
+    let f = setup();
+    let provider = register_active_provider(&f);
+    f.client.retire(&provider, &REASON_CLOSED);
+
+    // Every exit from `Retired` is refused: re-registration is the only
+    // way back, so the admin cannot silently un-retire a clinic.
+    for to in [
+        ProviderStatus::Pending,
+        ProviderStatus::Active,
+        ProviderStatus::Suspended,
+    ] {
+        assert_eq!(
+            try_transition(&f, &provider, &to),
+            RegistryError::InvalidTransition
+        );
+    }
+    assert_eq!(
+        f.client.get_provider(&provider).status,
+        ProviderStatus::Retired
+    );
+    assert!(!f.client.is_active_provider(&provider));
+}
+
+#[test]
+fn a_retired_clinic_cannot_manage_its_catalog() {
+    let f = setup();
+    let provider = register_active_provider(&f);
+    f.client.retire(&provider, &REASON_CLOSED);
+
+    let err = f
+        .client
+        .try_upsert_service(
+            &provider,
+            &101u32,
+            &String::from_str(&f.env, "Consult"),
+            &30_000_000i128,
+        )
+        .err()
+        .unwrap()
+        .unwrap();
+    assert_eq!(err, RegistryError::ProviderNotActive);
 }
