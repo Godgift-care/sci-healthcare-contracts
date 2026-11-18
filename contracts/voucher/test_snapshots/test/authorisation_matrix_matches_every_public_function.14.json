@@ -1022,6 +1022,14 @@
                           },
                           {
                             "key": {
+                              "symbol": "max_amount"
+                            },
+                            "val": {
+                              "i128": "1000000000"
+                            }
+                          },
+                          {
+                            "key": {
                               "symbol": "receipt_book"
                             },
                             "val": {
