@@ -222,7 +222,27 @@ npm run lifecycle -- settle <voucher-id>         # finish a voucher later, if th
 - `CLINIC_SECRET`, `ATTESTER_SECRET` and `FUNDER_SECRET` are optional — a missing one is generated, printed and friendbotted, so only `ADMIN_SECRET` is required. `ISSUER_SECRET` is needed only when the deployment has no faucet.
 - Activation and attestation are admin-gated, so a full run needs a deployment you control; the shared ids in the table above belong to the maintainer's deployment.
 - Node 18+ is required; the script polyfills the Web Crypto global that older Node versions hide from `tsx`.
-- CI type-checks the example, so it stays working.
+- CI type-checks both examples and runs the keeper's unit tests, so they stay working.
+
+### Run the settlement keeper
+
+[`examples/keeper.ts`](examples/keeper.ts) asks the backend API which vouchers are due, reads each one from the chain, simulates `settle` or `refund`, and only then submits it. `settle` and `refund` are permissionless, so the keeper does not need a USDC trustline; its account only pays the XLM transaction fee. A failed simulation, a status change or an open dispute window means the voucher is skipped, never sent.
+
+```bash
+cd examples && npm install
+
+# Print the plan without a key: no signature, no transaction.
+npm run keeper -- --dry-run
+
+# Submit from a funded account, once, or keep running every 30 seconds.
+KEEPER_SECRET=<funded account seed> npm run keeper
+KEEPER_SECRET=<funded account seed> npm run keeper -- --watch
+```
+
+- `KEEPER_API_URL` defaults to `http://localhost:8080`; `KEEPER_RPC_URL` and `KEEPER_NETWORK_PASSPHRASE` default to testnet.
+- `VOUCHER_CONTRACT_ID` comes from `deployments/testnet.env`, with the published testnet id as the fallback.
+- With `KEEPER_SECRET` set, `--dry-run` also simulates each call, so a preflight failure is reported without sending anything.
+- `npm test` covers the time parsing, API filters, due rules and CLI parsing; there is no network access in the tests.
 
 ## Contract reference
 
@@ -292,6 +312,11 @@ The admin should be a 2-of-3 Stellar multisig account, not one key. The
 [multisig admin guide](docs/developers/multisig-admin.md) creates it, hands all
 three contracts to it through the two-step `propose_admin` / `accept_admin`
 handover, and shows how to submit an admin call with two signatures.
+
+An organisation funding many vouchers should use a separate 2-of-3 **funder**
+multisig. [Funding from an organisation wallet](docs/guides/organisation-funders.md)
+covers setup, every funder action and its signatures, refunds back to the shared
+account, and per-voucher record keeping.
 
 Wallets and remittance apps can add care vouchers without this UI. The
 [integration guide](docs/developers/integration.md) covers deriving a

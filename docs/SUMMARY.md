@@ -13,6 +13,7 @@
 ## Guides
 
 * [Funding care for someone](guides/funders.md)
+* [Funding from an organisation wallet](guides/organisation-funders.md)
 * [Running a clinic](guides/clinics.md)
 * [Clinic FAQ](guides/clinics-faq.md)
 * [Attesting delivery](guides/attesters.md)

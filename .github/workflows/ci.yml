@@ -242,6 +242,7 @@ jobs:
           cache-dependency-path: examples/package-lock.json
       - run: npm ci
       - run: npm run typecheck
+      - run: npm test
 
   bot:
     name: auto-merge bot tests
