@@ -7,6 +7,7 @@
 
 * [How a voucher works](protocol/lifecycle.md)
 * [Economics](protocol/economics.md)
+* [Storage and rent costs](protocol/costs.md)
 * [Trust model](protocol/trust.md)
 * [Privacy](protocol/privacy.md)
 
@@ -25,6 +26,7 @@
 
 * [Local setup](developers/setup.md)
 * [Contract reference](developers/contracts.md)
+* [Reading contract events](developers/events.md)
 * [Integrating from another app](developers/integration.md)
 * [Trying it by hand in Stellar Lab](developers/stellar-lab.md)
 * [Using a multisig admin](developers/multisig-admin.md)
