@@ -1,0 +1,76 @@
+# Labels applied to pull requests by .github/workflows/label-pr.yml.
+#
+# One label per contract crate, plus one for the workspace and each other area
+# of the repository. Labels are created automatically if they do not exist.
+# A pull request can carry several labels: a change to contracts/voucher and
+# docs/ gets both "contract: voucher" and "area: docs".
+
+"contract: common":
+  - changed-files:
+      - any-glob-to-any-file:
+          - contracts/common/**
+
+"contract: registry":
+  - changed-files:
+      - any-glob-to-any-file:
+          - contracts/registry/**
+
+"contract: receipt":
+  - changed-files:
+      - any-glob-to-any-file:
+          - contracts/receipt/**
+
+"contract: voucher":
+  - changed-files:
+      - any-glob-to-any-file:
+          - contracts/voucher/**
+
+"contract: faucet":
+  - changed-files:
+      - any-glob-to-any-file:
+          - contracts/faucet/**
+
+"contract: sponsor":
+  - changed-files:
+      - any-glob-to-any-file:
+          - contracts/sponsor/**
+
+"area: contracts":
+  - changed-files:
+      - any-glob-to-any-file:
+          - contracts/**
+          - Cargo.toml
+          - Cargo.lock
+          - deny.toml
+          - rust-toolchain.toml
+
+"area: scripts":
+  - changed-files:
+      - any-glob-to-any-file:
+          - scripts/**
+          - justfile
+
+"area: docs":
+  - changed-files:
+      - any-glob-to-any-file:
+          - docs/**
+          - README.md
+          - CHANGELOG.md
+          - CONTRIBUTING.md
+          - CODE_OF_CONDUCT.md
+          - SECURITY.md
+
+"area: ci":
+  - changed-files:
+      - any-glob-to-any-file:
+          - .github/**
+
+"area: examples":
+  - changed-files:
+      - any-glob-to-any-file:
+          - examples/**
+
+"area: deployments":
+  - changed-files:
+      - any-glob-to-any-file:
+          - deployments/**
