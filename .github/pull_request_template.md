@@ -16,4 +16,5 @@ Closes #
 - [ ] `cargo build --target wasm32v1-none --release` succeeds
 - [ ] Event fields unchanged, or the matching indexer change is linked
 - [ ] Docs in `docs/` and the README contract reference updated if the interface changed
+- [ ] `CHANGELOG.md` (Unreleased) updated if anything under `contracts/` changed, or `skip-changelog` requested with a reason
 - [ ] No patient-identifying data added to storage or events

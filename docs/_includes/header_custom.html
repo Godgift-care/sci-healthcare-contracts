@@ -1,0 +1,57 @@
+{%- comment -%}
+  Version banner for the versioned docs site.
+
+  scripts/build-docs-site.sh sets docs_version ("main" or a release tag),
+  docs_latest (the newest release tag) and docs_root (the site root) for
+  every build, and copies this file into each release snapshot. Without
+  those values (GitHub's legacy Pages build, or `jekyll serve` on docs/)
+  nothing is rendered.
+
+  just-the-docs offers this include in its header bar, which it hides on
+  small screens. The banner is rendered here, so it shows on a desktop
+  without JavaScript, and the script below moves it to the top of the page
+  content, where it shows at every width. The header's own layout (search,
+  links) is left untouched.
+{%- endcomment -%}
+{%- if site.docs_version and site.docs_version != "" -%}
+{%- assign root = site.docs_root | default: "" -%}
+{%- assign latest = site.docs_latest -%}
+<style>
+  .docs-version-banner {
+    align-self: center;
+    padding: 0.5rem 0.75rem;
+    font-size: 0.875rem;
+    line-height: 1.4;
+    border: 1px solid #eeebee;
+    border-radius: 4px;
+  }
+  .main-content-wrap > .docs-version-banner { margin-top: 1rem; }
+  .docs-version-banner--main { background: #f5f6fa; }
+  .docs-version-banner--latest { background: #e6f4ea; }
+  .docs-version-banner--old { background: #fff4e5; border-color: #f0c36d; font-weight: 600; }
+  .docs-version-banner a { text-decoration: underline; }
+</style>
+{%- if site.docs_version == "main" -%}
+<div id="docs-version-banner" class="docs-version-banner docs-version-banner--main" role="note">
+  You are reading the docs for <code>main</code>, which can describe functions that are not deployed yet.
+  {%- if latest and latest != "" %} Integrating the deployed contracts? Read the <a href="{{ root }}/{{ latest }}/">{{ latest }} docs</a> (latest release).{%- endif %}
+</div>
+{%- elsif site.docs_version == latest -%}
+<div id="docs-version-banner" class="docs-version-banner docs-version-banner--latest" role="note">
+  Docs for <strong>{{ site.docs_version }}</strong>, the latest release.
+  Unreleased changes are documented on <a href="{{ root }}/">main</a>.
+</div>
+{%- else -%}
+<div id="docs-version-banner" class="docs-version-banner docs-version-banner--old" role="note">
+  These docs are for <strong>{{ site.docs_version }}</strong>, an older release.
+  Read the <a href="{{ root }}/{{ latest }}/">latest release ({{ latest }})</a> or <a href="{{ root }}/">main</a>.
+</div>
+{%- endif %}
+<script>
+  document.addEventListener('DOMContentLoaded', function () {
+    var banner = document.getElementById('docs-version-banner');
+    var wrap = document.querySelector('.main-content-wrap');
+    if (banner && wrap) wrap.insertBefore(banner, wrap.firstChild);
+  });
+</script>
+{%- endif -%}

@@ -20,6 +20,9 @@ The flow is:
 The examples run against **testnet**. Mainnet is not open: the contracts are
 unaudited. See the [mainnet launch checklist](mainnet-checklist.md).
 
+To make the same calls by hand in a browser before writing code, see
+[Trying it by hand in Stellar Lab](stellar-lab.md).
+
 ## Prerequisites
 
 - Node.js 22 or newer.

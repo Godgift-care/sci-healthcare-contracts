@@ -17,6 +17,11 @@ relative_links:
 exclude:
   - SUMMARY.md
 
+# Renders ```mermaid code blocks (the architecture and dispute diagrams).
+# GitHub renders the same blocks natively.
+mermaid:
+  version: "11.4.1"
+
 color_scheme: light
 search_enabled: true
 heading_anchors: true
