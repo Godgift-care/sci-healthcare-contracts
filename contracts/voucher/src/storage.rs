@@ -35,6 +35,7 @@ pub(crate) struct StoredVoucher(
     u64,             // attested_at
     u64,             // dispute_deadline
     Option<Address>, // attester
+    u32,             // response_code
 );
 
 impl StoredVoucher {
@@ -52,6 +53,7 @@ impl StoredVoucher {
             v.attested_at,
             v.dispute_deadline,
             v.attester.clone(),
+            v.response_code,
         )
     }
 
@@ -70,6 +72,7 @@ impl StoredVoucher {
             attested_at: self.9,
             dispute_deadline: self.10,
             attester: self.11,
+            response_code: self.12,
         }
     }
 }
