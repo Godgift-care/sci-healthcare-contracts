@@ -835,10 +835,9 @@ impl VoucherEscrow {
     pub fn statuses(env: Env, ids: Vec<u64>) -> Vec<(u64, VoucherStatus)> {
         let mut statuses = Vec::new(&env);
         for index in 0..ids.len().min(MAX_STATUSES_PER_CALL) {
-            if let Some(id) = ids.get(index) {
-                if let Ok(voucher) = read_voucher_without_extend(&env, id) {
-                    statuses.push_back((id, voucher.status));
-                }
+            let id = ids.get_unchecked(index);
+            if let Ok(voucher) = read_voucher_without_extend(&env, id) {
+                statuses.push_back((id, voucher.status));
             }
         }
         statuses

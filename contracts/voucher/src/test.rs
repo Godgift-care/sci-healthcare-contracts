@@ -497,6 +497,28 @@ fn redirect_moves_a_funded_voucher_and_emits_event() {
 }
 
 #[test]
+fn only_funder_can_redirect() {
+    let f = setup();
+    let id = fund(&f);
+    let new_provider = register_redirect_provider(&f);
+    f.registry.upsert_service(
+        &new_provider,
+        &CONSULT,
+        &String::from_str(&f.env, "Outpatient consult"),
+        &CONSULT_PRICE,
+    );
+    let stranger = Address::generate(&f.env);
+
+    let err = f
+        .voucher
+        .try_redirect(&stranger, &id, &new_provider)
+        .err()
+        .unwrap()
+        .unwrap();
+    assert_eq!(err, VoucherError::NotAuthorized);
+}
+
+#[test]
 fn cannot_redirect_to_an_inactive_provider() {
     let f = setup();
     let id = fund(&f);
@@ -530,6 +552,29 @@ fn cannot_redirect_to_a_provider_without_the_service() {
         .unwrap()
         .unwrap();
     assert_eq!(err, VoucherError::ServiceNotOffered);
+}
+
+#[test]
+fn cannot_redirect_to_a_paused_service() {
+    let f = setup();
+    let id = fund(&f);
+    let new_provider = register_redirect_provider(&f);
+    f.registry.upsert_service(
+        &new_provider,
+        &CONSULT,
+        &String::from_str(&f.env, "Outpatient consult"),
+        &CONSULT_PRICE,
+    );
+    f.registry
+        .set_service_available(&new_provider, &CONSULT, &false);
+
+    let err = f
+        .voucher
+        .try_redirect(&f.funder, &id, &new_provider)
+        .err()
+        .unwrap()
+        .unwrap();
+    assert_eq!(err, VoucherError::ServiceUnavailable);
 }
 
 #[test]
@@ -1584,6 +1629,20 @@ fn cannot_dispute_after_window_closes() {
         .unwrap()
         .unwrap();
     assert_eq!(err, VoucherError::DisputeWindowClosed);
+}
+
+#[test]
+fn cannot_dispute_an_unclaimed_voucher() {
+    let f = setup();
+    let id = fund(&f);
+
+    let err = f
+        .voucher
+        .try_dispute(&f.funder, &id, &1u32)
+        .err()
+        .unwrap()
+        .unwrap();
+    assert_eq!(err, VoucherError::InvalidStatus);
 }
 
 #[test]
@@ -4056,6 +4115,27 @@ fn old_voucher_layout_still_decodes() {
     assert_eq!(v.amount, CONSULT_PRICE);
     assert_eq!(v.attester, Some(f.attester.clone()));
     assert_eq!(v.updated_ledger, 0, "an old voucher has no recorded ledger");
+}
+
+#[test]
+fn voucher_with_an_unexpected_layout_is_not_found() {
+    let f = setup();
+    let id = 1u64;
+    f.env.as_contract(&f.voucher.address, || {
+        let bad = soroban_sdk::Vec::<soroban_sdk::Val>::from_array(
+            &f.env,
+            [soroban_sdk::Val::from(1u32)],
+        );
+        f.env
+            .storage()
+            .persistent()
+            .set(&crate::DataKey::Voucher(id), &bad);
+    });
+
+    assert_eq!(
+        f.voucher.try_get_voucher(&id),
+        Err(Ok(VoucherError::VoucherNotFound))
+    );
 }
 
 #[test]
