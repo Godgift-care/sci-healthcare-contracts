@@ -53,7 +53,7 @@ bytes to that entry and its rent.
 | `registry` | `Service(provider, code)` | persistent | 1555200 | 372 | 0.5580000 | 5580000 |
 | `registry` | `Attester(address)` | persistent | 1555200 | 132 | 0.1980000 | 1980000 |
 | `voucher` | contract instance (`Config`, `NextId`, `OpenEscrow`, `AttestationCap`) | persistent | 518400 | 668 | 0.3340000 | 3340000 |
-| `voucher` | `Voucher(id)` | persistent | 1555200 | 328 | 0.4920000 | 4920000 |
+| `voucher` | `Voucher(id)` | persistent | 1555200 | 336 | 0.5040000 | 5040000 |
 | `voucher` | `Attestations(attester, day)` | temporary | 34560 | 148 | 0.0024667 | 24667 |
 | `receipt` | contract instance (`Admin`, `Minter`) | persistent | 518400 | 244 | 0.1220000 | 1220000 |
 | `receipt` | `Receipt(voucher_id)` | persistent | 1555200 | 356 | 0.5340000 | 5340000 |

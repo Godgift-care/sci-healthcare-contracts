@@ -211,6 +211,11 @@ pub enum VoucherError {
     /// The chosen dispute window is outside the allowed bounds, or the bounds
     /// themselves are invalid.
     InvalidDisputeWindow = 31,
+    /// This voucher is above the admin-set presence threshold, so it must be
+    /// funded with a `presence_commitment`.
+    PresenceCommitmentRequired = 32,
+    /// The presence threshold cannot be negative.
+    InvalidPresenceThreshold = 33,
     /// The registry price changed between the quote the funder saw and this
     /// call. Nothing was escrowed; re-quote before signing.
     PriceChanged = 42,
