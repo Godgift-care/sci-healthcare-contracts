@@ -48,14 +48,14 @@ mod economics_test;
 mod test;
 
 use sci_common as common;
-use soroban_sdk::{contract, contractimpl, token, Address, Bytes, BytesN, Env, String};
+use soroban_sdk::{contract, contractimpl, token, Address, Bytes, BytesN, Env, String, Vec};
 
 #[allow(unused_imports)]
 pub use events::{
     AdminChanged, AdminProposed, AttestationCapChanged, DisputeResolved,
-    DisputeWindowBoundsChanged, EscrowCapChanged, Initialized, VoucherAmountReduced,
-    VoucherAttested, VoucherClaimed, VoucherCreated, VoucherDeclined, VoucherDisputed,
-    VoucherRedirected, VoucherRefunded, VoucherSettled,
+    DisputeWindowBoundsChanged, EscrowCapChanged, Initialized, PresenceThresholdChanged,
+    VoucherAmountReduced, VoucherAttested, VoucherClaimed, VoucherCreated, VoucherDeclined,
+    VoucherDisputed, VoucherRedirected, VoucherRefunded, VoucherSettled,
 };
 pub use interfaces::{ReceiptClient, RegistryClient};
 pub use types::{Config, DataKey, Exposure, Voucher, VoucherError, VoucherOptions, VoucherStatus};
@@ -63,9 +63,10 @@ pub use types::{Config, DataKey, Exposure, Voucher, VoucherError, VoucherOptions
 use storage::{
     bump_next_id, decrease_open_escrow, extend_instance, has_config, increase_open_escrow,
     peek_next_id, read_attestation_cap, read_attestations, read_config, read_dispute_window_bounds,
-    read_escrow_cap, read_exposure, read_open_escrow, read_options, read_voucher,
-    write_attestation_cap, write_attestations, write_config, write_dispute_window_bounds,
-    write_escrow_cap, write_exposure, write_options, write_voucher,
+    read_escrow_cap, read_exposure, read_open_escrow, read_options, read_presence_threshold,
+    read_voucher, read_voucher_without_extend, write_attestation_cap, write_attestations,
+    write_config, write_dispute_window_bounds, write_escrow_cap, write_exposure, write_options,
+    write_presence_threshold, write_voucher,
 };
 
 const BPS_DENOMINATOR: i128 = 10_000;
@@ -95,6 +96,9 @@ const SECONDS_PER_DAY: u64 = 24 * 60 * 60;
 /// attestation in; the ceiling keeps a clinic from waiting indefinitely to be
 /// paid for care it delivered.
 pub const DEFAULT_DISPUTE_WINDOW_BOUNDS: (u64, u64) = (SECONDS_PER_DAY, 30 * SECONDS_PER_DAY);
+/// Most voucher ids `statuses` reads in one call. A wallet refreshing a large
+/// list pages through it, so one call cannot scan unbounded storage.
+pub const MAX_STATUSES_PER_CALL: u32 = 50;
 
 #[contract]
 pub struct VoucherEscrow;
@@ -181,7 +185,12 @@ impl VoucherEscrow {
     ///   bounds (`InvalidDisputeWindow` otherwise). A funder of expensive care
     ///   can take longer to object; a small voucher can settle sooner.
     ///
-    /// With both unset this is exactly `create_voucher`.
+    /// A voucher whose amount is above `get_presence_threshold()` must set
+    /// `presence_commitment` (`PresenceCommitmentRequired` otherwise). With
+    /// the threshold at 0, the protocol imposes no requirement.
+    ///
+    /// With both options unset and no threshold, this is exactly
+    /// `create_voucher`.
     #[allow(clippy::too_many_arguments)]
     pub fn create_voucher_with_options(
         env: Env,
@@ -242,7 +251,7 @@ impl VoucherEscrow {
 
         let previous_provider = voucher.provider.clone();
         voucher.provider = new_provider.clone();
-        write_voucher(&env, &voucher);
+        write_voucher(&env, &mut voucher);
 
         VoucherRedirected {
             funder,
@@ -336,7 +345,7 @@ impl VoucherEscrow {
 
         let previous_amount = voucher.amount;
         voucher.amount = new_amount;
-        write_voucher(&env, &voucher);
+        write_voucher(&env, &mut voucher);
 
         VoucherAmountReduced {
             funder,
@@ -452,7 +461,7 @@ impl VoucherEscrow {
             .dispute_window
             .unwrap_or(config.dispute_window);
         voucher.dispute_deadline = now.checked_add(window).ok_or(VoucherError::MathOverflow)?;
-        write_voucher(&env, &voucher);
+        write_voucher(&env, &mut voucher);
 
         VoucherAttested {
             attester,
@@ -496,7 +505,7 @@ impl VoucherEscrow {
         }
 
         voucher.status = VoucherStatus::Disputed;
-        write_voucher(&env, &voucher);
+        write_voucher(&env, &mut voucher);
 
         VoucherDisputed {
             funder,
@@ -736,6 +745,28 @@ impl VoucherEscrow {
         Ok(())
     }
 
+    /// Sets the value above which a voucher must carry a presence commitment.
+    ///
+    /// `threshold` must not be negative (`InvalidPresenceThreshold`), and `0`
+    /// disables the protocol-level requirement. Vouchers already funded are
+    /// unaffected; the check applies when a voucher is created.
+    pub fn set_presence_threshold(
+        env: Env,
+        admin: Address,
+        threshold: i128,
+    ) -> Result<(), VoucherError> {
+        let config = read_config(&env)?;
+        common::require_admin(&config.admin, &admin)?;
+        if threshold < 0 {
+            return Err(VoucherError::InvalidPresenceThreshold);
+        }
+
+        write_presence_threshold(&env, threshold);
+        extend_instance(&env);
+        PresenceThresholdChanged { admin, threshold }.publish(&env);
+        Ok(())
+    }
+
     // ----- views -----
 
     /// `(min, max)` seconds a funder's per-voucher dispute window may take.
@@ -752,6 +783,12 @@ impl VoucherEscrow {
     /// Most value one clinic may hold in escrow at once; `0` is unlimited.
     pub fn get_max_escrow_per_provider(env: Env) -> i128 {
         read_escrow_cap(&env)
+    }
+
+    /// Value above which a voucher must carry a presence commitment; `0`
+    /// means the protocol imposes no requirement.
+    pub fn get_presence_threshold(env: Env) -> i128 {
+        read_presence_threshold(&env)
     }
 
     /// The clinic's open vouchers: how many, and how much they escrow.
@@ -787,6 +824,24 @@ impl VoucherEscrow {
 
     pub fn get_voucher(env: Env, voucher_id: u64) -> Result<Voucher, VoucherError> {
         read_voucher(&env, voucher_id)
+    }
+
+    /// Current status of up to `MAX_STATUSES_PER_CALL` vouchers, in the order
+    /// the ids were given.
+    ///
+    /// Ids that do not exist are omitted, and ids beyond the cap are ignored,
+    /// so page a larger list with repeated calls. This is a view: it never
+    /// bumps a voucher's TTL, which is what makes refreshing a wallet cheap.
+    pub fn statuses(env: Env, ids: Vec<u64>) -> Vec<(u64, VoucherStatus)> {
+        let mut statuses = Vec::new(&env);
+        for index in 0..ids.len().min(MAX_STATUSES_PER_CALL) {
+            if let Some(id) = ids.get(index) {
+                if let Ok(voucher) = read_voucher_without_extend(&env, id) {
+                    statuses.push_back((id, voucher.status));
+                }
+            }
+        }
+        statuses
     }
 
     /// The fields `sponsor` needs to match this voucher, in one call.
@@ -888,6 +943,15 @@ impl VoucherEscrow {
                 return Err(VoucherError::InvalidDisputeWindow);
             }
         }
+        // Above the admin-set value, the patient's secret is mandatory: a
+        // clinic cannot take a high-value voucher without the patient present.
+        let presence_threshold = read_presence_threshold(env);
+        if presence_threshold > 0
+            && amount > presence_threshold
+            && options.presence_commitment.is_none()
+        {
+            return Err(VoucherError::PresenceCommitmentRequired);
+        }
 
         let config = read_config(env)?;
         let registry = RegistryClient::new(env, &config.registry);
@@ -942,7 +1006,7 @@ impl VoucherEscrow {
         );
 
         let id = bump_next_id(env);
-        let voucher = Voucher {
+        let mut voucher = Voucher {
             id,
             funder: funder.clone(),
             beneficiary_ref: beneficiary_ref.clone(),
@@ -956,8 +1020,9 @@ impl VoucherEscrow {
             attested_at: 0,
             dispute_deadline: 0,
             attester: None,
+            updated_ledger: env.ledger().sequence(),
         };
-        write_voucher(env, &voucher);
+        write_voucher(env, &mut voucher);
         write_options(env, id, &options);
 
         VoucherCreated {
@@ -1015,7 +1080,7 @@ impl VoucherEscrow {
 
         voucher.status = VoucherStatus::Claimed;
         voucher.claimed_at = now;
-        write_voucher(env, &voucher);
+        write_voucher(env, &mut voucher);
 
         VoucherClaimed {
             provider,

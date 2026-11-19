@@ -186,6 +186,16 @@ pub struct EscrowCapChanged {
     pub max: i128,
 }
 
+/// The admin changed the value above which a voucher must carry a presence
+/// commitment. `threshold` is 0 when no protocol-level requirement applies.
+#[contractevent]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct PresenceThresholdChanged {
+    #[topic]
+    pub admin: Address,
+    pub threshold: i128,
+}
+
 #[contractevent]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct AdminProposed {

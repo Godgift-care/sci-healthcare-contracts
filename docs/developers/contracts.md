@@ -194,6 +194,7 @@ pub struct Voucher {
     pub attested_at: u64,
     pub dispute_deadline: u64,
     pub attester: Option<Address>,     // set by `attest`, paid at settlement
+    pub updated_ledger: u32,           // ledger of the last write, 0 if pre-field
 }
 
 pub struct Config {
@@ -218,7 +219,7 @@ pub struct Exposure {            // a clinic's open vouchers
 }
 ```
 
-`Voucher` is what every function takes and returns. In storage it is kept positionally — an XDR vec of its values, without the id, which is already in the key — rather than as a map carrying every field name; for an attested voucher that is 228 bytes instead of 464, about half, and rent is charged on entry size (`stored_voucher_is_smaller_than_the_named_layout` prints both). `VoucherOptions` lives in its own entry, written only for a voucher that sets one.
+`Voucher` is what every function takes and returns. In storage it is kept positionally — an XDR vec of its values, without the id, which is already in the key — rather than as a map carrying every field name; for an attested voucher that is 276 bytes instead of 552, exactly half, and rent is charged on entry size (`stored_voucher_is_smaller_than_the_named_layout` prints both). Appending `updated_ledger` added 8 bytes to the stored entry (268 → 276); a voucher written before the field existed still decodes and reports `updated_ledger = 0`, meaning the ledger is unknown. `VoucherOptions` lives in its own entry, written only for a voucher that sets one.
 
 ### Functions
 
@@ -241,13 +242,16 @@ pub struct Exposure {            // a clinic's open vouchers
 | `set_attestation_cap` | `admin, cap: u32` | `()` | `admin` |
 | `set_dispute_window_bounds` | `admin, min: u64, max: u64` | `()` | `admin` |
 | `set_max_escrow_per_provider` | `admin, max: i128` | `()` | `admin` |
+| `set_presence_threshold` | `admin, threshold: i128` | `()` | `admin` |
 | `propose_admin` | `admin, new_admin` | `()` | `admin` |
 | `accept_admin` | `new_admin` | `()` | `new_admin` |
 | `get_voucher` | `voucher_id` | `Voucher` | view |
 | `get_voucher_options` | `voucher_id` | `VoucherOptions` | view |
 | `get_dispute_window_bounds` | — | `(u64, u64)` | view |
 | `refundable_at` | `voucher_id` | `u64` | view |
+| `statuses` | `ids: Vec<u64>` | `Vec<(u64, VoucherStatus)>` | view |
 | `get_max_escrow_per_provider` | — | `i128` | view |
+| `get_presence_threshold` | — | `i128` | view |
 | `get_exposure` | `provider` | `Exposure` | view |
 | `get_attestation_cap` | — | `u32` | view |
 | `attestations_left` | `attester` | `u32` | view |
@@ -285,17 +289,20 @@ Every public function, with the exact signer it demands. `AUTH_MATRIX` in `contr
 | `set_attestation_cap` | `admin` |
 | `set_dispute_window_bounds` | `admin` |
 | `set_max_escrow_per_provider` | `admin` |
+| `set_presence_threshold` | `admin` |
 | `propose_admin` | `admin` |
 | `accept_admin` | `new_admin` |
 | `get_dispute_window_bounds` | none (view) |
 | `get_voucher_options` | none (view) |
 | `get_max_escrow_per_provider` | none (view) |
+| `get_presence_threshold` | none (view) |
 | `get_exposure` | none (view) |
 | `get_attestation_cap` | none (view) |
 | `attestations_left` | none (view) |
 | `get_pending_admin` | none (view) |
 | `refundable_at` | none (view) |
 | `get_voucher` | none (view) |
+| `statuses` | none (view) |
 | `get_config` | none (view) |
 | `next_voucher_id` | none (view) |
 | `quote` | none (view) |
@@ -309,13 +316,13 @@ rejects the voucher's own provider even if it holds that role.
 
 ### What each function checks
 
-**`create_voucher`** — amount > 0; expiry in the future; provider is `Active`; the service exists and is active; amount ≥ listed price; the service is not paused (`ServiceUnavailable`); the clinic is below the capacity it declared in the registry (`ProviderAtCapacity`); the clinic's escrow plus this amount stays within the per-clinic cap (`EscrowCapReached`). Transfers the token *before* writing the voucher, so a failed transfer reverts everything.
+**`create_voucher`** — amount > 0; expiry in the future; provider is `Active`; the service exists and is active; amount ≥ listed price; the service is not paused (`ServiceUnavailable`); the clinic is below the capacity it declared in the registry (`ProviderAtCapacity`); the clinic's escrow plus this amount stays within the per-clinic cap (`EscrowCapReached`); an amount above `get_presence_threshold()` carries a `presence_commitment` (`PresenceCommitmentRequired`). Transfers the token *before* writing the voucher, so a failed transfer reverts everything.
 
 **`set_max_escrow_per_provider`** — caller is admin; `max` ≥ 0 (`InvalidEscrowCap`). `0`, the default, is unlimited. The cap limits what one clinic can hold in escrow across all its open vouchers, so a verified clinic that turns out to be fraudulent is exposed to at most this much. `get_exposure(provider)` returns the clinic's open voucher count and escrowed value; both fall when a voucher settles or refunds, including through `resolve_dispute` and `resolve_split`, and the value falls by the refunded difference when `reduce_amount` lowers a voucher. Lowering the cap only affects new vouchers.
 
 **`reduce_amount`** — caller is the funder of this voucher (`NotAuthorized`); status is `Funded` (`InvalidStatus`); `new_amount` > 0 (`InvalidAmount`) and strictly below the escrowed amount (`AmountNotReduced`); the service is still listed (`ServiceNotOffered`); and `new_amount` ≥ the price the registry lists **at call time** (`AmountBelowPrice`). The difference goes straight back to the funder and the escrow keeps the rest; no fee is taken on money that never became care, and the `open_escrow` total follows the difference down. The price at call time is the floor, not the price at funding time: a clinic that has raised its price cannot have a funded voucher reduced below that price, and a clinic that has lowered it frees the funder to reduce further. A voucher whose service has been delisted cannot be reduced at all — there is no floor to reduce towards — and is refunded at expiry instead. Once the clinic has claimed the voucher the amount is what the clinic expects to be paid, so the reduction is closed.
 
-**`create_voucher_with_options`** — everything `create_voucher` checks, plus: a `dispute_window`, when set, lies within `get_dispute_window_bounds()` (`InvalidDisputeWindow`). With both options unset it is exactly `create_voucher`.
+**`create_voucher_with_options`** — everything `create_voucher` checks, plus: a `dispute_window`, when set, lies within `get_dispute_window_bounds()` (`InvalidDisputeWindow`). A voucher whose amount is above the presence threshold must set `presence_commitment` (`PresenceCommitmentRequired`). With both options unset and the threshold at 0 it is exactly `create_voucher`.
 
 **`claim`** — caller is the named provider; provider is still `Active` in the registry; status is `Funded`; not expired; the voucher has no presence commitment (`PresenceProofRequired`).
 
@@ -328,6 +335,10 @@ rejects the voucher's own provider even if it holds that role.
 **`attest`** — caller is a registry attester; caller is **not** the provider; status is `Claimed`; the attester has attestations left today. Stores the attester on the voucher and sets `dispute_deadline = now + window`, where `window` is the voucher's own `dispute_window` if it was funded with one and `Config.dispute_window` otherwise.
 
 **`set_dispute_window_bounds`** — caller is admin; `1 ≤ min ≤ max` (`InvalidDisputeWindow`). The range a funder's per-voucher window must fall in; `DEFAULT_DISPUTE_WINDOW_BOUNDS` is one day to thirty. Applies to vouchers funded afterwards. Emits `dispute_window_bounds_changed`.
+
+**`set_presence_threshold`** — caller is admin; `threshold` ≥ 0 (`InvalidPresenceThreshold`). Above the threshold, a new voucher must carry a `presence_commitment`; `0`, the default, disables the protocol-level requirement, and vouchers already funded are unaffected. Emits `presence_threshold_changed { admin, threshold }`; `get_presence_threshold` reads it.
+
+**`statuses`** — returns the current status of up to `MAX_STATUSES_PER_CALL` (50) vouchers, in the order the ids were given. Unknown ids are omitted and ids beyond the cap are ignored, so a larger wallet list is paged. It is a view and deliberately does **not** extend any voucher's TTL, unlike `get_voucher`.
 
 **`set_attestation_cap`** — caller is admin; `cap` ≥ 1 (`InvalidAttestationCap`). Each attester may attest at most `cap` vouchers per UTC day (`timestamp / 86400`); the next is rejected with `AttestationCapReached` until midnight UTC, when the counter resets. The default is `DEFAULT_MAX_ATTESTATIONS_PER_DAY` (100). Counters live in temporary storage keyed by `(attester, day)`. The cap bounds what a stolen attester key can confirm before the admin removes it from the registry; `attestations_left(attester)` and the `remaining_today` field of `voucher_attested` show how close an attester is.
 
@@ -372,6 +383,8 @@ rejects the voucher's own provider even if it holds that role.
 |  |  | 29 | `InvalidPresenceProof` |
 |  |  | 30 | `NoPresenceCommitment` |
 |  |  | 31 | `InvalidDisputeWindow` |
+|  |  | 32 | `PresenceCommitmentRequired` |
+|  |  | 33 | `InvalidPresenceThreshold` |
 
 ### Events
 
@@ -390,6 +403,7 @@ rejects the voucher's own provider even if it holds that role.
 | `attestation_cap_changed` | `admin` | `cap` |
 | `dispute_window_bounds_changed` | `admin` | `min`, `max` |
 | `escrow_cap_changed` | `admin` | `max` |
+| `presence_threshold_changed` | `admin` | `threshold` |
 
 > Fields listed under **Topics** are published in the event's topic list, **not** in its data map. An indexer reading them off the data map gets `undefined`.
 >

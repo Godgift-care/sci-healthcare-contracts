@@ -1,5 +1,5 @@
 use sci_common as common;
-use soroban_sdk::{contracttype, Address, BytesN, Env};
+use soroban_sdk::{contracttype, Address, BytesN, Env, TryFromVal, Val, Vec};
 
 use crate::{DEFAULT_DISPUTE_WINDOW_BOUNDS, DEFAULT_MAX_ATTESTATIONS_PER_DAY};
 
@@ -10,7 +10,7 @@ use crate::types::{
 /// How a voucher is laid out in storage.
 ///
 /// `Voucher` is a named struct, which the host encodes as an XDR map: every
-/// field is stored with its name as a symbol key, so twelve field names ride
+/// field is stored with its name as a symbol key, so thirteen field names ride
 /// along in every voucher entry and are paid for in rent for its whole life.
 /// This tuple struct is encoded as an XDR vec — values only, in order — and
 /// leaves out the id, which is already in the entry's key. The public API
@@ -35,6 +35,29 @@ pub(crate) struct StoredVoucher(
     u64,             // attested_at
     u64,             // dispute_deadline
     Option<Address>, // attester
+    u32,             // updated_ledger
+);
+
+/// The positional layout before `updated_ledger` was appended.
+///
+/// Kept only so a voucher written by an older deployment still decodes. New
+/// writes always use `StoredVoucher`; a read falls back to this and reports
+/// `updated_ledger = 0`, meaning the ledger is unknown.
+#[contracttype]
+#[derive(Clone)]
+pub(crate) struct StoredVoucherV1(
+    pub(crate) Address,
+    pub(crate) BytesN<32>,
+    pub(crate) Address,
+    pub(crate) u32,
+    pub(crate) i128,
+    pub(crate) VoucherStatus,
+    pub(crate) u64,
+    pub(crate) u64,
+    pub(crate) u64,
+    pub(crate) u64,
+    pub(crate) u64,
+    pub(crate) Option<Address>,
 );
 
 impl StoredVoucher {
@@ -52,6 +75,7 @@ impl StoredVoucher {
             v.attested_at,
             v.dispute_deadline,
             v.attester.clone(),
+            v.updated_ledger,
         )
     }
 
@@ -70,6 +94,28 @@ impl StoredVoucher {
             attested_at: self.9,
             dispute_deadline: self.10,
             attester: self.11,
+            updated_ledger: self.12,
+        }
+    }
+}
+
+impl StoredVoucherV1 {
+    pub(crate) fn into_voucher(self, id: u64) -> Voucher {
+        Voucher {
+            id,
+            funder: self.0,
+            beneficiary_ref: self.1,
+            provider: self.2,
+            service_code: self.3,
+            amount: self.4,
+            status: self.5,
+            created_at: self.6,
+            expires_at: self.7,
+            claimed_at: self.8,
+            attested_at: self.9,
+            dispute_deadline: self.10,
+            attester: self.11,
+            updated_ledger: 0,
         }
     }
 }
@@ -104,23 +150,50 @@ pub(crate) fn peek_next_id(env: &Env) -> u64 {
     env.storage().instance().get(&DataKey::NextId).unwrap_or(1)
 }
 
-pub(crate) fn read_voucher(env: &Env, id: u64) -> Result<Voucher, VoucherError> {
+/// Reads a voucher without changing its TTL.
+///
+/// Views that may touch many vouchers use this: a read-only `statuses` call
+/// must not charge rent or bump entries it only looks at. `read_voucher`
+/// wraps it for the normal single-voucher path.
+pub(crate) fn read_voucher_without_extend(env: &Env, id: u64) -> Result<Voucher, VoucherError> {
     let key = DataKey::Voucher(id);
-    let stored: StoredVoucher = env
+    let raw: Val = env
         .storage()
         .persistent()
         .get(&key)
         .ok_or(VoucherError::VoucherNotFound)?;
-    common::extend_persistent(env, &key);
-    Ok(stored.into_voucher(id))
+
+    // Check the encoded length before converting: unpacking a 12-field vec
+    // into the 13-field `StoredVoucher` traps inside the host rather than
+    // returning a conversion error, and an old voucher must still decode.
+    let fields = Vec::<Val>::try_from_val(env, &raw).map_err(|_| VoucherError::VoucherNotFound)?;
+    if fields.len() as usize == 13 {
+        return StoredVoucher::try_from_val(env, &raw)
+            .map(|stored| stored.into_voucher(id))
+            .map_err(|_| VoucherError::VoucherNotFound);
+    }
+    if fields.len() as usize == 12 {
+        return StoredVoucherV1::try_from_val(env, &raw)
+            .map(|old| old.into_voucher(id))
+            .map_err(|_| VoucherError::VoucherNotFound);
+    }
+    Err(VoucherError::VoucherNotFound)
+}
+
+pub(crate) fn read_voucher(env: &Env, id: u64) -> Result<Voucher, VoucherError> {
+    let voucher = read_voucher_without_extend(env, id)?;
+    common::extend_persistent(env, &DataKey::Voucher(id));
+    Ok(voucher)
 }
 
 /// Writes a voucher and keeps the contract instance alive with it.
 ///
 /// Every state transition goes through here, so a contract that is only
 /// ever claimed, attested and settled (never funded) for a month still has
-/// its config and id counter extended.
-pub(crate) fn write_voucher(env: &Env, voucher: &Voucher) {
+/// its config and id counter extended. The write also stamps the current
+/// ledger sequence onto the voucher, which is why callers pass it mutably.
+pub(crate) fn write_voucher(env: &Env, voucher: &mut Voucher) {
+    voucher.updated_ledger = env.ledger().sequence();
     let key = DataKey::Voucher(voucher.id);
     env.storage()
         .persistent()
@@ -254,6 +327,21 @@ pub(crate) fn read_escrow_cap(env: &Env) -> i128 {
 
 pub(crate) fn write_escrow_cap(env: &Env, cap: i128) {
     env.storage().instance().set(&DataKey::EscrowCap, &cap);
+}
+
+/// The value above which a voucher must carry a presence commitment; 0 when
+/// there is no protocol-level requirement.
+pub(crate) fn read_presence_threshold(env: &Env) -> i128 {
+    env.storage()
+        .instance()
+        .get(&DataKey::PresenceThreshold)
+        .unwrap_or(0)
+}
+
+pub(crate) fn write_presence_threshold(env: &Env, threshold: i128) {
+    env.storage()
+        .instance()
+        .set(&DataKey::PresenceThreshold, &threshold);
 }
 
 #[cfg(test)]
