@@ -149,33 +149,37 @@
 <a href=#149 id=149 data-nosnippet>149</a>    <span class="doccomment">/// The requested provider status change is not one of the allowed
 <a href=#150 id=150 data-nosnippet>150</a>    /// transitions, or would leave `Retired`.
 <a href=#151 id=151 data-nosnippet>151</a>    </span>InvalidTransition = <span class="number">14</span>,
-<a href=#152 id=152 data-nosnippet>152</a>}
-<a href=#153 id=153 data-nosnippet>153</a>
-<a href=#154 id=154 data-nosnippet>154</a><span class="doccomment">/// Maps the shared helpers' failures onto this contract's error numbers, so
-<a href=#155 id=155 data-nosnippet>155</a>/// callers keep seeing the same codes they did before the helpers were shared.
-<a href=#156 id=156 data-nosnippet>156</a></span><span class="kw">impl </span>From&lt;sci_common::CommonError&gt; <span class="kw">for </span>RegistryError {
-<a href=#157 id=157 data-nosnippet>157</a>    <span class="kw">fn </span>from(error: sci_common::CommonError) -&gt; <span class="self">Self </span>{
-<a href=#158 id=158 data-nosnippet>158</a>        <span class="kw">match </span>error {
-<a href=#159 id=159 data-nosnippet>159</a>            sci_common::CommonError::NotAuthorized =&gt; RegistryError::NotAuthorized,
-<a href=#160 id=160 data-nosnippet>160</a>            sci_common::CommonError::NoPendingAdmin =&gt; RegistryError::NoPendingAdmin,
-<a href=#161 id=161 data-nosnippet>161</a>        }
-<a href=#162 id=162 data-nosnippet>162</a>    }
-<a href=#163 id=163 data-nosnippet>163</a>}
-<a href=#164 id=164 data-nosnippet>164</a>
-<a href=#165 id=165 data-nosnippet>165</a><span class="attr">#[cfg(test)]
-<a href=#166 id=166 data-nosnippet>166</a></span><span class="kw">mod </span>error_conversion_tests {
-<a href=#167 id=167 data-nosnippet>167</a>    <span class="kw">use </span>super::<span class="kw-2">*</span>;
+<a href=#152 id=152 data-nosnippet>152</a>    <span class="doccomment">/// A scheduled price of `MAX_PRICE_JUMP` times the current price or more
+<a href=#153 id=153 data-nosnippet>153</a>    /// needs the explicit `confirm_large_change` flag. Large jumps are almost
+<a href=#154 id=154 data-nosnippet>154</a>    /// always a typo, and a typo here overcharges every funder that day.
+<a href=#155 id=155 data-nosnippet>155</a>    </span>LargePriceJumpNeedsConfirmation = <span class="number">15</span>,
+<a href=#156 id=156 data-nosnippet>156</a>}
+<a href=#157 id=157 data-nosnippet>157</a>
+<a href=#158 id=158 data-nosnippet>158</a><span class="doccomment">/// Maps the shared helpers' failures onto this contract's error numbers, so
+<a href=#159 id=159 data-nosnippet>159</a>/// callers keep seeing the same codes they did before the helpers were shared.
+<a href=#160 id=160 data-nosnippet>160</a></span><span class="kw">impl </span>From&lt;sci_common::CommonError&gt; <span class="kw">for </span>RegistryError {
+<a href=#161 id=161 data-nosnippet>161</a>    <span class="kw">fn </span>from(error: sci_common::CommonError) -&gt; <span class="self">Self </span>{
+<a href=#162 id=162 data-nosnippet>162</a>        <span class="kw">match </span>error {
+<a href=#163 id=163 data-nosnippet>163</a>            sci_common::CommonError::NotAuthorized =&gt; RegistryError::NotAuthorized,
+<a href=#164 id=164 data-nosnippet>164</a>            sci_common::CommonError::NoPendingAdmin =&gt; RegistryError::NoPendingAdmin,
+<a href=#165 id=165 data-nosnippet>165</a>        }
+<a href=#166 id=166 data-nosnippet>166</a>    }
+<a href=#167 id=167 data-nosnippet>167</a>}
 <a href=#168 id=168 data-nosnippet>168</a>
-<a href=#169 id=169 data-nosnippet>169</a>    <span class="attr">#[test]
-<a href=#170 id=170 data-nosnippet>170</a>    </span><span class="kw">fn </span>not_authorized_maps() {
-<a href=#171 id=171 data-nosnippet>171</a>        <span class="kw">let </span>err: RegistryError = sci_common::CommonError::NotAuthorized.into();
-<a href=#172 id=172 data-nosnippet>172</a>        <span class="macro">assert_eq!</span>(err, RegistryError::NotAuthorized);
-<a href=#173 id=173 data-nosnippet>173</a>    }
-<a href=#174 id=174 data-nosnippet>174</a>
-<a href=#175 id=175 data-nosnippet>175</a>    <span class="attr">#[test]
-<a href=#176 id=176 data-nosnippet>176</a>    </span><span class="kw">fn </span>no_pending_admin_maps() {
-<a href=#177 id=177 data-nosnippet>177</a>        <span class="kw">let </span>err: RegistryError = sci_common::CommonError::NoPendingAdmin.into();
-<a href=#178 id=178 data-nosnippet>178</a>        <span class="macro">assert_eq!</span>(err, RegistryError::NoPendingAdmin);
-<a href=#179 id=179 data-nosnippet>179</a>    }
-<a href=#180 id=180 data-nosnippet>180</a>}
+<a href=#169 id=169 data-nosnippet>169</a><span class="attr">#[cfg(test)]
+<a href=#170 id=170 data-nosnippet>170</a></span><span class="kw">mod </span>error_conversion_tests {
+<a href=#171 id=171 data-nosnippet>171</a>    <span class="kw">use </span>super::<span class="kw-2">*</span>;
+<a href=#172 id=172 data-nosnippet>172</a>
+<a href=#173 id=173 data-nosnippet>173</a>    <span class="attr">#[test]
+<a href=#174 id=174 data-nosnippet>174</a>    </span><span class="kw">fn </span>not_authorized_maps() {
+<a href=#175 id=175 data-nosnippet>175</a>        <span class="kw">let </span>err: RegistryError = sci_common::CommonError::NotAuthorized.into();
+<a href=#176 id=176 data-nosnippet>176</a>        <span class="macro">assert_eq!</span>(err, RegistryError::NotAuthorized);
+<a href=#177 id=177 data-nosnippet>177</a>    }
+<a href=#178 id=178 data-nosnippet>178</a>
+<a href=#179 id=179 data-nosnippet>179</a>    <span class="attr">#[test]
+<a href=#180 id=180 data-nosnippet>180</a>    </span><span class="kw">fn </span>no_pending_admin_maps() {
+<a href=#181 id=181 data-nosnippet>181</a>        <span class="kw">let </span>err: RegistryError = sci_common::CommonError::NoPendingAdmin.into();
+<a href=#182 id=182 data-nosnippet>182</a>        <span class="macro">assert_eq!</span>(err, RegistryError::NoPendingAdmin);
+<a href=#183 id=183 data-nosnippet>183</a>    }
+<a href=#184 id=184 data-nosnippet>184</a>}
 </code></pre></div></section></main></body></html>

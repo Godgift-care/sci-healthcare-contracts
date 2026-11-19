@@ -201,33 +201,36 @@
 <a href=#201 id=201 data-nosnippet>201</a>    <span class="doccomment">/// The chosen dispute window is outside the allowed bounds, or the bounds
 <a href=#202 id=202 data-nosnippet>202</a>    /// themselves are invalid.
 <a href=#203 id=203 data-nosnippet>203</a>    </span>InvalidDisputeWindow = <span class="number">31</span>,
-<a href=#204 id=204 data-nosnippet>204</a>}
-<a href=#205 id=205 data-nosnippet>205</a>
-<a href=#206 id=206 data-nosnippet>206</a><span class="doccomment">/// Maps the shared helpers' failures onto this contract's error numbers, so
-<a href=#207 id=207 data-nosnippet>207</a>/// callers keep seeing the same codes they did before the helpers were shared.
-<a href=#208 id=208 data-nosnippet>208</a></span><span class="kw">impl </span>From&lt;sci_common::CommonError&gt; <span class="kw">for </span>VoucherError {
-<a href=#209 id=209 data-nosnippet>209</a>    <span class="kw">fn </span>from(error: sci_common::CommonError) -&gt; <span class="self">Self </span>{
-<a href=#210 id=210 data-nosnippet>210</a>        <span class="kw">match </span>error {
-<a href=#211 id=211 data-nosnippet>211</a>            sci_common::CommonError::NotAuthorized =&gt; VoucherError::NotAuthorized,
-<a href=#212 id=212 data-nosnippet>212</a>            sci_common::CommonError::NoPendingAdmin =&gt; VoucherError::NoPendingAdmin,
-<a href=#213 id=213 data-nosnippet>213</a>        }
-<a href=#214 id=214 data-nosnippet>214</a>    }
-<a href=#215 id=215 data-nosnippet>215</a>}
-<a href=#216 id=216 data-nosnippet>216</a>
-<a href=#217 id=217 data-nosnippet>217</a><span class="attr">#[cfg(test)]
-<a href=#218 id=218 data-nosnippet>218</a></span><span class="kw">mod </span>error_conversion_tests {
-<a href=#219 id=219 data-nosnippet>219</a>    <span class="kw">use </span>super::<span class="kw-2">*</span>;
-<a href=#220 id=220 data-nosnippet>220</a>
-<a href=#221 id=221 data-nosnippet>221</a>    <span class="attr">#[test]
-<a href=#222 id=222 data-nosnippet>222</a>    </span><span class="kw">fn </span>not_authorized_maps() {
-<a href=#223 id=223 data-nosnippet>223</a>        <span class="kw">let </span>err: VoucherError = sci_common::CommonError::NotAuthorized.into();
-<a href=#224 id=224 data-nosnippet>224</a>        <span class="macro">assert_eq!</span>(err, VoucherError::NotAuthorized);
-<a href=#225 id=225 data-nosnippet>225</a>    }
-<a href=#226 id=226 data-nosnippet>226</a>
-<a href=#227 id=227 data-nosnippet>227</a>    <span class="attr">#[test]
-<a href=#228 id=228 data-nosnippet>228</a>    </span><span class="kw">fn </span>no_pending_admin_maps() {
-<a href=#229 id=229 data-nosnippet>229</a>        <span class="kw">let </span>err: VoucherError = sci_common::CommonError::NoPendingAdmin.into();
-<a href=#230 id=230 data-nosnippet>230</a>        <span class="macro">assert_eq!</span>(err, VoucherError::NoPendingAdmin);
-<a href=#231 id=231 data-nosnippet>231</a>    }
-<a href=#232 id=232 data-nosnippet>232</a>}
+<a href=#204 id=204 data-nosnippet>204</a>    <span class="doccomment">/// The registry price changed between the quote the funder saw and this
+<a href=#205 id=205 data-nosnippet>205</a>    /// call. Nothing was escrowed; re-quote before signing.
+<a href=#206 id=206 data-nosnippet>206</a>    </span>PriceChanged = <span class="number">42</span>,
+<a href=#207 id=207 data-nosnippet>207</a>}
+<a href=#208 id=208 data-nosnippet>208</a>
+<a href=#209 id=209 data-nosnippet>209</a><span class="doccomment">/// Maps the shared helpers' failures onto this contract's error numbers, so
+<a href=#210 id=210 data-nosnippet>210</a>/// callers keep seeing the same codes they did before the helpers were shared.
+<a href=#211 id=211 data-nosnippet>211</a></span><span class="kw">impl </span>From&lt;sci_common::CommonError&gt; <span class="kw">for </span>VoucherError {
+<a href=#212 id=212 data-nosnippet>212</a>    <span class="kw">fn </span>from(error: sci_common::CommonError) -&gt; <span class="self">Self </span>{
+<a href=#213 id=213 data-nosnippet>213</a>        <span class="kw">match </span>error {
+<a href=#214 id=214 data-nosnippet>214</a>            sci_common::CommonError::NotAuthorized =&gt; VoucherError::NotAuthorized,
+<a href=#215 id=215 data-nosnippet>215</a>            sci_common::CommonError::NoPendingAdmin =&gt; VoucherError::NoPendingAdmin,
+<a href=#216 id=216 data-nosnippet>216</a>        }
+<a href=#217 id=217 data-nosnippet>217</a>    }
+<a href=#218 id=218 data-nosnippet>218</a>}
+<a href=#219 id=219 data-nosnippet>219</a>
+<a href=#220 id=220 data-nosnippet>220</a><span class="attr">#[cfg(test)]
+<a href=#221 id=221 data-nosnippet>221</a></span><span class="kw">mod </span>error_conversion_tests {
+<a href=#222 id=222 data-nosnippet>222</a>    <span class="kw">use </span>super::<span class="kw-2">*</span>;
+<a href=#223 id=223 data-nosnippet>223</a>
+<a href=#224 id=224 data-nosnippet>224</a>    <span class="attr">#[test]
+<a href=#225 id=225 data-nosnippet>225</a>    </span><span class="kw">fn </span>not_authorized_maps() {
+<a href=#226 id=226 data-nosnippet>226</a>        <span class="kw">let </span>err: VoucherError = sci_common::CommonError::NotAuthorized.into();
+<a href=#227 id=227 data-nosnippet>227</a>        <span class="macro">assert_eq!</span>(err, VoucherError::NotAuthorized);
+<a href=#228 id=228 data-nosnippet>228</a>    }
+<a href=#229 id=229 data-nosnippet>229</a>
+<a href=#230 id=230 data-nosnippet>230</a>    <span class="attr">#[test]
+<a href=#231 id=231 data-nosnippet>231</a>    </span><span class="kw">fn </span>no_pending_admin_maps() {
+<a href=#232 id=232 data-nosnippet>232</a>        <span class="kw">let </span>err: VoucherError = sci_common::CommonError::NoPendingAdmin.into();
+<a href=#233 id=233 data-nosnippet>233</a>        <span class="macro">assert_eq!</span>(err, VoucherError::NoPendingAdmin);
+<a href=#234 id=234 data-nosnippet>234</a>    }
+<a href=#235 id=235 data-nosnippet>235</a>}
 </code></pre></div></section></main></body></html>
