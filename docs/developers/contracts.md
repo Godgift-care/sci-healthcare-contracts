@@ -15,6 +15,45 @@ Protocol terminology used across the docs is defined in [docs/glossary.md](../gl
 
 ---
 
+## Who calls whom
+
+```mermaid
+flowchart LR
+    funder([Funder])
+    clinic([Clinic])
+    attester([Attester])
+    admin([Registry / voucher admin])
+    anyone([Anyone, e.g. a keeper])
+    org([Sponsor organisation])
+
+    registry["registry<br/>providers, services, attesters"]
+    voucher["voucher<br/>escrow and lifecycle"]
+    receipt["receipt book<br/>non-transferable care records"]
+    sponsor["sponsor<br/>sponsorship desk"]
+    faucet["faucet<br/>testnet only"]
+    token[("USDC<br/>SEP-41 token")]
+
+    funder -. "create_voucher, redirect,<br/>reduce_amount, dispute" .-> voucher
+    clinic -. "claim, claim_with_proof,<br/>decline" .-> voucher
+    attester -. "attest" .-> voucher
+    anyone -. "settle, refund" .-> voucher
+    admin -. "resolve_dispute, resolve_split" .-> voucher
+    clinic -. "register_provider, upsert_service,<br/>set_capacity, retire" .-> registry
+    admin -. "set_provider_status,<br/>add_attester" .-> registry
+    org -. "deposit, set_rules,<br/>match_voucher, withdraw" .-> sponsor
+    funder -. "drip" .-> faucet
+
+    voucher == "is_active_provider, get_service_price,<br/>is_service_available, get_capacity,<br/>is_attester" ==> registry
+    voucher == "mint" ==> receipt
+    voucher == "transfer, balance" ==> token
+    sponsor == "create_voucher,<br/>voucher_summary" ==> voucher
+    sponsor == "get_provider_country" ==> registry
+    sponsor == "transfer, balance" ==> token
+    faucet == "mint, set_admin" ==> token
+```
+
+Thick arrows are cross-contract calls, declared in [`contracts/voucher/src/interfaces.rs`](https://github.com/Godgift-care/sci-healthcare-contracts/blob/main/contracts/voucher/src/interfaces.rs) and [`contracts/sponsor/src/interfaces.rs`](https://github.com/Godgift-care/sci-healthcare-contracts/blob/main/contracts/sponsor/src/interfaces.rs), plus the standard token interface. Dotted arrows are calls a person or app signs; each is labelled with its main functions, and admin settings such as caps and handovers are left out. Only the voucher contract can `mint` a receipt: the receipt book names it as minter at initialisation.
+
 ## registry
 
 Answers one question: who is allowed to do what.

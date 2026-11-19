@@ -61,6 +61,11 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
         run: |
+          # The versioned docs site (docs-site.yml) on the default github.io
+          # address. Owner names are case-insensitive there and lower-case in
+          # the URL.
+          owner="$(printf '%s' "$GITHUB_REPOSITORY_OWNER" | tr '[:upper:]' '[:lower:]')"
+          DOCS_URL="https://${owner}.github.io/${GITHUB_REPOSITORY#*/}/"
           notes="$(mktemp)"
           {
             echo "## Contracts in this release"
@@ -84,6 +89,13 @@ jobs:
             echo "whole comparison for every contract in \`deployments/testnet.env\`."
             echo
             echo "To rebuild the same bytes yourself, run \`./scripts/build-wasm.sh\`."
+            echo
+            echo "## Documentation for this release"
+            echo
+            echo "${DOCS_URL}${RELEASE_TAG}/ is the documentation as it stood at \`${RELEASE_TAG}\`."
+            echo "The site root, ${DOCS_URL}, documents \`main\` and can describe functions this"
+            echo "release does not have. \`.github/workflows/docs-site.yml\` publishes the snapshot"
+            echo "when this tag is pushed."
           } > "$notes"
           gh release create "$RELEASE_TAG" dist/*.wasm dist/SHA256SUMS \
             --title "$RELEASE_TAG" \

@@ -26,6 +26,7 @@
 * [Local setup](developers/setup.md)
 * [Contract reference](developers/contracts.md)
 * [Integrating from another app](developers/integration.md)
+* [Trying it by hand in Stellar Lab](developers/stellar-lab.md)
 * [Using a multisig admin](developers/multisig-admin.md)
 * [Mainnet launch checklist](developers/mainnet-checklist.md)
 * [Security audit scope](developers/audit-scope.md)

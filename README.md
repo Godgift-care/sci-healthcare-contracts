@@ -92,17 +92,44 @@ The full recipe, and what "byte-identical" does and does not cover, is in [docs/
 
 ## Architecture
 
-Three contracts, one responsibility each.
+Three core contracts, one responsibility each: `registry` says who may bill, for what, and who may attest; `voucher` holds the escrow and runs the lifecycle; the receipt book keeps a non-transferable record of care that was paid for. The sponsorship desk (`sponsor`) and the testnet faucet sit on top and are optional.
 
+```mermaid
+flowchart LR
+    funder([Funder])
+    clinic([Clinic])
+    attester([Attester])
+    admin([Registry / voucher admin])
+    anyone([Anyone, e.g. a keeper])
+    org([Sponsor organisation])
+
+    registry["registry<br/>providers, services, attesters"]
+    voucher["voucher<br/>escrow and lifecycle"]
+    receipt["receipt book<br/>non-transferable care records"]
+    sponsor["sponsor<br/>sponsorship desk"]
+    faucet["faucet<br/>testnet only"]
+    token[("USDC<br/>SEP-41 token")]
+
+    funder -. "create_voucher, redirect,<br/>reduce_amount, dispute" .-> voucher
+    clinic -. "claim, claim_with_proof,<br/>decline" .-> voucher
+    attester -. "attest" .-> voucher
+    anyone -. "settle, refund" .-> voucher
+    admin -. "resolve_dispute, resolve_split" .-> voucher
+    clinic -. "register_provider, upsert_service,<br/>set_capacity, retire" .-> registry
+    admin -. "set_provider_status,<br/>add_attester" .-> registry
+    org -. "deposit, set_rules,<br/>match_voucher, withdraw" .-> sponsor
+    funder -. "drip" .-> faucet
+
+    voucher == "is_active_provider, get_service_price,<br/>is_service_available, get_capacity,<br/>is_attester" ==> registry
+    voucher == "mint" ==> receipt
+    voucher == "transfer, balance" ==> token
+    sponsor == "create_voucher,<br/>voucher_summary" ==> voucher
+    sponsor == "get_provider_country" ==> registry
+    sponsor == "transfer, balance" ==> token
+    faucet == "mint, set_admin" ==> token
 ```
-  registry ──────────┐         who may bill, for what, and who may attest
-  (providers,        │
-   services,         ├──────>  voucher  ──────>  receipt
-   attesters)        │        (escrow +         (non-transferable
-                     │         lifecycle)        care record)
-  SEP-41 token ──────┘
-  (USDC)
-```
+
+Thick arrows are cross-contract calls, declared in [`contracts/voucher/src/interfaces.rs`](contracts/voucher/src/interfaces.rs) and [`contracts/sponsor/src/interfaces.rs`](contracts/sponsor/src/interfaces.rs), plus the standard token interface. Dotted arrows are calls a person or app signs; each is labelled with its main functions, and admin settings such as caps and handovers are left out. Only the voucher contract can `mint` a receipt: the receipt book names it as minter at initialisation.
 
 `registry` and `receipt` hold no references and deploy first. `voucher` points at both and deploys last.
 
@@ -187,6 +214,8 @@ stellar keys generate --network testnet --fund sci-issuer
 | `cargo deny check` | dependencies with a known advisory or an incompatible licence |
 | `./scripts/build-wasm.sh` | a contract that no longer compiles to wasm |
 | `./scripts/test-deploy.sh` | deploy-script overwrite, `--force` and `--dry-run` regressions |
+| [`changelog.yml`](.github/workflows/changelog.yml) | a pull request that changes `contracts/` without a `CHANGELOG.md` entry (maintainers can waive it with the `skip-changelog` label) |
+| [`docs-site.yml`](.github/workflows/docs-site.yml) | a docs change that breaks the site build; on `main` and on release tags it publishes the versioned docs |
 
 **Coverage.** The `coverage` job prints the coverage table in the job output
 and fails when the contract sources drop below the threshold. Today the
@@ -204,6 +233,12 @@ today, and any future one has to carry a reason.
 `wasm-opt -Oz` and attaches them to the GitHub release together with a
 `SHA256SUMS` file and notes that explain how to compare the hash with a
 deployed contract.
+
+**Versioned docs.** The [docs site](https://godgift-care.github.io/sci-healthcare-contracts/) serves `main` at its root and a frozen copy for every release under `/<tag>/`, for example [`/v0.2.0/`](https://godgift-care.github.io/sci-healthcare-contracts/v0.2.0/), with [`/latest/`](https://godgift-care.github.io/sci-healthcare-contracts/latest/) pointing at the newest release. Each page carries a banner that says which version it describes, so someone integrating the deployed release does not read about functions that are only on `main`. Pushing a tag publishes its snapshot, and the release notes link to it. [`scripts/build-docs-site.sh`](scripts/build-docs-site.sh) builds the same site locally.
+
+### Try it by hand in Stellar Lab
+
+[Trying it by hand in Stellar Lab](docs/developers/stellar-lab.md) walks one voucher through fund, claim, attest and settle on testnet from a browser, one form per call, with nothing installed. It suits workshops: a facilitator deploys a copy from a GitHub Codespace and plays the admin, and everyone else uses only [Stellar Lab](https://lab.stellar.org).
 
 ### Run the lifecycle in TypeScript
 
