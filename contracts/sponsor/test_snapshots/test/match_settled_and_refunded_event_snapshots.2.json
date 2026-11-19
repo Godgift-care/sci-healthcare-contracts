@@ -1305,7 +1305,10 @@
                   {
                     "u64": "0"
                   },
-                  "void"
+                  "void",
+                  {
+                    "u64": "0"
+                  }
                 ]
               }
             }
@@ -1369,6 +1372,9 @@
                   },
                   {
                     "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAK3IM"
+                  },
+                  {
+                    "u64": "0"
                   }
                 ]
               }
