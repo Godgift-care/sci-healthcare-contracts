@@ -1,0 +1,264 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SCI Healthcare — Clinic Onboarding Sheet</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    @page { size: A4; margin: 0; }
+    body {
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      font-size: 11pt;
+      line-height: 1.4;
+      color: #000;
+      background: #fff;
+      padding: 20mm 15mm;
+      max-width: 210mm;
+      margin: 0 auto;
+    }
+    .header {
+      text-align: center;
+      border-bottom: 3px solid #000;
+      padding-bottom: 12px;
+      margin-bottom: 16px;
+    }
+    .header h1 { font-size: 22pt; font-weight: 700; margin-bottom: 4px; }
+    .header .subtitle { font-size: 12pt; color: #333; }
+    .section { margin-bottom: 14px; page-break-inside: avoid; }
+    .section h2 {
+      font-size: 13pt;
+      font-weight: 700;
+      border-bottom: 1px solid #000;
+      padding-bottom: 3px;
+      margin-bottom: 8px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    .field { display: flex; flex-direction: column; gap: 3px; }
+    .field label { font-size: 9pt; font-weight: 600; color: #333; text-transform: uppercase; letter-spacing: 0.3px; }
+    .field input, .field textarea {
+      border: 1px solid #999;
+      padding: 6px 8px;
+      font-size: 10pt;
+      font-family: inherit;
+      background: #fff;
+    }
+    .field input:read-only, .field textarea:read-only { background: #f5f5f5; }
+    .qr-placeholder {
+      border: 2px dashed #999;
+      aspect-ratio: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 9pt;
+      color: #999;
+      text-align: center;
+      padding: 10px;
+    }
+    .steps { counter-reset: step; }
+    .step {
+      display: flex;
+      gap: 10px;
+      padding: 8px 0;
+      border-bottom: 1px dotted #ccc;
+    }
+    .step:last-child { border-bottom: none; }
+    .step-num {
+      counter-increment: step;
+      flex-shrink: 0;
+      width: 28px;
+      height: 28px;
+      border: 2px solid #000;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 700;
+      font-size: 11pt;
+    }
+    .step-num::before { content: counter(step); }
+    .step-content { flex: 1; }
+    .step-title { font-weight: 600; font-size: 10.5pt; }
+    .step-desc { font-size: 9.5pt; color: #333; margin-top: 2px; }
+    .important-box {
+      border: 2px solid #000;
+      padding: 10px 12px;
+      margin-top: 8px;
+      background: #fafafa;
+    }
+    .important-box strong { display: block; margin-bottom: 4px; font-size: 10pt; }
+    .contact-row { display: flex; justify-content: space-between; padding: 6px 0; border-bottom: 1px dotted #ccc; }
+    .contact-row:last-child { border-bottom: none; }
+    .contact-label { font-weight: 600; font-size: 10pt; }
+    .contact-value { font-size: 10pt; color: #333; }
+    .footer {
+      margin-top: 20px;
+      padding-top: 10px;
+      border-top: 1px solid #000;
+      text-align: center;
+      font-size: 8.5pt;
+      color: #666;
+    }
+    .checklist { list-style: none; }
+    .checklist li {
+      padding: 4px 0 4px 24px;
+      position: relative;
+      font-size: 10pt;
+    }
+    .checklist li::before {
+      content: "☐";
+      position: absolute;
+      left: 0;
+      font-size: 12pt;
+    }
+    @media print {
+      body { padding: 15mm 10mm; }
+      .no-print { display: none !important; }
+      .field input, .field textarea { border-color: #666; }
+      .qr-placeholder { border-color: #666; }
+    }
+    @media screen {
+      .no-print { display: block; text-align: center; margin: 16px 0; color: #666; font-size: 9pt; }
+    }
+  </style>
+</head>
+<body>
+  <div class="no-print">Press Ctrl/Cmd+P to print. Designed for A4, black & white.</div>
+
+  <header class="header">
+    <h1>SCI Healthcare</h1>
+    <div class="subtitle">Clinic Onboarding — Quick Reference Sheet</div>
+  </header>
+
+  <section class="section">
+    <h2>Clinic Details</h2>
+    <div class="grid">
+      <div class="field">
+        <label>Clinic Name</label>
+        <input type="text" placeholder="Enter clinic name" readonly>
+      </div>
+      <div class="field">
+        <label>Country</label>
+        <input type="text" placeholder="NG / KE / TZ / etc." maxlength="2" readonly>
+      </div>
+      <div class="field">
+        <label>Wallet Address (Public)</label>
+        <input type="text" placeholder="G..." readonly>
+      </div>
+      <div class="field">
+        <label>Registry Status</label>
+        <input type="text" placeholder="Pending → Active → Suspended → Retired" readonly>
+      </div>
+    </div>
+  </section>
+
+  <section class="section">
+    <h2>QR Code — Wallet / Clinic Profile</h2>
+    <div class="qr-placeholder" style="max-width: 80px; margin: 0 auto;">
+      [ QR CODE HERE ]
+    </div>
+    <p style="text-align:center; font-size:8pt; color:#666; margin-top:6px;">
+      Scan to open clinic desk / verify on-chain registration
+    </p>
+  </section>
+
+  <section class="section">
+    <h2>Getting Started — 4 Steps</h2>
+    <div class="steps">
+      <div class="step">
+        <div class="step-num"></div>
+        <div class="step-content">
+          <div class="step-title">1. Connect & Register</div>
+          <div class="step-desc">Open the Clinic Desk in your browser. Connect your Stellar wallet (Freighter, Albedo, Lobstr). Enter clinic name and 2-letter country code. You are now <strong>Pending</strong>.</div>
+        </div>
+      </div>
+      <div class="step">
+        <div class="step-num"></div>
+        <div class="step-content">
+          <div class="step-title">2. Get Verified</div>
+          <div class="step-desc">An administrator reviews your licence, location, and contact. Once approved, you move to <strong>Active</strong>. Only Active clinics can list services and receive vouchers.</div>
+        </div>
+      </div>
+      <div class="step">
+        <div class="step-num"></div>
+        <div class="step-content">
+          <div class="step-title">3. List Services</div>
+          <div class="step-desc">Add each service: a <strong>code</strong> (number), <strong>label</strong> (e.g. "Outpatient consult"), and <strong>price in USDC</strong>. Keep labels coarse — no diagnoses on chain. Prices are a floor; funders may pay more.</div>
+        </div>
+      </div>
+      <div class="step">
+        <div class="step-num"></div>
+        <div class="step-content">
+          <div class="step-title">4. Get Paid</div>
+          <div class="step-desc">Patient arrives → <strong>Mark patient seen</strong> (claim) → Deliver care → <strong>Attester confirms</strong> → 72-hour dispute window → <strong>Release payment</strong> (settle). You receive voucher amount minus 1% protocol fee.</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="section">
+    <h2>Key Rules to Remember</h2>
+    <ul class="checklist">
+      <li>You <strong>cannot attest your own vouchers</strong> — the contract rejects it even if you hold an attester role.</li>
+      <li>Claim <strong>promptly</strong> — a voucher cannot be claimed after it expires (funder gets it back).</li>
+      <li>Settlement is <strong>permissionless</strong> — once the dispute window closes, anyone can trigger it. No operator can withhold your payment.</li>
+      <li>If suspended: you keep vouchers already funded. You cannot receive new ones or change prices.</li>
+      <li>Payment is in <strong>USDC</strong>. Convert to local currency via a Stellar anchor (Yellowcard, Cowrie, HoneyCoin, MoneyGram) — separate KYC step.</li>
+      <li>Stellar network fees (fractions of a cent in XLM) are paid by whoever submits the transaction.</li>
+    </ul>
+  </section>
+
+  <section class="section">
+    <h2>Service Catalogue</h2>
+    <table style="width:100%; border-collapse:collapse; font-size:9.5pt;">
+      <thead>
+        <tr style="border-bottom:2px solid #000;">
+          <th style="text-align:left; padding:4px 8px;">Code</th>
+          <th style="text-align:left; padding:4px 8px;">Label</th>
+          <th style="text-align:right; padding:4px 8px;">Price (USDC)</th>
+          <th style="text-align:center; padding:4px 8px;">Active</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr style="border-bottom:1px solid #ccc;"><td style="padding:4px 8px;">101</td><td style="padding:4px 8px;">Outpatient consult</td><td style="text-align:right; padding:4px 8px;">3.00</td><td style="text-align:center; padding:4px 8px;">☐</td></tr>
+        <tr style="border-bottom:1px solid #ccc;"><td style="padding:4px 8px;">102</td><td style="padding:4px 8px;">Lab panel — basic</td><td style="text-align:right; padding:4px 8px;">5.00</td><td style="text-align:center; padding:4px 8px;">☐</td></tr>
+        <tr style="border-bottom:1px solid #ccc;"><td style="padding:4px 8px;">103</td><td style="padding:4px 8px;">Medication dispense</td><td style="text-align:right; padding:4px 8px;">2.50</td><td style="text-align:center; padding:4px 8px;">☐</td></tr>
+        <tr style="border-bottom:1px solid #ccc;"><td style="padding:4px 8px;">104</td><td style="padding:4px 8px;">Vaccination</td><td style="text-align:right; padding:4px 8px;">4.00</td><td style="text-align:center; padding:4px 8px;">☐</td></tr>
+        <tr><td style="padding:4px 8px;">___</td><td style="padding:4px 8px;">____________________</td><td style="text-align:right; padding:4px 8px;">___.__</td><td style="text-align:center; padding:4px 8px;">☐</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section class="section">
+    <h2>Disputes & Refunds</h2>
+    <div class="grid" style="gap: 16px;">
+      <div>
+        <strong>Funder disputes</strong> (within 72 hrs of attestation):<br>
+        Funds freeze in escrow. Admin resolves → funder or clinic.<br>
+        Admin <strong>cannot</strong> send money to a third party.
+      </div>
+      <div>
+        <strong>No attestation?</strong><br>
+        Unclaimed: refund at expiry (or immediately if clinic inactive).<br>
+        Claimed but never attested: refund 7 days after expiry.<br>
+        <strong>No fee on refunds.</strong>
+      </div>
+    </div>
+  </section>
+
+  <section class="section">
+    <h2>Contacts</h2>
+    <div class="contact-row"><span class="contact-label">Admin / Verification</span><span class="contact-value">________________________________</span></div>
+    <div class="contact-row"><span class="contact-label">Technical Support</span><span class="contact-value">________________________________</span></div>
+    <div class="contact-row"><span class="contact-label">Anchor / Cash-out Partner</span><span class="contact-value">________________________________</span></div>
+    <div class="contact-row"><span class="contact-label">Security / Vulnerability</span><span class="contact-value">adelekevat@gmail.com</span></div>
+  </section>
+
+  <footer class="footer">
+    SCI Healthcare Protocol · <a href="https://github.com/Godgift-care/sci-healthcare-contracts" style="color:#666;">github.com/Godgift-care/sci-healthcare-contracts</a> ·
+    Contracts on Stellar testnet · Unaudited — do not use with real funds
+  </footer>
+</body>
+</html>

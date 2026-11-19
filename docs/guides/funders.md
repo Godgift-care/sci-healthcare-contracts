@@ -9,6 +9,11 @@ nav_order: 6
 
 You are paying for a specific treatment at a specific clinic, for yourself or for someone else.
 
+If you are funding many vouchers from an organisation's shared wallet or a
+multisig account, read [Funding from an organisation wallet](organisation-funders.md)
+instead: it covers approvals, refunds back to the shared account and record
+keeping.
+
 ## What you need
 
 - A Stellar wallet. [Freighter](https://freighter.app) is the usual choice.
