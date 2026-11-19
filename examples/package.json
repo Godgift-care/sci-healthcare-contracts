@@ -5,7 +5,9 @@
   "description": "Runnable examples of the SCI Healthcare voucher lifecycle on Stellar testnet",
   "scripts": {
     "typecheck": "tsc --noEmit",
-    "lifecycle": "tsx lifecycle.ts"
+    "test": "tsx --test keeper.test.ts",
+    "lifecycle": "tsx lifecycle.ts",
+    "keeper": "tsx keeper.ts"
   },
   "dependencies": {
     "@stellar/stellar-sdk": "^17.0.1"

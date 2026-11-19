@@ -3,6 +3,8 @@
 Thanks for helping. This repo holds the Soroban contracts, so changes here move
 real escrowed value — the bar is deliberately high.
 
+By taking part you agree to the [Code of Conduct](CODE_OF_CONDUCT.md).
+
 ## Before you start
 
 1. Comment on the issue you want and wait to be assigned, so two people do not
@@ -193,6 +195,33 @@ assert_eq!(err, VoucherError::NotYetExpired);
 Prefer this to `#[should_panic]`: it pins the error number callers decode and
 keeps the failure path readable. Test each new error variant, including the
 input validation, authorisation and state checks, not only the happy path.
+
+## Forking, Codespaces and pushing
+
+Only maintainers can push to this repository, and `main` takes changes through
+pull requests only. If `git push` answers `403` or `Permission denied`, the
+push is going to `Godgift-care/sci-healthcare-contracts` instead of your fork.
+
+1. Fork the repository, then clone **your fork**
+   (`gh repo fork Godgift-care/sci-healthcare-contracts --clone` does both).
+2. Create a branch, commit, and `git push -u origin <branch>`.
+3. Open a pull request against `main`.
+
+**GitHub Codespaces.** The repository has a [dev container](.devcontainer/), so
+a codespace starts with the toolchain CI uses and the dependencies installed.
+Create it from your fork (**Code → Codespaces** on your fork's page) and
+`git push` works as usual. A codespace created from this repository without
+write access cannot push here; GitHub offers to fork it for you on the first
+push, or run `gh repo fork --remote` and push to the new `origin`.
+
+A codespace cannot push changes to `.github/workflows/`: its token has no
+workflow permission. Make those changes from a local clone.
+
+Never commit a `.env` file, and never commit files you did not write. If
+`git status` shows changes you do not recognise (an `init` file, edited
+`package.json` scripts, a changed `.gitignore`, config files with one very long
+line), stop and check your machine before pushing: see
+[Security scan](#security-scan).
 
 ## Commits
 

@@ -65,7 +65,7 @@ Returns **503** when the database is unreachable, RPC is unreachable, or the ind
 
 | Parameter | Type | Notes |
 | --- | --- | --- |
-| `status` | `Pending` \| `Active` \| `Suspended` | |
+| `status` | `Pending` \| `Active` \| `Suspended` \| `Retired` | |
 | `country` | string(2) | ISO 3166-1 alpha-2 |
 | `q` | string | Name search |
 | `limit` | int | 1–100, default 50 |
