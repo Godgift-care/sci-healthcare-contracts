@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"enum":["DataKey","ProviderStatus","RegistryError"],"struct":["Provider","ServiceItem"]};
+window.SIDEBAR_ITEMS = {"enum":["DataKey","ProviderCategory","ProviderStatus","RegistryError"],"struct":["Provider","ServiceItem"]};
