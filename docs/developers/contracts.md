@@ -203,7 +203,22 @@ A signer is not the same as a role: `admin` must be the stored admin **and** sig
 
 ### Events
 
-`provider_registered`, `provider_status_changed` (topics `provider`; data `status`, `reason_code`), `service_upserted`, `service_removed`, `service_price_scheduled` (topics `provider`, `code`; data `price`, `effective_at`), `service_availability_changed` (topics `provider`, `code`; data `available`), `capacity_changed` (topic `provider`; data `max_outstanding`), `attester_added`, `attester_removed`, `admin_changed`, `initialized`
+| Event | Topics | Data |
+| --- | --- | --- |
+| `initialized` | — | `admin` |
+| `provider_registered` | `provider` | `name`, `country`, `registered_at` |
+| `provider_status_changed` | `provider` | `status`, `reason_code` |
+| `service_upserted` | `provider`, `code` | `label`, `price` |
+| `service_removed` | `provider` | `code` |
+| `service_price_scheduled` | `provider`, `code` | `price`, `effective_at` |
+| `service_availability_changed` | `provider`, `code` | `available` |
+| `attester_added` | `attester` | — |
+| `capacity_changed` | `provider` | `max_outstanding` |
+| `attester_removed` | `attester` | — |
+| `admin_proposed` | `admin` | `pending_admin` |
+| `admin_changed` | — | `new_admin` |
+
+> Fields listed under **Topics** are published in the event's topic list, **not** in its data map. The table is checked against the `#[contractevent]` structs in `contracts/registry/src/events.rs` by `event_table_in_the_docs_matches_the_source`; adding, renaming or moving a field fails that test until the table is updated in the same change.
 
 ---
 
@@ -416,6 +431,7 @@ rejects the voucher's own provider even if it holds that role.
 
 | Event | Topics | Data |
 | --- | --- | --- |
+| `initialized` | — | `admin` |
 | `voucher_created` | `funder`, `provider`, `beneficiary_ref` | `voucher_id`, `service_code`, `amount`, `created_at`, `expires_at` |
 | `voucher_claimed` | `provider` | `voucher_id`, `claimed_at`, `service_code`, `amount` |
 | `voucher_declined` | `provider` | `voucher_id`, `reason_code`, `service_code`, `amount` |
@@ -429,7 +445,11 @@ rejects the voucher's own provider even if it holds that role.
 | `attestation_cap_changed` | `admin` | `cap` |
 | `dispute_window_bounds_changed` | `admin` | `min`, `max` |
 | `escrow_cap_changed` | `admin` | `max` |
+| `admin_proposed` | `admin` | `pending_admin` |
+| `admin_changed` | — | `new_admin` |
 
+> The table is checked against the `#[contractevent]` structs in `contracts/voucher/src/events.rs` by `event_table_in_the_docs_matches_the_source`; adding, renaming or moving a field fails that test until the table is updated in the same change.
+>
 > Fields listed under **Topics** are published in the event's topic list, **not** in its data map. An indexer reading them off the data map gets `undefined`.
 >
 > Every event in this table has a snapshot test that reads the decoded XDR and asserts the exact topic list and data map — `*_event_snapshot` in each contract's `src/test.rs`. Changing a field name, moving a field between topic and data, or adding a field fails that test with a message naming `TOPIC_FIELDS` in `sci-healthcare-backend/src/stellar/events.ts`.
@@ -528,9 +548,18 @@ Every public function, with the exact signer it demands. `AUTH_MATRIX` in `contr
 
 ### Events
 
-`receipt_minted` — topics `beneficiary_ref`, `provider`; data `voucher_id`, `service_code`, `amount`, `settled_at`
+| Event | Topics | Data |
+| --- | --- | --- |
+| `initialized` | — | `admin` |
+| `minter_proposed` | `admin` | `pending_minter` |
+| `minter_changed` | — | `minter` |
+| `admin_proposed` | `admin` | `pending_admin` |
+| `admin_changed` | — | `new_admin` |
+| `receipt_minted` | `beneficiary_ref`, `provider` | `voucher_id`, `service_code`, `amount`, `settled_at` |
 
-`minter_proposed` — topic `admin`; data `pending_minter`. `minter_changed` — data `minter`. The indexer should treat `minter_proposed` as a pending state only: `get_minter()` changes on `minter_changed`, after the nominee accepts.
+The indexer should treat `minter_proposed` as a pending state only: `get_minter()` changes on `minter_changed`, after the nominee accepts.
+
+The table is checked against the `#[contractevent]` structs in `contracts/receipt/src/lib.rs` by `event_table_in_the_docs_matches_the_source`; adding, renaming or moving a field fails that test until the table is updated in the same change.
 
 ## faucet (testnet only)
 
@@ -554,6 +583,21 @@ Lets anyone trying the demo get test USDC without a server holding the issuer ke
 `initialize` also sets a per-address `lifetime_cap`: the total base units one address may ever receive. It is tracked in a persistent counter per address and never resets, so an address at its cap is rejected with `LifetimeCapReached` even on a new UTC day. A `lifetime_cap` of `0` means unlimited; a negative value is rejected with `InvalidAmount`. The counter is TTL-extended on every read and write.
 
 On testnet the faucet drips 50 USDC once a day: [`CCB25WG7DQ2CSNXPTOHZO2PDZ324FQPZLH3LSNCCLWYM3FEH52GEXC47`](https://stellar.expert/explorer/testnet/contract/CCB25WG7DQ2CSNXPTOHZO2PDZ324FQPZLH3LSNCCLWYM3FEH52GEXC47).
+
+### Authorisation matrix
+
+Every public function, with the exact signer it demands. `AUTH_MATRIX` in `contracts/faucet/src/test.rs` drives both `authorisation_matrix_matches_every_public_function` and this table, through `authorisation_table_in_the_docs_matches_the_matrix`.
+
+| Function | Signer required |
+| --- | --- |
+| `initialize` | none (one-shot) |
+| `drip` | `to` |
+| `set_drip` | `admin` |
+| `set_paused` | `admin` |
+| `release_token_admin` | `admin` |
+| `get_config` | none (view) |
+| `next_drip_at` | none (view) |
+| `version` | none (view) |
 
 | # | Error |
 | --- | --- |
@@ -676,6 +720,10 @@ Every public function, with the exact signer it demands. `AUTH_MATRIX` in `contr
 
 These events are new to the indexer: `sci-healthcare-backend` decodes them
 once their topic names are added to `TOPIC_FIELDS` in `src/stellar/events.ts`.
+The table is checked against the `#[contractevent]` structs in
+`contracts/sponsor/src/events.rs` by `event_table_in_the_docs_matches_the_source`;
+adding, renaming or moving a field fails that test until the table is updated in
+the same change.
 
 ---
 
@@ -739,6 +787,55 @@ These expectations are tested, not assumed:
   and `registry_reads_restore_a_lapsed_entry`.
 - `contracts/receipt/src/test.rs` — `receipt_survives_sixty_days_of_activity`,
   `receipt_read_restores_a_lapsed_entry` and `count_for_extends_its_own_entry`.
+
+### Storage read and write costs
+
+Every public entry point has a committed read and write count in
+`contracts/<crate>/storage-counts.md`. The count comes from running the same
+`AUTH_MATRIX` case as the authorisation test once in the state that makes the
+call valid, then reading `memory_read_entries` and `write_entries` from
+`Env::cost_estimate().resources()`.
+
+| Contract | Table |
+| --- | --- |
+| registry | [`contracts/registry/storage-counts.md`](../../contracts/registry/storage-counts.md) |
+| voucher | [`contracts/voucher/storage-counts.md`](../../contracts/voucher/storage-counts.md) |
+| receipt | [`contracts/receipt/storage-counts.md`](../../contracts/receipt/storage-counts.md) |
+| sponsor | [`contracts/sponsor/storage-counts.md`](../../contracts/sponsor/storage-counts.md) |
+| faucet | [`contracts/faucet/storage-counts.md`](../../contracts/faucet/storage-counts.md) |
+
+The tests fail on any change, including a decrease: the committed table would
+otherwise stop describing the code. Regenerate intentionally with:
+
+```bash
+just storage-counts
+# or: ./scripts/refresh-storage-counts.sh
+```
+
+Explain a changed count in the pull request. An increase is a fee and
+entry-limit regression, and a decrease is a cost improvement worth recording.
+
+### Stored-type upgrade safety
+
+Entries written by one release may outlive the release that wrote them. Each
+contract keeps XDR fixtures for the `#[contracttype]` values it stores under
+`contracts/<crate>/fixtures/stored_types/`. The
+`stored_type_fixtures_decode_against_current_code` test decodes each fixture
+with the current types and compares it with a freshly built value.
+
+Adding, removing, renaming or reordering a field makes the old fixture fail to
+decode (or decode to a different value). That is a breaking storage change: keep
+the old layout, put new fields under a new data key with a default, or add a
+versioned migration before refreshing the fixture. Refreshing is deliberately
+explicit and should happen only at release time:
+
+```bash
+just stored-type-fixtures
+# or: ./scripts/refresh-stored-type-fixtures.sh
+```
+
+The same tests honour `UPDATE_STORAGE_COUNTS=1` and
+`UPDATE_STORED_TYPE_FIXTURES=1` when run directly with `cargo test`.
 
 ---
 
