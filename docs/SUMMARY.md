@@ -11,6 +11,14 @@
 * [Trust model](protocol/trust.md)
 * [Privacy](protocol/privacy.md)
 
+## Architecture decisions
+
+* [Architecture decision records](adr/README.md)
+* [0001 — A provider cannot attest its own voucher](adr/0001-provider-cannot-attest-its-own-voucher.md)
+* [0002 — Settle and refund are permissionless](adr/0002-settle-and-refund-are-permissionless.md)
+* [0003 — Beneficiary references are HMACs, not hashes](adr/0003-beneficiary-references-are-hmacs.md)
+* [0004 — The contract holds no general balance](adr/0004-no-general-balance.md)
+
 ## Guides
 
 * [Funding care for someone](guides/funders.md)

@@ -3,6 +3,7 @@
 ## Unreleased
 
 ### Added
+- **docs:** architecture decision records under [`docs/adr/`](docs/adr/README.md), with a short template and one ADR for each non-obvious decision that protects funds or privacy: a provider cannot attest its own voucher, `settle` and `refund` are permissionless, beneficiary references are HMACs rather than plain hashes, and the contract holds no general balance. Each ADR states the context, the decision, its consequences and the alternatives rejected, and links the function that implements it. Linked from the README, the docs table of contents and the contract reference.
 - **registry:** provider counts by status via `provider_counts() -> (pending, active, suspended)`. Counters updated on registration, status transitions and retirement. Closes #104.
 - **registry:** paginated list of attesters on chain via `list_attesters(start, limit)`. Attesters index maintained with swap-and-pop on removal and capped page limit. Closes #103.
 - **registry:** provider categories via `ProviderCategory` enum (Clinic, Pharmacy, Laboratory, Maternity, Other). Set at registration with `register_provider` and changeable by owner via `update_provider_category`, emitting `provider_category_changed`. Closes #102.

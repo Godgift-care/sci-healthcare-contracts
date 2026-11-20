@@ -11,6 +11,8 @@ All amounts are `i128` in the token's smallest unit. All timestamps are `u64` se
 
 `contracts/common` (`sci-common`) is an internal `rlib` shared by the three contracts: the TTL constants, the persistent-entry extension helper and the two-step admin handover (`propose_admin` / `take_pending_admin` / `require_admin`). It defines no contract entry points; each contract keeps its own `DataKey`, errors and events, so the public interface and the numbers callers see are unchanged. Faucet keeps its own shorter drip TTLs.
 
+The decisions that look surprising on a first read — a provider cannot attest its own voucher, `settle` and `refund` take no signature, beneficiary references are HMACs, and there is no general balance — are recorded with their reasoning and rejected alternatives in the [architecture decision records](../adr/README.md).
+
 Protocol terminology used across the docs is defined in [docs/glossary.md](../glossary.md). Clinic questions (payment timing, disputes, fees) are answered in [docs/guides/clinics-faq.md](../guides/clinics-faq.md), and French versions of the funder, clinic and attester guides live under [docs/fr/](../fr/).
 
 ---
