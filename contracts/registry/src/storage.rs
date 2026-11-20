@@ -190,6 +190,34 @@ pub(crate) fn list_attesters(env: &Env, start: u32, limit: u32) -> Vec<Address> 
     out
 }
 
+/// Number of providers in a given lifecycle status.
+pub(crate) fn read_status_count(env: &Env, status: ProviderStatus) -> u32 {
+    let key = DataKey::StatusCount(status);
+    match env.storage().persistent().get::<_, u32>(&key) {
+        Some(count) => {
+            common::extend_persistent(env, &key);
+            count
+        }
+        None => 0,
+    }
+}
+
+pub(crate) fn write_status_count(env: &Env, status: ProviderStatus, count: &u32) {
+    let key = DataKey::StatusCount(status);
+    env.storage().persistent().set(&key, count);
+    common::extend_persistent(env, &key);
+}
+
+pub(crate) fn increment_status_count(env: &Env, status: ProviderStatus) {
+    let count = read_status_count(env, status);
+    write_status_count(env, status, &(count.saturating_add(1)));
+}
+
+pub(crate) fn decrement_status_count(env: &Env, status: ProviderStatus) {
+    let count = read_status_count(env, status);
+    write_status_count(env, status, &(count.saturating_sub(1)));
+}
+
 /// Total number of registered providers.
 pub(crate) fn read_provider_count(env: &Env) -> u32 {
     match env

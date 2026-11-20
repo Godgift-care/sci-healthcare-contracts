@@ -120,6 +120,7 @@ impl Registry {
         let count = storage::read_provider_count(&env);
         storage::write_provider_at(&env, count, &owner);
         storage::write_provider_count(&env, &(count + 1));
+        storage::increment_status_count(&env, ProviderStatus::Pending);
 
         // `CountryCount` for this country is left unset; `read_country_count`
         // returns 0 when absent, so `providers_in` works even if the provider
@@ -197,6 +198,8 @@ impl Registry {
 
         // Update the per-country index when crossing the Active boundary.
         if prev_status != status {
+            storage::decrement_status_count(&env, prev_status);
+            storage::increment_status_count(&env, status);
             let country = &provider.country;
             match (prev_status, status) {
                 // Provider just became active: add to country index.
@@ -295,10 +298,14 @@ impl Registry {
         if provider.status == ProviderStatus::Retired {
             return Err(RegistryError::InvalidTransition);
         }
+        let prev_status = provider.status;
         provider.status = ProviderStatus::Retired;
         provider.reason_code = reason_code;
         write_provider(&env, &owner, &provider);
         extend_instance(&env);
+
+        storage::decrement_status_count(&env, prev_status);
+        storage::increment_status_count(&env, ProviderStatus::Retired);
 
         ProviderStatusChanged {
             provider: owner,
@@ -619,6 +626,15 @@ impl Registry {
     /// trusting an indexer.
     pub fn list_providers(env: Env, start: u32, limit: u32) -> Vec<Provider> {
         storage::list_providers(&env, start, limit)
+    }
+
+    /// Returns provider counts by lifecycle status: `(pending, active, suspended)`.
+    pub fn provider_counts(env: Env) -> (u32, u32, u32) {
+        (
+            storage::read_status_count(&env, ProviderStatus::Pending),
+            storage::read_status_count(&env, ProviderStatus::Active),
+            storage::read_status_count(&env, ProviderStatus::Suspended),
+        )
     }
 
     /// The check `voucher` relies on before escrowing any funds.

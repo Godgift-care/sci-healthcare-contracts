@@ -109,6 +109,7 @@ pub struct ServiceItem {
 | `get_pending_admin` | — | `Option<Address>` | view | — |
 | `get_provider` | `provider_addr` | `Provider` | view | `ProviderNotFound` |
 | `list_providers` | `start, limit: u32` | `Vec<Provider>` | view | — |
+| `provider_counts` | — | `(u32, u32, u32)` | view | — |
 | `providers_in` | `country: String, start, limit: u32` | `Vec<Provider>` | view | — |
 | `is_active_provider` | `provider_addr` | `bool` | view | — |
 | `get_service` | `provider_addr, code` | `ServiceItem` | view | `ServiceNotFound` |
@@ -178,6 +179,7 @@ Every public function, with the exact signer it demands — no signature that is
 | `get_pending_admin` | none (view) |
 | `get_provider` | none (view) |
 | `list_providers` | none (view) |
+| `provider_counts` | none (view) |
 | `providers_in` | none (view) |
 | `is_active_provider` | none (view) |
 | `get_service` | none (view) |

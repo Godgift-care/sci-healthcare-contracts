@@ -1058,6 +1058,57 @@ fn attester_lifecycle() {
 }
 
 #[test]
+fn provider_counts_lifecycle() {
+    let f = setup();
+    assert_eq!(f.client.provider_counts(), (0, 0, 0));
+
+    let provider = Address::generate(&f.env);
+    f.client.register_provider(
+        &provider,
+        &String::from_str(&f.env, "A Clinic"),
+        &String::from_str(&f.env, "NG"),
+        &ProviderCategory::Clinic,
+    );
+    assert_eq!(f.client.provider_counts(), (1, 0, 0));
+
+    // Pending -> Active
+    f.client
+        .set_provider_status(&f.admin, &provider, &ProviderStatus::Active, &1u32);
+    assert_eq!(f.client.provider_counts(), (0, 1, 0));
+
+    // Active -> Suspended
+    f.client
+        .set_provider_status(&f.admin, &provider, &ProviderStatus::Suspended, &2u32);
+    assert_eq!(f.client.provider_counts(), (0, 0, 1));
+
+    // Suspended -> Active
+    f.client
+        .set_provider_status(&f.admin, &provider, &ProviderStatus::Active, &1u32);
+    assert_eq!(f.client.provider_counts(), (0, 1, 0));
+
+    // Active -> Retired
+    f.client.retire(&provider, &5u32);
+    assert_eq!(f.client.provider_counts(), (0, 0, 0));
+
+    // New provider Pending -> Suspended -> Retired
+    let p2 = Address::generate(&f.env);
+    f.client.register_provider(
+        &p2,
+        &String::from_str(&f.env, "B Clinic"),
+        &String::from_str(&f.env, "KE"),
+        &ProviderCategory::Pharmacy,
+    );
+    assert_eq!(f.client.provider_counts(), (1, 0, 0));
+
+    f.client
+        .set_provider_status(&f.admin, &p2, &ProviderStatus::Suspended, &3u32);
+    assert_eq!(f.client.provider_counts(), (0, 0, 1));
+
+    f.client.retire(&p2, &5u32);
+    assert_eq!(f.client.provider_counts(), (0, 0, 0));
+}
+
+#[test]
 fn list_attesters_lifecycle() {
     let f = setup();
     let a = Address::generate(&f.env);
@@ -1435,6 +1486,10 @@ const AUTH_MATRIX: &[AuthCase] = &[
         auth: Auth::Free("none (view)"),
     },
     AuthCase {
+        function: "provider_counts",
+        auth: Auth::Free("none (view)"),
+    },
+    AuthCase {
         function: "is_active_provider",
         auth: Auth::Free("none (view)"),
     },
@@ -1619,6 +1674,9 @@ fn run_case(f: &AuthFixture, function: &str) -> CaseRun {
         }
         "list_providers" => {
             client.list_providers(&0u32, &10u32);
+        }
+        "provider_counts" => {
+            client.provider_counts();
         }
         "is_active_provider" => {
             activate(&f.f, &f.provider);

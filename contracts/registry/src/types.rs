@@ -142,6 +142,8 @@ pub enum DataKey {
     /// Address of the active provider at `index` in a country's list, in
     /// insertion order. Uses swap-and-pop on removal so reads stay O(1).
     CountryAt(String, u32),
+    /// Number of providers in a given status.
+    StatusCount(ProviderStatus),
 }
 
 #[contracterror]

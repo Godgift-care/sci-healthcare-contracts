@@ -3,6 +3,7 @@
 ## Unreleased
 
 ### Added
+- **registry:** provider counts by status via `provider_counts() -> (pending, active, suspended)`. Counters updated on registration, status transitions and retirement. Closes #104.
 - **registry:** paginated list of attesters on chain via `list_attesters(start, limit)`. Attesters index maintained with swap-and-pop on removal and capped page limit. Closes #103.
 - **registry:** provider categories via `ProviderCategory` enum (Clinic, Pharmacy, Laboratory, Maternity, Other). Set at registration with `register_provider` and changeable by owner via `update_provider_category`, emitting `provider_category_changed`. Closes #102.
 - **registry:** record verification evidence hash via `set_verification_evidence`. Admin records an on-chain `BytesN<32>` hash of the provider's verification documents (licence, inspection report), stored on `Provider` and emitted as `verification_evidence_set`. Closes #101.
