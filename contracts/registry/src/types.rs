@@ -187,7 +187,7 @@ impl From<sci_common::CommonError> for RegistryError {
 }
 
 #[cfg(test)]
-mod error_conversion_tests {
+mod tests {
     use super::*;
 
     #[test]
@@ -200,5 +200,64 @@ mod error_conversion_tests {
     fn no_pending_admin_maps() {
         let err: RegistryError = sci_common::CommonError::NoPendingAdmin.into();
         assert_eq!(err, RegistryError::NoPendingAdmin);
+    }
+
+    #[test]
+    fn provider_status_transitions() {
+        use ProviderStatus::*;
+        assert!(ProviderStatus::is_transition_allowed(Pending, Active));
+        assert!(ProviderStatus::is_transition_allowed(Pending, Suspended));
+        assert!(ProviderStatus::is_transition_allowed(Active, Suspended));
+        assert!(ProviderStatus::is_transition_allowed(Suspended, Active));
+        assert!(!ProviderStatus::is_transition_allowed(Pending, Pending));
+        assert!(!ProviderStatus::is_transition_allowed(Active, Active));
+        assert!(!ProviderStatus::is_transition_allowed(Suspended, Suspended));
+        assert!(!ProviderStatus::is_transition_allowed(Active, Pending));
+        assert!(!ProviderStatus::is_transition_allowed(Suspended, Pending));
+        assert!(!ProviderStatus::is_transition_allowed(Pending, Retired));
+        assert!(!ProviderStatus::is_transition_allowed(Retired, Active));
+        assert!(!ProviderStatus::is_transition_allowed(Retired, Suspended));
+        assert!(!ProviderStatus::is_transition_allowed(Retired, Retired));
+    }
+
+    #[test]
+    fn provider_category_variants() {
+        let categories = [
+            ProviderCategory::Clinic,
+            ProviderCategory::Pharmacy,
+            ProviderCategory::Laboratory,
+            ProviderCategory::Maternity,
+            ProviderCategory::Other,
+        ];
+        for (i, c) in categories.iter().enumerate() {
+            assert_eq!(*c as u32, i as u32);
+        }
+    }
+
+    #[test]
+    fn service_item_due_price() {
+        let env = soroban_sdk::Env::default();
+        let mut item = ServiceItem {
+            code: 1,
+            label: String::from_str(&env, "Consult"),
+            price: 100,
+            active: true,
+            available: true,
+            pending_price: 200,
+            effective_at: 1000,
+        };
+        // Before effective_at: no change
+        item.apply_due_price(999);
+        assert_eq!(item.price, 100);
+        assert_eq!(item.pending_price, 200);
+
+        // At effective_at: price updated
+        item.apply_due_price(1000);
+        assert_eq!(item.price, 200);
+        assert_eq!(item.pending_price, 0);
+
+        // When pending_price is 0: no change
+        item.apply_due_price(2000);
+        assert_eq!(item.price, 200);
     }
 }

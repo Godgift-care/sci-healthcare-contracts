@@ -194,6 +194,27 @@ fn update_provider_category_by_owner() {
         f.client.get_provider(&provider).category,
         ProviderCategory::Laboratory
     );
+
+    f.client
+        .update_provider_category(&provider, &ProviderCategory::Maternity);
+    assert_eq!(
+        f.client.get_provider(&provider).category,
+        ProviderCategory::Maternity
+    );
+
+    f.client
+        .update_provider_category(&provider, &ProviderCategory::Other);
+    assert_eq!(
+        f.client.get_provider(&provider).category,
+        ProviderCategory::Other
+    );
+
+    f.client
+        .update_provider_category(&provider, &ProviderCategory::Pharmacy);
+    assert_eq!(
+        f.client.get_provider(&provider).category,
+        ProviderCategory::Pharmacy
+    );
 }
 
 #[test]
@@ -1106,6 +1127,22 @@ fn provider_counts_lifecycle() {
 
     f.client.retire(&p2, &5u32);
     assert_eq!(f.client.provider_counts(), (0, 0, 0));
+
+    // New provider Pending -> Retired directly
+    let p3 = Address::generate(&f.env);
+    f.client.register_provider(
+        &p3,
+        &String::from_str(&f.env, "C Clinic"),
+        &String::from_str(&f.env, "GH"),
+        &ProviderCategory::Laboratory,
+    );
+    assert_eq!(f.client.provider_counts(), (1, 0, 0));
+    f.client.retire(&p3, &5u32);
+    assert_eq!(f.client.provider_counts(), (0, 0, 0));
+
+    // Trying to retire an already retired provider fails
+    let err = f.client.try_retire(&p3, &5u32).err().unwrap().unwrap();
+    assert_eq!(err, RegistryError::InvalidTransition);
 }
 
 #[test]
@@ -1169,6 +1206,19 @@ fn list_attesters_pagination() {
 
     let p_empty = f.client.list_attesters(&5u32, &2u32);
     assert_eq!(p_empty.len(), 0);
+
+    let p_zero_limit = f.client.list_attesters(&0u32, &0u32);
+    assert_eq!(p_zero_limit.len(), 0);
+
+    let p_start_out_of_bounds = f.client.list_attesters(&100u32, &10u32);
+    assert_eq!(p_start_out_of_bounds.len(), 0);
+
+    let p_large_limit = f.client.list_attesters(&0u32, &100u32);
+    assert_eq!(p_large_limit.len(), 5);
+
+    // Removing an address that is not an attester does not fail and does not panic
+    let stranger = Address::generate(&f.env);
+    f.client.remove_attester(&f.admin, &stranger);
 }
 
 #[test]
