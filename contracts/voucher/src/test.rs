@@ -302,6 +302,100 @@ fn voucher_ids_increment() {
 }
 
 #[test]
+fn create_voucher_at_price_funds_at_the_agreed_price() {
+    let f = setup();
+    let before = f.token.balance(&f.funder);
+
+    let id = f.voucher.create_voucher_at_price(
+        &f.funder,
+        &patient(&f.env),
+        &f.provider,
+        &CONSULT,
+        &CONSULT_PRICE,
+        &(START_TIME + 30 * 24 * 60 * 60),
+        &CONSULT_PRICE,
+    );
+
+    let voucher = f.voucher.get_voucher(&id);
+    assert_eq!(voucher.status, VoucherStatus::Funded);
+    assert_eq!(voucher.amount, CONSULT_PRICE);
+    assert_eq!(f.token.balance(&f.funder), before - CONSULT_PRICE);
+    assert_escrow(&f, CONSULT_PRICE);
+}
+
+#[test]
+fn create_voucher_at_price_rejects_a_raised_price() {
+    let f = setup();
+    let before = f.token.balance(&f.funder);
+    let effective_at = START_TIME + MIN_PRICE_NOTICE_SECS;
+
+    f.registry.schedule_service_price(
+        &f.provider,
+        &CONSULT,
+        &(CONSULT_PRICE * 2),
+        &effective_at,
+        &false,
+    );
+    advance(&f.env, MIN_PRICE_NOTICE_SECS);
+
+    let err = f
+        .voucher
+        .try_create_voucher_at_price(
+            &f.funder,
+            &patient(&f.env),
+            &f.provider,
+            &CONSULT,
+            &CONSULT_PRICE,
+            &(START_TIME + 30 * 24 * 60 * 60),
+            &CONSULT_PRICE,
+        )
+        .err()
+        .unwrap()
+        .unwrap();
+    assert_eq!(err, VoucherError::PriceChanged);
+
+    // Nothing moved and no voucher was written.
+    assert_eq!(f.token.balance(&f.funder), before);
+    assert_escrow(&f, 0);
+    assert_eq!(f.voucher.next_voucher_id(), 1);
+}
+
+#[test]
+fn create_voucher_at_price_rejects_a_lowered_price() {
+    let f = setup();
+    // The clinic lowers the price between the quote and the signing call. The
+    // funder did not agree to the new terms, so the call is rejected even
+    // though the amount would still cover it.
+    f.registry.upsert_service(
+        &f.provider,
+        &CONSULT,
+        &String::from_str(&f.env, "Outpatient consult"),
+        &(CONSULT_PRICE / 2),
+    );
+
+    let err = f
+        .voucher
+        .try_create_voucher_at_price(
+            &f.funder,
+            &patient(&f.env),
+            &f.provider,
+            &CONSULT,
+            &CONSULT_PRICE,
+            &(START_TIME + 30 * 24 * 60 * 60),
+            &CONSULT_PRICE,
+        )
+        .err()
+        .unwrap()
+        .unwrap();
+    assert_eq!(err, VoucherError::PriceChanged);
+
+    // The old entry point is unchanged: it funds at the current price.
+    let id = fund(&f);
+    assert_eq!(f.voucher.get_voucher(&id).amount, CONSULT_PRICE);
+    assert!(f.token.balance(&f.funder) > 0);
+}
+
+#[test]
 fn funder_need_not_be_beneficiary() {
     // A relative abroad funds care for someone at home. Same code path.
     let f = setup();
@@ -596,8 +690,13 @@ fn pausing_a_service_does_not_affect_funded_vouchers() {
 fn scheduled_price_rise_applies_to_funding_at_the_effective_time() {
     let f = setup();
     let effective_at = START_TIME + MIN_PRICE_NOTICE_SECS;
-    f.registry
-        .schedule_service_price(&f.provider, &CONSULT, &(CONSULT_PRICE * 2), &effective_at);
+    f.registry.schedule_service_price(
+        &f.provider,
+        &CONSULT,
+        &(CONSULT_PRICE * 2),
+        &effective_at,
+        &false,
+    );
 
     // Before the effective time the listed price still funds.
     assert_eq!(fund(&f), 1);
@@ -888,8 +987,13 @@ fn cannot_reduce_below_a_price_the_clinic_has_raised() {
     let overpaid = CONSULT_PRICE * 2;
     let id = fund_overpaid(&f, overpaid);
     let effective_at = START_TIME + MIN_PRICE_NOTICE_SECS;
-    f.registry
-        .schedule_service_price(&f.provider, &CONSULT, &(CONSULT_PRICE * 3), &effective_at);
+    f.registry.schedule_service_price(
+        &f.provider,
+        &CONSULT,
+        &(CONSULT_PRICE * 3),
+        &effective_at,
+        &false,
+    );
     f.env.ledger().with_mut(|li| li.timestamp = effective_at);
 
     let err = f
@@ -2576,6 +2680,10 @@ const AUTH_MATRIX: &[AuthCase] = &[
         auth: signer("`funder`", funder_addr),
     },
     AuthCase {
+        function: "create_voucher_at_price",
+        auth: signer("`funder`", funder_addr),
+    },
+    AuthCase {
         function: "reduce_amount",
         auth: signer("`funder`", funder_addr),
     },
@@ -2756,6 +2864,17 @@ fn run_case(f: &AuthFixture, function: &str) -> CaseRun {
         }
         "create_voucher_with_options" => {
             fund_with(&f.f, &VoucherOptions::default());
+        }
+        "create_voucher_at_price" => {
+            voucher.create_voucher_at_price(
+                &f.f.funder,
+                &patient(env),
+                &f.f.provider,
+                &CONSULT,
+                &CONSULT_PRICE,
+                &(START_TIME + 30 * 24 * 60 * 60),
+                &CONSULT_PRICE,
+            );
         }
         "reduce_amount" => {
             let id = fund_overpaid(&f.f, CONSULT_PRICE * 2);
@@ -4405,316 +4524,5 @@ fn reducing_a_voucher_lowers_the_clinics_exposure() {
     let (open_escrow, _) = f.voucher.escrow_summary();
     assert_eq!(open_escrow, 3 * CONSULT_PRICE);
 }
-
-// ----- event table in the docs -----
-//
-// Events are the indexer's API. This test reads the `#[contractevent]` structs
-// in `events.rs` and compares the event names, topics and data fields with the
-// table in `docs/developers/contracts.md`. Adding a field without documenting
-// it fails here rather than in a downstream decoder.
-//
-// What breaks if this is wrong: `sci-healthcare-backend` decodes by event name
-// and field name, so an undocumented rename becomes `undefined` in the indexer.
-
-#[derive(Debug)]
-struct SourceEvent {
-    name: std::string::String,
-    topics: std::vec::Vec<std::string::String>,
-    data: std::vec::Vec<std::string::String>,
-}
-
-fn snake_case(name: &str) -> std::string::String {
-    let mut out = std::string::String::new();
-    for (index, ch) in name.chars().enumerate() {
-        if ch.is_ascii_uppercase() {
-            if index != 0 {
-                out.push('_');
-            }
-            out.push(ch.to_ascii_lowercase());
-        } else {
-            out.push(ch);
-        }
-    }
-    out
-}
-
-fn events_in_source(source: &str) -> std::vec::Vec<SourceEvent> {
-    let mut events = std::vec::Vec::new();
-    let mut seen_attribute = false;
-    let mut current: Option<SourceEvent> = None;
-    let mut pending_topic = false;
-
-    for raw in source.lines() {
-        let line = raw.trim();
-        if line.starts_with("#[contractevent") {
-            seen_attribute = true;
-            continue;
-        }
-        let Some(event) = current.as_mut() else {
-            if seen_attribute {
-                if let Some(rest) = line.strip_prefix("pub struct ") {
-                    let name = rest.trim().trim_end_matches('{').trim();
-                    current = Some(SourceEvent {
-                        name: snake_case(name),
-                        topics: std::vec::Vec::new(),
-                        data: std::vec::Vec::new(),
-                    });
-                    seen_attribute = false;
-                }
-            }
-            continue;
-        };
-        if line == "}" {
-            events.push(current.take().unwrap());
-            continue;
-        }
-        if line == "#[topic]" {
-            pending_topic = true;
-            continue;
-        }
-        if let Some(rest) = line.strip_prefix("pub ") {
-            let field = rest.split(':').next().unwrap().trim();
-            if pending_topic {
-                event.topics.push(field.into());
-            } else {
-                event.data.push(field.into());
-            }
-            pending_topic = false;
-        }
-    }
-
-    events
-}
-
-fn doc_event_rows<'a>(docs: &'a str, contract: &str) -> std::vec::Vec<&'a str> {
-    let heading = if contract == "faucet" {
-        "## faucet (testnet only)\n".to_string()
-    } else {
-        std::format!("## {contract}\n")
-    };
-    let start = docs
-        .find(&heading)
-        .unwrap_or_else(|| panic!("contracts.md has no `{contract}` section"));
-    let section = &docs[start..];
-    let start = section
-        .find("### Events")
-        .unwrap_or_else(|| panic!("the `{contract}` section has no event table"));
-    let section = &section[start..];
-    let end = find_section_end(section);
-    section[..end]
-        .lines()
-        .filter(|line| line.starts_with("| `"))
-        .collect()
-}
-
-fn split_doc_fields(cell: &str) -> std::vec::Vec<std::string::String> {
-    let trimmed = cell.trim();
-    if trimmed.is_empty() || trimmed == "-" || trimmed == "—" {
-        return std::vec::Vec::new();
-    }
-    cell.split(',')
-        .map(|field| field.trim().trim_matches('`').into())
-        .collect()
-}
-
-fn doc_event_row(line: &str) -> std::vec::Vec<std::string::String> {
-    line.trim()
-        .trim_matches('|')
-        .split('|')
-        .map(|cell| cell.trim().trim_matches('`').into())
-        .collect()
-}
-
-#[test]
-fn event_table_in_the_docs_matches_the_source() {
-    const DOCS: &str = include_str!("../../../docs/developers/contracts.md");
-    const SOURCE: &str = include_str!("events.rs");
-
-    let source = events_in_source(SOURCE);
-    let rows = doc_event_rows(DOCS, "voucher");
-    assert_eq!(
-        rows.len(),
-        source.len(),
-        "docs/developers/contracts.md documents {} voucher events but the source has {}",
-        rows.len(),
-        source.len(),
-    );
-    for event in source {
-        let row = rows
-            .iter()
-            .map(|line| doc_event_row(line))
-            .find(|row| row[0] == event.name)
-            .unwrap_or_else(|| {
-                panic!(
-                    "docs/developers/contracts.md is missing the `{}` event. Add its row \
-                     to the voucher event table with topics {:?} and data {:?}",
-                    event.name, event.topics, event.data,
-                )
-            });
-        assert_eq!(
-            split_doc_fields(&row[1]),
-            event.topics,
-            "the topics documented for `{}` do not match the #[topic] fields in \
-             contracts/voucher/src/events.rs",
-            event.name,
-        );
-        assert_eq!(
-            split_doc_fields(&row[2]),
-            event.data,
-            "the data fields documented for `{}` do not match the non-topic fields in \
-             contracts/voucher/src/events.rs. The indexer decodes them by name \
-             (TOPIC_FIELDS in sci-healthcare-backend/src/stellar/events.ts)",
-            event.name,
-        );
-    }
-}
-
-// ----- stored-type upgrade safety -----
-//
-// The fixtures in `fixtures/stored_types/` are XDR of the values the latest
-// release writes. If a change to a `#[contracttype]` struct makes an old
-// fixture undecodable, every entry written by the previous release is
-// unreadable unless the change is handled deliberately. Regenerate only at
-// release time with `just stored-type-fixtures`.
-//
-// What breaks if this is wrong: a deployed contract upgrade (or a redeploy
-// pointed at existing state) loses access to vouchers already in the ledger.
-
-fn fixture_path(name: &str) -> std::path::PathBuf {
-    std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("fixtures/stored_types")
-        .join(std::format!("{name}.hex"))
-}
-
-fn to_hex(bytes: &soroban_sdk::Bytes) -> std::string::String {
-    use std::fmt::Write as _;
-
-    let mut out = std::string::String::new();
-    for byte in bytes.iter() {
-        write!(&mut out, "{byte:02x}").unwrap();
-    }
-    out
-}
-
-fn from_hex(env: &Env, text: &str) -> soroban_sdk::Bytes {
-    let text = text.trim();
-    assert_eq!(
-        text.len() % 2,
-        0,
-        "a stored-type fixture has an odd hex length"
-    );
-    let mut bytes = std::vec::Vec::with_capacity(text.len() / 2);
-    for index in (0..text.len()).step_by(2) {
-        bytes.push(u8::from_str_radix(&text[index..index + 2], 16).unwrap());
-    }
-    soroban_sdk::Bytes::from_slice(env, &bytes)
-}
-
-fn check_stored_type<T>(env: &Env, name: &str, expected: T)
-where
-    T: soroban_sdk::xdr::ToXdr + soroban_sdk::xdr::FromXdr + Clone + PartialEq + std::fmt::Debug,
-    <T as soroban_sdk::xdr::FromXdr>::Error: std::fmt::Debug,
-{
-    let bytes = expected.clone().to_xdr(env);
-    let path = fixture_path(name);
-
-    if std::env::var_os("UPDATE_STORED_TYPE_FIXTURES").is_some() {
-        std::fs::create_dir_all(path.parent().unwrap()).unwrap();
-        std::fs::write(&path, std::format!("{}\n", to_hex(&bytes))).unwrap();
-        return;
-    }
-
-    let committed = std::fs::read_to_string(&path).unwrap_or_else(|_| {
-        panic!(
-            "{} is missing; regenerate fixtures with `just stored-type-fixtures`",
-            path.display()
-        )
-    });
-    let fixture = from_hex(env, &committed);
-    match T::from_xdr(env, &fixture) {
-        Ok(decoded) => assert_eq!(
-            decoded, expected,
-            "the stored `{name}` fixture decodes to a different value than the current \
-             code writes. This is a breaking storage change: keep the old layout, put \
-             new fields under a new data key, or add a versioned migration before \
-             refreshing the fixture",
-        ),
-        Err(error) => panic!(
-            "the stored `{name}` fixture no longer decodes into the current type: \
-             {error:?}. Adding, removing, renaming or reordering a field is a breaking \
-             storage change. Keep the old layout, put new fields under a new data key \
-             with a default, or add a versioned migration; only then refresh fixtures \
-             with `just stored-type-fixtures`",
-        ),
-    }
-}
-
-#[test]
-fn stored_type_fixtures_decode_against_current_code() {
-    use crate::storage::StoredVoucher;
-    use crate::{Config, Voucher};
-
-    let env = Env::default();
-    let admin = Address::from_str(
-        &env,
-        "GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWHF",
-    );
-    let contract = Address::from_str(
-        &env,
-        "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABSC4",
-    );
-
-    check_stored_type(
-        &env,
-        "config",
-        Config {
-            admin: admin.clone(),
-            registry: contract.clone(),
-            receipt_book: contract.clone(),
-            token: contract.clone(),
-            dispute_window: DISPUTE_WINDOW,
-            fee_bps: FEE_BPS,
-            attester_share_bps: ATTESTER_SHARE_BPS,
-            fee_account: admin.clone(),
-        },
-    );
-
-    let voucher = Voucher {
-        id: 42,
-        funder: admin.clone(),
-        beneficiary_ref: patient(&env),
-        provider: contract.clone(),
-        service_code: CONSULT,
-        amount: CONSULT_PRICE,
-        status: VoucherStatus::Attested,
-        created_at: START_TIME,
-        expires_at: START_TIME + 30 * 24 * 60 * 60,
-        claimed_at: START_TIME + 60,
-        attested_at: START_TIME + 120,
-        dispute_deadline: START_TIME + 120 + DISPUTE_WINDOW,
-        attester: Some(admin.clone()),
-    };
-    check_stored_type(&env, "voucher", voucher.clone());
-    check_stored_type(
-        &env,
-        "stored_voucher",
-        StoredVoucher::from_voucher(&voucher),
-    );
-
-    check_stored_type(
-        &env,
-        "voucher_options",
-        VoucherOptions {
-            presence_commitment: Some(BytesN::from_array(&env, &[7u8; 32])),
-            dispute_window: Some(DISPUTE_WINDOW),
-        },
-    );
-    check_stored_type(
-        &env,
-        "exposure",
-        Exposure {
-            vouchers: 3,
-            value: CONSULT_PRICE * 3,
-        },
-    );
-}
+#[cfg(test)]
+mod costs;

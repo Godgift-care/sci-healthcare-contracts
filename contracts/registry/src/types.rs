@@ -149,6 +149,10 @@ pub enum RegistryError {
     /// The requested provider status change is not one of the allowed
     /// transitions, or would leave `Retired`.
     InvalidTransition = 14,
+    /// A scheduled price of `MAX_PRICE_JUMP` times the current price or more
+    /// needs the explicit `confirm_large_change` flag. Large jumps are almost
+    /// always a typo, and a typo here overcharges every funder that day.
+    LargePriceJumpNeedsConfirmation = 15,
 }
 
 /// Maps the shared helpers' failures onto this contract's error numbers, so

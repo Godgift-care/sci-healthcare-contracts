@@ -201,6 +201,9 @@ pub enum VoucherError {
     /// The chosen dispute window is outside the allowed bounds, or the bounds
     /// themselves are invalid.
     InvalidDisputeWindow = 31,
+    /// The registry price changed between the quote the funder saw and this
+    /// call. Nothing was escrowed; re-quote before signing.
+    PriceChanged = 42,
 }
 
 /// Maps the shared helpers' failures onto this contract's error numbers, so
