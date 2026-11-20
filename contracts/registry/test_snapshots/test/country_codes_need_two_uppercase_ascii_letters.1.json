@@ -173,6 +173,12 @@
                     "val": {
                       "u32": 0
                     }
+                  },
+                  {
+                    "key": {
+                      "symbol": "verification_evidence"
+                    },
+                    "val": "void"
                   }
                 ]
               }
@@ -249,6 +255,12 @@
                     "val": {
                       "u32": 0
                     }
+                  },
+                  {
+                    "key": {
+                      "symbol": "verification_evidence"
+                    },
+                    "val": "void"
                   }
                 ]
               }
@@ -325,6 +337,12 @@
                     "val": {
                       "u32": 0
                     }
+                  },
+                  {
+                    "key": {
+                      "symbol": "verification_evidence"
+                    },
+                    "val": "void"
                   }
                 ]
               }

@@ -70,6 +70,7 @@ pub struct Provider {
     pub status: ProviderStatus,
     pub registered_at: u64,
     pub reason_code: u32,     // why the last status change happened, 0 before any
+    pub verification_evidence: Option<BytesN<32>>,
 }
 
 pub struct ServiceItem {
@@ -90,6 +91,7 @@ pub struct ServiceItem {
 | `initialize` | `admin: Address` | `()` | once | `AlreadyInitialized` |
 | `register_provider` | `owner, name, country` | `()` | `owner` | `EmptyName`, `InvalidCountry`, `ProviderExists` |
 | `set_provider_status` | `admin, provider_addr, status, reason_code: u32` | `()` | `admin` | `NotAuthorized`, `ProviderNotFound`, `InvalidTransition` |
+| `set_verification_evidence` | `admin, provider_addr, evidence_hash: BytesN<32>` | `()` | `admin` | `NotAuthorized`, `ProviderNotFound` |
 | `retire` | `owner, reason_code: u32` | `()` | `owner` | `ProviderNotFound`, `InvalidTransition` |
 | `upsert_service` | `provider_addr, code, label, price` | `()` | `provider_addr` | `InvalidPrice`, `EmptyName`, `ProviderNotActive`, `PriceIncreaseNeedsNotice` |
 | `schedule_service_price` | `provider_addr, code, price, effective_at, confirm_large_change: bool` | `()` | `provider_addr` | `InvalidPrice`, `ProviderNotActive`, `ServiceNotFound`, `PriceNoticeTooShort`, `LargePriceJumpNeedsConfirmation` |
@@ -155,6 +157,7 @@ Every public function, with the exact signer it demands — no signature that is
 | `initialize` | none (one-shot) |
 | `register_provider` | `owner` |
 | `set_provider_status` | `admin` |
+| `set_verification_evidence` | `admin` |
 | `retire` | `owner` |
 | `upsert_service` | `provider_addr` |
 | `schedule_service_price` | `provider_addr` |
@@ -209,6 +212,7 @@ A signer is not the same as a role: `admin` must be the stored admin **and** sig
 | `initialized` | — | `admin` |
 | `provider_registered` | `provider` | `name`, `country`, `registered_at` |
 | `provider_status_changed` | `provider` | `status`, `reason_code` |
+| `verification_evidence_set` | `provider` | `evidence_hash` |
 | `service_upserted` | `provider`, `code` | `label`, `price` |
 | `service_removed` | `provider` | `code` |
 | `service_price_scheduled` | `provider`, `code` | `price`, `effective_at` |

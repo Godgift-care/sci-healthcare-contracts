@@ -23,12 +23,12 @@ mod types;
 mod test;
 
 use sci_common as common;
-use soroban_sdk::{contract, contractimpl, Address, Env, String, Vec};
+use soroban_sdk::{contract, contractimpl, Address, BytesN, Env, String, Vec};
 
 pub use events::{
     AdminChanged, AdminProposed, AttesterAdded, AttesterRemoved, CapacityChanged, Initialized,
     ProviderRegistered, ProviderStatusChanged, ServiceAvailabilityChanged, ServicePriceScheduled,
-    ServiceRemoved, ServiceUpserted,
+    ServiceRemoved, ServiceUpserted, VerificationEvidenceSet,
 };
 pub use types::{DataKey, Provider, ProviderStatus, RegistryError, ServiceItem};
 
@@ -108,6 +108,7 @@ impl Registry {
             status: ProviderStatus::Pending,
             registered_at,
             reason_code: 0,
+            verification_evidence: None,
         };
         write_provider(&env, &owner, &provider);
         extend_instance(&env);
@@ -218,6 +219,31 @@ impl Registry {
             provider: provider_addr,
             status,
             reason_code,
+        }
+        .publish(&env);
+        Ok(())
+    }
+
+    /// Sets the verification evidence hash for a provider. Admin only.
+    ///
+    /// Records an on-chain hash of the verification bundle (licence,
+    /// inspection report) to make provider verification auditable.
+    pub fn set_verification_evidence(
+        env: Env,
+        admin: Address,
+        provider_addr: Address,
+        evidence_hash: BytesN<32>,
+    ) -> Result<(), RegistryError> {
+        Self::require_admin(&env, &admin)?;
+
+        let mut provider = read_provider(&env, &provider_addr)?;
+        provider.verification_evidence = Some(evidence_hash.clone());
+        write_provider(&env, &provider_addr, &provider);
+        extend_instance(&env);
+
+        VerificationEvidenceSet {
+            provider: provider_addr,
+            evidence_hash,
         }
         .publish(&env);
         Ok(())

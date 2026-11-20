@@ -1,4 +1,4 @@
-use soroban_sdk::{contracterror, contracttype, Address, String};
+use soroban_sdk::{contracterror, contracttype, Address, BytesN, String};
 
 /// Lifecycle state of a care provider in the registry.
 ///
@@ -63,6 +63,8 @@ pub struct Provider {
     /// `docs/protocol/trust.md`. Codes are added, never renumbered. 0 on
     /// registration, before any status change has recorded a reason.
     pub reason_code: u32,
+    /// Hash of the verification evidence bundle (e.g. licence, inspection report).
+    pub verification_evidence: Option<BytesN<32>>,
 }
 
 /// A single billable service offered by a provider.

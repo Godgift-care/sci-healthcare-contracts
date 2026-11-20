@@ -4,7 +4,7 @@ use std::string::ToString;
 
 use soroban_sdk::{
     testutils::{Address as _, Ledger as _},
-    Address, Env, String, Vec,
+    Address, BytesN, Env, String, Vec,
 };
 
 use crate::{
@@ -157,6 +157,50 @@ fn admin_activates_provider() {
     let f = setup();
     let provider = register_active_provider(&f);
     assert!(f.client.is_active_provider(&provider));
+}
+
+#[test]
+fn admin_sets_verification_evidence() {
+    let f = setup();
+    let provider = register_active_provider(&f);
+    let hash = BytesN::from_array(&f.env, &[7u8; 32]);
+
+    f.client
+        .set_verification_evidence(&f.admin, &provider, &hash);
+
+    let stored = f.client.get_provider(&provider);
+    assert_eq!(stored.verification_evidence, Some(hash));
+}
+
+#[test]
+fn non_admin_cannot_set_verification_evidence() {
+    let f = setup();
+    let provider = register_active_provider(&f);
+    let impostor = Address::generate(&f.env);
+    let hash = BytesN::from_array(&f.env, &[7u8; 32]);
+
+    let err = f
+        .client
+        .try_set_verification_evidence(&impostor, &provider, &hash)
+        .err()
+        .unwrap()
+        .unwrap();
+    assert_eq!(err, RegistryError::NotAuthorized);
+}
+
+#[test]
+fn set_verification_evidence_unknown_provider() {
+    let f = setup();
+    let stranger = Address::generate(&f.env);
+    let hash = BytesN::from_array(&f.env, &[7u8; 32]);
+
+    let err = f
+        .client
+        .try_set_verification_evidence(&f.admin, &stranger, &hash)
+        .err()
+        .unwrap()
+        .unwrap();
+    assert_eq!(err, RegistryError::ProviderNotFound);
 }
 
 #[test]
@@ -1177,6 +1221,10 @@ const AUTH_MATRIX: &[AuthCase] = &[
         auth: signer("`admin`", admin_addr),
     },
     AuthCase {
+        function: "set_verification_evidence",
+        auth: signer("`admin`", admin_addr),
+    },
+    AuthCase {
         function: "retire",
         auth: signer("`owner`", provider_addr),
     },
@@ -1331,6 +1379,11 @@ fn run_case(f: &AuthFixture, function: &str) -> CaseRun {
                 &ProviderStatus::Suspended,
                 &REASON_VERIFIED,
             );
+        }
+        "set_verification_evidence" => {
+            activate(&f.f, &f.provider);
+            let hash = BytesN::from_array(env, &[42u8; 32]);
+            client.set_verification_evidence(&f.f.admin, &f.provider, &hash);
         }
         "retire" => {
             activate(&f.f, &f.provider);
@@ -1830,6 +1883,24 @@ fn provider_status_changed_event_snapshot() {
     // Unit enum with explicit discriminants: Suspended is 2.
     assert_eq!(field_u32(&e, "status"), 2);
     assert_eq!(field_u32(&e, "reason_code"), REASON_SUSPENDED_WHILE_TESTING);
+}
+
+#[test]
+fn verification_evidence_set_event_snapshot() {
+    let f = setup();
+    let provider = register_active_provider(&f);
+    let hash = BytesN::from_array(&f.env, &[7u8; 32]);
+
+    f.client
+        .set_verification_evidence(&f.admin, &provider, &hash);
+
+    let e = one_event(&f);
+    assert_layout(
+        &e,
+        "verification_evidence_set",
+        &[ScVal::from(&provider)],
+        &["evidence_hash"],
+    );
 }
 
 #[test]
@@ -2790,6 +2861,7 @@ fn stored_type_fixtures_decode_against_current_code() {
             status: ProviderStatus::Active,
             registered_at: 1_700_000_000,
             reason_code: REASON_VERIFIED,
+            verification_evidence: None,
         },
     );
     check_stored_type(
