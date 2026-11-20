@@ -27,10 +27,10 @@ use soroban_sdk::{contract, contractimpl, Address, BytesN, Env, String, Vec};
 
 pub use events::{
     AdminChanged, AdminProposed, AttesterAdded, AttesterRemoved, CapacityChanged, Initialized,
-    ProviderRegistered, ProviderStatusChanged, ServiceAvailabilityChanged, ServicePriceScheduled,
-    ServiceRemoved, ServiceUpserted, VerificationEvidenceSet,
+    ProviderCategoryChanged, ProviderRegistered, ProviderStatusChanged, ServiceAvailabilityChanged,
+    ServicePriceScheduled, ServiceRemoved, ServiceUpserted, VerificationEvidenceSet,
 };
-pub use types::{DataKey, Provider, ProviderStatus, RegistryError, ServiceItem};
+pub use types::{DataKey, Provider, ProviderCategory, ProviderStatus, RegistryError, ServiceItem};
 
 use storage::{
     extend_instance, has_admin, has_provider, list_providers_by_country, read_admin, read_attester,
@@ -80,6 +80,7 @@ impl Registry {
         owner: Address,
         name: String,
         country: String,
+        category: ProviderCategory,
     ) -> Result<(), RegistryError> {
         owner.require_auth();
 
@@ -108,6 +109,7 @@ impl Registry {
             status: ProviderStatus::Pending,
             registered_at,
             reason_code: 0,
+            category,
             verification_evidence: None,
         };
         write_provider(&env, &owner, &provider);
@@ -129,6 +131,28 @@ impl Registry {
             name,
             country,
             registered_at,
+            category,
+        }
+        .publish(&env);
+        Ok(())
+    }
+
+    /// Changes a provider's category. Callable by provider owner only.
+    pub fn update_provider_category(
+        env: Env,
+        provider_addr: Address,
+        category: ProviderCategory,
+    ) -> Result<(), RegistryError> {
+        provider_addr.require_auth();
+
+        let mut provider = read_provider(&env, &provider_addr)?;
+        provider.category = category;
+        write_provider(&env, &provider_addr, &provider);
+        extend_instance(&env);
+
+        ProviderCategoryChanged {
+            provider: provider_addr,
+            category,
         }
         .publish(&env);
         Ok(())

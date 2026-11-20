@@ -12,7 +12,9 @@ use crate::{
     DEFAULT_DISPUTE_WINDOW_BOUNDS, DEFAULT_MAX_ATTESTATIONS_PER_DAY,
 };
 use sci_receipt::{ReceiptBook, ReceiptBookClient};
-use sci_registry::{ProviderStatus, Registry, RegistryClient, MIN_PRICE_NOTICE_SECS};
+use sci_registry::{
+    ProviderCategory, ProviderStatus, Registry, RegistryClient, MIN_PRICE_NOTICE_SECS,
+};
 
 const DISPUTE_WINDOW: u64 = 72 * 60 * 60; // 72 hours
 const FEE_BPS: u32 = 100; // 1%
@@ -96,6 +98,7 @@ fn setup_with(fee_bps: u32, attester_share_bps: u32) -> Fixture {
         &provider,
         &String::from_str(&env, "Ikeja General Clinic"),
         &String::from_str(&env, "NG"),
+        &ProviderCategory::Clinic,
     );
     registry.set_provider_status(&admin, &provider, &ProviderStatus::Active, &REASON_VERIFIED);
     registry.upsert_service(
@@ -551,6 +554,7 @@ fn register_redirect_provider(f: &Fixture) -> Address {
         &provider,
         &String::from_str(&f.env, "New Clinic"),
         &String::from_str(&f.env, "NG"),
+        &ProviderCategory::Clinic,
     );
     f.registry.set_provider_status(
         &f.admin,
@@ -2887,6 +2891,7 @@ fn run_case(f: &AuthFixture, function: &str) -> CaseRun {
                 &provider,
                 &String::from_str(env, "New Clinic"),
                 &String::from_str(env, "NG"),
+                &ProviderCategory::Clinic,
             );
             f.f.registry.set_provider_status(
                 &f.f.admin,
@@ -4227,6 +4232,7 @@ fn math_overflow_in_fee_calculation() {
         &provider,
         &String::from_str(&env, "Clinic"),
         &String::from_str(&env, "NG"),
+        &ProviderCategory::Clinic,
     );
     registry.set_provider_status(&admin, &provider, &ProviderStatus::Active, &REASON_VERIFIED);
     registry.upsert_service(

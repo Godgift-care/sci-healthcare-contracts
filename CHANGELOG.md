@@ -3,6 +3,7 @@
 ## Unreleased
 
 ### Added
+- **registry:** provider categories via `ProviderCategory` enum (Clinic, Pharmacy, Laboratory, Maternity, Other). Set at registration with `register_provider` and changeable by owner via `update_provider_category`, emitting `provider_category_changed`. Closes #102.
 - **registry:** record verification evidence hash via `set_verification_evidence`. Admin records an on-chain `BytesN<32>` hash of the provider's verification documents (licence, inspection report), stored on `Provider` and emitted as `verification_evidence_set`. Closes #101.
 - **test:** contract safety harnesses across all five crates. The [event tables](docs/developers/contracts.md) are now checked against the `#[contractevent]` structs in the source, every public function has an authorisation-matrix test and a documented signer — including sponsor and faucet — and stored `#[contracttype]` values are pinned by XDR fixtures that must still decode against the current code. Every entry point also has a committed read and write count in `contracts/<crate>/storage-counts.md`, regenerated with `just storage-counts` or `just stored-type-fixtures`. Closes #296, #297, #298 and #300.
 - **docs:** versioned documentation. [`.github/workflows/docs-site.yml`](.github/workflows/docs-site.yml) publishes `docs/` from `main` at the site root and a frozen copy of `docs/` from every release tag under `/<tag>/` (today `/v0.2.0/` and `/v0.1.0/`), with `/latest/` redirecting to the newest release. A banner on every page says which version it describes: `main` warns that it can describe functions that are not deployed and links the latest release, and an older release links both the latest release and `main`. Pushing a `v*` tag publishes its snapshot, and the release notes written by `release.yml` link to it. [`scripts/build-docs-site.sh`](scripts/build-docs-site.sh) builds the same site locally; pull requests that touch `docs/` build it without publishing. Needs a one-time switch of the Pages source to "GitHub Actions". Mermaid diagrams now render on the site as well as on GitHub. Closes #286.
@@ -117,6 +118,7 @@ Redeployed to testnet on 2026-10-07; addresses are in `deployments/testnet.env`.
 - **registry:** attester entries are TTL-extended on read like providers and services.
 
 ### Added
+- **registry:** provider categories via `ProviderCategory` enum (Clinic, Pharmacy, Laboratory, Maternity, Other). Set at registration with `register_provider` and changeable by owner via `update_provider_category`, emitting `provider_category_changed`. Closes #102.
 - "Try it in five minutes" walkthrough in the README.
 - Issue forms (bug, feature) and a pull request template; blank issues off, security reports routed to SECURITY.md.
 - **faucet** (testnet only): anyone can get 50 test USDC once a day from the app, with no server holding the issuer key. The demo token's SAC names the faucet as admin; `release_token_admin` hands it back. Deployed by `scripts/deploy-faucet.sh`, which refuses mainnet. 10 tests.

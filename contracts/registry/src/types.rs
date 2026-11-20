@@ -63,8 +63,20 @@ pub struct Provider {
     /// `docs/protocol/trust.md`. Codes are added, never renumbered. 0 on
     /// registration, before any status change has recorded a reason.
     pub reason_code: u32,
+    pub category: ProviderCategory,
     /// Hash of the verification evidence bundle (e.g. licence, inspection report).
     pub verification_evidence: Option<BytesN<32>>,
+}
+
+/// Category of a care provider in the registry.
+#[contracttype]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ProviderCategory {
+    Clinic = 0,
+    Pharmacy = 1,
+    Laboratory = 2,
+    Maternity = 3,
+    Other = 4,
 }
 
 /// A single billable service offered by a provider.

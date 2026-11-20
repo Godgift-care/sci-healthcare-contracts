@@ -8,8 +8,8 @@ use soroban_sdk::{
 };
 
 use crate::{
-    Provider, ProviderStatus, Registry, RegistryClient, RegistryError, ServiceItem, MAX_PRICE_JUMP,
-    MAX_PROVIDERS_PAGE, MIN_PRICE_NOTICE_SECS,
+    Provider, ProviderCategory, ProviderStatus, Registry, RegistryClient, RegistryError,
+    ServiceItem, MAX_PRICE_JUMP, MAX_PROVIDERS_PAGE, MIN_PRICE_NOTICE_SECS,
 };
 
 /// Reason codes as documented in `docs/protocol/trust.md`: codes are added,
@@ -46,6 +46,7 @@ fn activate(f: &Fixture, provider: &Address) {
         provider,
         &String::from_str(&f.env, "Ikeja General Clinic"),
         &String::from_str(&f.env, "NG"),
+        &ProviderCategory::Clinic,
     );
     f.client.set_provider_status(
         &f.admin,
@@ -92,6 +93,7 @@ fn provider_registers_as_pending() {
         &provider,
         &String::from_str(&f.env, "Nairobi Health Post"),
         &String::from_str(&f.env, "KE"),
+        &ProviderCategory::Clinic,
     );
 
     let stored = f.client.get_provider(&provider);
@@ -107,11 +109,12 @@ fn duplicate_registration_rejected() {
     let provider = Address::generate(&f.env);
     let name = String::from_str(&f.env, "Clinic");
     let country = String::from_str(&f.env, "NG");
-    f.client.register_provider(&provider, &name, &country);
+    f.client
+        .register_provider(&provider, &name, &country, &ProviderCategory::Clinic);
 
     let err = f
         .client
-        .try_register_provider(&provider, &name, &country)
+        .try_register_provider(&provider, &name, &country, &ProviderCategory::Clinic)
         .err()
         .unwrap()
         .unwrap();
@@ -128,6 +131,7 @@ fn bad_country_code_rejected() {
             &provider,
             &String::from_str(&f.env, "Clinic"),
             &String::from_str(&f.env, "NGA"),
+            &ProviderCategory::Clinic,
         )
         .err()
         .unwrap()
@@ -145,11 +149,65 @@ fn empty_name_rejected() {
             &provider,
             &String::from_str(&f.env, ""),
             &String::from_str(&f.env, "NG"),
+            &ProviderCategory::Clinic,
         )
         .err()
         .unwrap()
         .unwrap();
     assert_eq!(err, RegistryError::EmptyName);
+}
+
+#[test]
+fn register_with_each_category() {
+    let f = setup();
+    for (category, name) in [
+        (ProviderCategory::Clinic, "Clinic A"),
+        (ProviderCategory::Pharmacy, "Pharmacy B"),
+        (ProviderCategory::Laboratory, "Lab C"),
+        (ProviderCategory::Maternity, "Maternity D"),
+        (ProviderCategory::Other, "Other E"),
+    ] {
+        let provider = Address::generate(&f.env);
+        f.client.register_provider(
+            &provider,
+            &String::from_str(&f.env, name),
+            &String::from_str(&f.env, "NG"),
+            &category,
+        );
+        let stored = f.client.get_provider(&provider);
+        assert_eq!(stored.category, category);
+    }
+}
+
+#[test]
+fn update_provider_category_by_owner() {
+    let f = setup();
+    let provider = register_active_provider(&f);
+    assert_eq!(
+        f.client.get_provider(&provider).category,
+        ProviderCategory::Clinic
+    );
+
+    f.client
+        .update_provider_category(&provider, &ProviderCategory::Laboratory);
+    assert_eq!(
+        f.client.get_provider(&provider).category,
+        ProviderCategory::Laboratory
+    );
+}
+
+#[test]
+fn update_category_unknown_provider() {
+    let f = setup();
+    let stranger = Address::generate(&f.env);
+
+    let err = f
+        .client
+        .try_update_provider_category(&stranger, &ProviderCategory::Pharmacy)
+        .err()
+        .unwrap()
+        .unwrap();
+    assert_eq!(err, RegistryError::ProviderNotFound);
 }
 
 #[test]
@@ -523,6 +581,7 @@ fn pending_provider_cannot_add_services() {
         &provider,
         &String::from_str(&f.env, "Unverified Clinic"),
         &String::from_str(&f.env, "NG"),
+        &ProviderCategory::Clinic,
     );
 
     let err = f
@@ -729,16 +788,19 @@ fn list_providers_in_registration_order() {
         &a,
         &String::from_str(&f.env, "A Clinic"),
         &String::from_str(&f.env, "NG"),
+        &ProviderCategory::Clinic,
     );
     f.client.register_provider(
         &b,
         &String::from_str(&f.env, "B Clinic"),
         &String::from_str(&f.env, "KE"),
+        &ProviderCategory::Clinic,
     );
     f.client.register_provider(
         &c,
         &String::from_str(&f.env, "C Clinic"),
         &String::from_str(&f.env, "GH"),
+        &ProviderCategory::Clinic,
     );
 
     let first = f.client.list_providers(&0u32, &2u32);
@@ -778,6 +840,7 @@ fn list_providers_start_beyond_end_is_empty() {
         &provider,
         &String::from_str(&f.env, "A Clinic"),
         &String::from_str(&f.env, "NG"),
+        &ProviderCategory::Clinic,
     );
 
     assert_eq!(f.client.list_providers(&1u32, &10u32).len(), 0);
@@ -795,6 +858,7 @@ fn list_providers_limit_is_capped() {
             &provider,
             &String::from_str(&f.env, "Clinic"),
             &String::from_str(&f.env, "NG"),
+            &ProviderCategory::Clinic,
         );
     }
 
@@ -827,16 +891,19 @@ fn providers_in_tracks_active_status() {
         &a,
         &String::from_str(&f.env, "A Clinic"),
         &String::from_str(&f.env, "NG"),
+        &ProviderCategory::Clinic,
     );
     f.client.register_provider(
         &b,
         &String::from_str(&f.env, "B Clinic"),
         &String::from_str(&f.env, "NG"),
+        &ProviderCategory::Clinic,
     );
     f.client.register_provider(
         &c,
         &String::from_str(&f.env, "C Clinic"),
         &String::from_str(&f.env, "NG"),
+        &ProviderCategory::Clinic,
     );
     f.client
         .set_provider_status(&f.admin, &a, &ProviderStatus::Active, &0u32);
@@ -892,6 +959,7 @@ fn providers_in_pages() {
             &provider,
             &String::from_str(&f.env, "Clinic"),
             &String::from_str(&f.env, "NG"),
+            &ProviderCategory::Clinic,
         );
         f.client
             .set_provider_status(&f.admin, &provider, &ProviderStatus::Active, &0u32);
@@ -940,11 +1008,13 @@ fn list_providers_extends_index_ttl() {
         &a,
         &String::from_str(&f.env, "A Clinic"),
         &String::from_str(&f.env, "NG"),
+        &ProviderCategory::Clinic,
     );
     f.client.register_provider(
         &b,
         &String::from_str(&f.env, "B Clinic"),
         &String::from_str(&f.env, "KE"),
+        &ProviderCategory::Clinic,
     );
 
     // Jump far enough that the 90-day TTL would lapse on every entry.
@@ -1217,6 +1287,10 @@ const AUTH_MATRIX: &[AuthCase] = &[
         auth: signer("`owner`", new_provider_addr),
     },
     AuthCase {
+        function: "update_provider_category",
+        auth: signer("`provider_addr`", provider_addr),
+    },
+    AuthCase {
         function: "set_provider_status",
         auth: signer("`admin`", admin_addr),
     },
@@ -1369,7 +1443,16 @@ fn run_case(f: &AuthFixture, function: &str) -> CaseRun {
             return case_run(&env);
         }
         "register_provider" => {
-            client.register_provider(&f.new_provider, &label("Lagos Clinic"), &label("NG"));
+            client.register_provider(
+                &f.new_provider,
+                &label("Lagos Clinic"),
+                &label("NG"),
+                &ProviderCategory::Clinic,
+            );
+        }
+        "update_provider_category" => {
+            activate(&f.f, &f.provider);
+            client.update_provider_category(&f.provider, &ProviderCategory::Pharmacy);
         }
         "set_provider_status" => {
             activate(&f.f, &f.provider);
@@ -1847,6 +1930,7 @@ fn provider_registered_event_snapshot() {
         &provider,
         &String::from_str(&f.env, "Lagos Clinic"),
         &String::from_str(&f.env, "NG"),
+        &ProviderCategory::Clinic,
     );
 
     let e = one_event(&f);
@@ -1854,11 +1938,30 @@ fn provider_registered_event_snapshot() {
         &e,
         "provider_registered",
         &[ScVal::from(&provider)],
-        &["name", "country", "registered_at"],
+        &["name", "country", "registered_at", "category"],
     );
     assert_eq!(field_text(&e, "name"), "Lagos Clinic");
     assert_eq!(field_text(&e, "country"), "NG");
     assert_eq!(field_u64(&e, "registered_at"), 1_700_000_000);
+    assert_eq!(field_u32(&e, "category"), 0);
+}
+
+#[test]
+fn provider_category_changed_event_snapshot() {
+    let f = setup();
+    let provider = register_active_provider(&f);
+
+    f.client
+        .update_provider_category(&provider, &ProviderCategory::Pharmacy);
+
+    let e = one_event(&f);
+    assert_layout(
+        &e,
+        "provider_category_changed",
+        &[ScVal::from(&provider)],
+        &["category"],
+    );
+    assert_eq!(field_u32(&e, "category"), 1);
 }
 
 #[test]
@@ -2268,7 +2371,7 @@ fn country_codes_need_two_uppercase_ascii_letters() {
         let country = String::from_str(&f.env, bad);
         let err = f
             .client
-            .try_register_provider(&provider, &name, &country)
+            .try_register_provider(&provider, &name, &country, &ProviderCategory::Clinic)
             .err()
             .unwrap()
             .unwrap();
@@ -2284,7 +2387,8 @@ fn country_codes_need_two_uppercase_ascii_letters() {
     for good in ["NG", "KE", "GB"] {
         let provider = Address::generate(&f.env);
         let country = String::from_str(&f.env, good);
-        f.client.register_provider(&provider, &name, &country);
+        f.client
+            .register_provider(&provider, &name, &country, &ProviderCategory::Clinic);
         assert_eq!(f.client.get_provider(&provider).country, country);
     }
 }
@@ -2307,6 +2411,7 @@ fn provider_in(f: &Fixture, status: ProviderStatus) -> Address {
         &provider,
         &String::from_str(&f.env, "Clinic"),
         &String::from_str(&f.env, "NG"),
+        &ProviderCategory::Clinic,
     );
     match status {
         ProviderStatus::Pending => {}
@@ -2446,6 +2551,7 @@ fn reason_code_is_recorded_on_every_status_change() {
         &provider,
         &String::from_str(&f.env, "Clinic"),
         &String::from_str(&f.env, "NG"),
+        &ProviderCategory::Clinic,
     );
     // No status change has happened yet.
     assert_eq!(f.client.get_provider(&provider).reason_code, 0);
@@ -2861,6 +2967,7 @@ fn stored_type_fixtures_decode_against_current_code() {
             status: ProviderStatus::Active,
             registered_at: 1_700_000_000,
             reason_code: REASON_VERIFIED,
+            category: ProviderCategory::Clinic,
             verification_evidence: None,
         },
     );

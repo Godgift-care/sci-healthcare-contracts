@@ -5,7 +5,7 @@
 
 use soroban_sdk::{contractevent, Address, BytesN, String};
 
-use crate::types::ProviderStatus;
+use crate::types::{ProviderCategory, ProviderStatus};
 
 #[contractevent]
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -21,6 +21,15 @@ pub struct ProviderRegistered {
     pub name: String,
     pub country: String,
     pub registered_at: u64,
+    pub category: ProviderCategory,
+}
+
+#[contractevent]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ProviderCategoryChanged {
+    #[topic]
+    pub provider: Address,
+    pub category: ProviderCategory,
 }
 
 #[contractevent]

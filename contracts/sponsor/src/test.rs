@@ -12,7 +12,7 @@ use soroban_sdk::{
 };
 
 use sci_receipt::{ReceiptBook, ReceiptBookClient};
-use sci_registry::{ProviderStatus, Registry, RegistryClient};
+use sci_registry::{ProviderCategory, ProviderStatus, Registry, RegistryClient};
 use sci_voucher::{VoucherEscrow, VoucherEscrowClient};
 
 use crate::{Rules, SponsorDesk, SponsorDeskClient, SponsorError, MAX_MATCH_BPS, MAX_OPEN_MATCHES};
@@ -77,6 +77,7 @@ fn setup() -> Fixture {
         &provider,
         &String::from_str(&env, "Ikeja General Clinic"),
         &String::from_str(&env, "NG"),
+        &ProviderCategory::Clinic,
     );
     registry.set_provider_status(&admin, &provider, &ProviderStatus::Active, &REASON_VERIFIED);
     registry.upsert_service(
