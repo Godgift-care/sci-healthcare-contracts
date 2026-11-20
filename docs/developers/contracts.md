@@ -117,6 +117,7 @@ pub struct ServiceItem {
 | `get_upcoming_price` | `provider_addr, code` | `(i128, u64)` | view | `ServiceNotFound` |
 | `is_service_available` | `provider_addr, code` | `bool` | view | — |
 | `is_attester` | `addr` | `bool` | view | — |
+| `list_attesters` | `start, limit: u32` | `Vec<Address>` | view | — |
 | `get_capacity` | `provider_addr` | `u32` | view | — |
 | `get_admin` | — | `Address` | view | `NotInitialized` |
 | `version` | — | `String` | view | — |
@@ -185,6 +186,7 @@ Every public function, with the exact signer it demands — no signature that is
 | `get_upcoming_price` | none (view) |
 | `is_service_available` | none (view) |
 | `is_attester` | none (view) |
+| `list_attesters` | none (view) |
 | `get_capacity` | none (view) |
 | `version` | none (view) |
 

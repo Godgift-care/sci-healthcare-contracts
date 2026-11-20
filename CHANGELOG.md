@@ -3,6 +3,7 @@
 ## Unreleased
 
 ### Added
+- **registry:** paginated list of attesters on chain via `list_attesters(start, limit)`. Attesters index maintained with swap-and-pop on removal and capped page limit. Closes #103.
 - **registry:** provider categories via `ProviderCategory` enum (Clinic, Pharmacy, Laboratory, Maternity, Other). Set at registration with `register_provider` and changeable by owner via `update_provider_category`, emitting `provider_category_changed`. Closes #102.
 - **registry:** record verification evidence hash via `set_verification_evidence`. Admin records an on-chain `BytesN<32>` hash of the provider's verification documents (licence, inspection report), stored on `Provider` and emitted as `verification_evidence_set`. Closes #101.
 - **test:** contract safety harnesses across all five crates. The [event tables](docs/developers/contracts.md) are now checked against the `#[contractevent]` structs in the source, every public function has an authorisation-matrix test and a documented signer — including sponsor and faucet — and stored `#[contracttype]` values are pinned by XDR fixtures that must still decode against the current code. Every entry point also has a committed read and write count in `contracts/<crate>/storage-counts.md`, regenerated with `just storage-counts` or `just stored-type-fixtures`. Closes #296, #297, #298 and #300.
@@ -118,6 +119,7 @@ Redeployed to testnet on 2026-10-07; addresses are in `deployments/testnet.env`.
 - **registry:** attester entries are TTL-extended on read like providers and services.
 
 ### Added
+- **registry:** paginated list of attesters on chain via `list_attesters(start, limit)`. Attesters index maintained with swap-and-pop on removal and capped page limit. Closes #103.
 - **registry:** provider categories via `ProviderCategory` enum (Clinic, Pharmacy, Laboratory, Maternity, Other). Set at registration with `register_provider` and changeable by owner via `update_provider_category`, emitting `provider_category_changed`. Closes #102.
 - "Try it in five minutes" walkthrough in the README.
 - Issue forms (bug, feature) and a pull request template; blank issues off, security reports routed to SECURITY.md.

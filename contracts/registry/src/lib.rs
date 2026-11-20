@@ -522,7 +522,12 @@ impl Registry {
     /// Grants attester rights. Admin only.
     pub fn add_attester(env: Env, admin: Address, attester: Address) -> Result<(), RegistryError> {
         Self::require_admin(&env, &admin)?;
-        write_attester(&env, &attester, true);
+        if !read_attester(&env, &attester) {
+            write_attester(&env, &attester, true);
+            let count = storage::read_attester_count(&env);
+            storage::write_attester_at(&env, count, &attester);
+            storage::write_attester_count(&env, &(count + 1));
+        }
         extend_instance(&env);
         AttesterAdded { attester }.publish(&env);
         Ok(())
@@ -535,7 +540,29 @@ impl Registry {
         attester: Address,
     ) -> Result<(), RegistryError> {
         Self::require_admin(&env, &admin)?;
-        write_attester(&env, &attester, false);
+        if read_attester(&env, &attester) {
+            write_attester(&env, &attester, false);
+            let total = storage::read_attester_count(&env);
+            let mut idx = None;
+            for i in 0..total {
+                if let Some(addr) = storage::read_attester_at(&env, i) {
+                    if addr == attester {
+                        idx = Some(i);
+                        break;
+                    }
+                }
+            }
+            if let Some(i) = idx {
+                let last_idx = total.saturating_sub(1);
+                if i != last_idx {
+                    if let Some(last_addr) = storage::read_attester_at(&env, last_idx) {
+                        storage::write_attester_at(&env, i, &last_addr);
+                    }
+                }
+                storage::remove_attester_at(&env, last_idx);
+                storage::write_attester_count(&env, &(total - 1));
+            }
+        }
         extend_instance(&env);
         AttesterRemoved { attester }.publish(&env);
         Ok(())
@@ -678,6 +705,11 @@ impl Registry {
 
     pub fn is_attester(env: Env, addr: Address) -> bool {
         read_attester(&env, &addr)
+    }
+
+    /// Attesters in addition order, paged by `start` and `limit`.
+    pub fn list_attesters(env: Env, start: u32, limit: u32) -> Vec<Address> {
+        storage::list_attesters(&env, start, limit)
     }
 
     /// Most vouchers the clinic accepts outstanding at once; `0` is

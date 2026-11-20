@@ -124,6 +124,10 @@ pub enum DataKey {
     Provider(Address),
     Service(Address, u32),
     Attester(Address),
+    /// Total number of active attesters in the index.
+    AttesterCount,
+    /// Attester address at index in addition order (swap-and-pop on removal).
+    AttesterAt(u32),
     /// Total number of registered providers.
     ProviderCount,
     /// Provider address at a registration index, in registration order.

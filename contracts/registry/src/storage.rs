@@ -121,6 +121,75 @@ pub(crate) fn write_attester(env: &Env, addr: &Address, enabled: bool) {
     common::extend_persistent(env, &key);
 }
 
+/// Total number of active attesters in the index.
+pub(crate) fn read_attester_count(env: &Env) -> u32 {
+    match env
+        .storage()
+        .persistent()
+        .get::<_, u32>(&DataKey::AttesterCount)
+    {
+        Some(count) => {
+            common::extend_persistent(env, &DataKey::AttesterCount);
+            count
+        }
+        None => 0,
+    }
+}
+
+pub(crate) fn write_attester_count(env: &Env, count: &u32) {
+    env.storage()
+        .persistent()
+        .set(&DataKey::AttesterCount, count);
+    common::extend_persistent(env, &DataKey::AttesterCount);
+}
+
+pub(crate) fn read_attester_at(env: &Env, index: u32) -> Option<Address> {
+    let key = DataKey::AttesterAt(index);
+    match env.storage().persistent().get::<_, Address>(&key) {
+        Some(addr) => {
+            common::extend_persistent(env, &key);
+            Some(addr)
+        }
+        None => None,
+    }
+}
+
+pub(crate) fn write_attester_at(env: &Env, index: u32, addr: &Address) {
+    let key = DataKey::AttesterAt(index);
+    env.storage().persistent().set(&key, addr);
+    common::extend_persistent(env, &key);
+}
+
+pub(crate) fn remove_attester_at(env: &Env, index: u32) {
+    env.storage()
+        .persistent()
+        .remove(&DataKey::AttesterAt(index));
+}
+
+/// Attesters in addition order, paged by `start` and `limit`.
+pub(crate) fn list_attesters(env: &Env, start: u32, limit: u32) -> Vec<Address> {
+    use soroban_sdk::Vec;
+
+    let mut out = Vec::new(env);
+    let limit = limit.min(MAX_PROVIDERS_PAGE);
+    if limit == 0 {
+        return out;
+    }
+
+    let total = read_attester_count(env);
+    if start >= total {
+        return out;
+    }
+    let end = start.saturating_add(limit).min(total);
+
+    for index in start..end {
+        if let Some(addr) = read_attester_at(env, index) {
+            out.push_back(addr);
+        }
+    }
+    out
+}
+
 /// Total number of registered providers.
 pub(crate) fn read_provider_count(env: &Env) -> u32 {
     match env
