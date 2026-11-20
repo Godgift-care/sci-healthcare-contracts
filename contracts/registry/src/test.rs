@@ -8,8 +8,8 @@ use soroban_sdk::{
 };
 
 use crate::{
-    ProviderStatus, Registry, RegistryClient, RegistryError, MAX_PRICE_JUMP, MAX_PROVIDERS_PAGE,
-    MIN_PRICE_NOTICE_SECS,
+    Provider, ProviderStatus, Registry, RegistryClient, RegistryError, ServiceItem, MAX_PRICE_JUMP,
+    MAX_PROVIDERS_PAGE, MIN_PRICE_NOTICE_SECS,
 };
 
 /// Reason codes as documented in `docs/protocol/trust.md`: codes are added,
