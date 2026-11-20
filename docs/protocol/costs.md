@@ -49,7 +49,7 @@ bytes to that entry and its rent.
 | Contract | Entry | Durability | TTL (ledgers) | Size (bytes) | Rent (XLM) | Rent (stroops) |
 | --- | --- | --- | --- | --- | --- | --- |
 | `registry` | contract instance (`Admin`) | persistent | 518400 | 176 | 0.0880000 | 880000 |
-| `registry` | `Provider(owner)` | persistent | 1555200 | 348 | 0.5220000 | 4800000 |
+| `registry` | `Provider(owner)` | persistent | 1555200 | 408 | 0.6120000 | 6120000 |
 | `registry` | `Service(provider, code)` | persistent | 1555200 | 372 | 0.5580000 | 5580000 |
 | `registry` | `Attester(address)` | persistent | 1555200 | 132 | 0.1980000 | 1980000 |
 | `voucher` | contract instance (`Config`, `NextId`, `OpenEscrow`, `AttestationCap`) | persistent | 518400 | 668 | 0.3340000 | 3340000 |
