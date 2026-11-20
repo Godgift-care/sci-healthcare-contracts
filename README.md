@@ -158,6 +158,8 @@ This is trust-*minimised*, not trustless. Whether care actually happened is an o
 - The funder gets a dispute window after attestation, before any money moves.
 - Dispute resolution is a trusted human decision, scoped as narrowly as possible: the admin can only route already-escrowed funds to one of the two parties, never divert them elsewhere.
 
+The reasoning behind these choices — why the provider cannot attest its own payment, why `settle` and `refund` are permissionless, why beneficiary references are HMACs rather than plain hashes, and why the contract has no general balance — is recorded in the [architecture decision records](docs/adr/). Read those before simplifying one of them away.
+
 ## Quick start
 
 ### Install Rust and the Stellar CLI
