@@ -163,13 +163,13 @@
           "function": {
             "contract_fn": {
               "contract_address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAATYON",
-              "function_name": "set_max_escrow_per_provider",
+              "function_name": "set_attestation_cap",
               "args": [
                 {
                   "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM"
                 },
                 {
-                  "i128": "30000000"
+                  "u32": 10
                 }
               ]
             }
@@ -703,6 +703,18 @@
                       "key": {
                         "vec": [
                           {
+                            "symbol": "AttestationCap"
+                          }
+                        ]
+                      },
+                      "val": {
+                        "u32": 10
+                      }
+                    },
+                    {
+                      "key": {
+                        "vec": [
+                          {
                             "symbol": "Config"
                           }
                         ]
@@ -774,18 +786,6 @@
                             }
                           }
                         ]
-                      }
-                    },
-                    {
-                      "key": {
-                        "vec": [
-                          {
-                            "symbol": "EscrowCap"
-                          }
-                        ]
-                      },
-                      "val": {
-                        "i128": "30000000"
                       }
                     }
                   ]
@@ -1054,7 +1054,7 @@
           "v0": {
             "topics": [
               {
-                "symbol": "escrow_cap_changed"
+                "symbol": "attestation_cap_changed"
               },
               {
                 "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM"
@@ -1064,10 +1064,10 @@
               "map": [
                 {
                   "key": {
-                    "symbol": "max"
+                    "symbol": "cap"
                   },
                   "val": {
-                    "i128": "30000000"
+                    "u32": 10
                   }
                 }
               ]

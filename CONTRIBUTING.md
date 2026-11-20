@@ -242,9 +242,34 @@ Types: `feat`, `fix`, `test`, `docs`, `refactor`, `chore`, `perf`.
 - `cargo test` and `cargo build --target wasm32v1-none --release` must both pass.
 - `cargo fmt --all` and `cargo clippy --all-targets -- -D warnings` must be clean.
 - Describe **what breaks if this is wrong**, not just what you changed.
+- If anything under `contracts/` changes, add an entry under `## Unreleased` in
+  `CHANGELOG.md`. The `changelog entry` check fails without one. A change no
+  integrator can notice (a comment, a test-only refactor) can skip it: ask a
+  maintainer to add the `skip-changelog` label, and the check re-runs.
 - If you changed an event's fields, say so explicitly — the indexer in
   `sci-healthcare-backend` decodes events by name, and moving a field between
   topic and data is a breaking change that needs a matching PR there.
+
+## Documentation site
+
+The [docs site](https://godgift-care.github.io/sci-healthcare-contracts/) is
+built from `docs/` by `.github/workflows/docs-site.yml`. The root shows `main`,
+and every release tag gets a frozen copy under `/<tag>/` with a banner saying
+which version it is, so a page you change on `main` does not rewrite the docs of
+a release that is already deployed. Pull requests that touch `docs/` build the
+whole site, so a broken page fails before merge.
+
+To build it locally (Ruby 3.1 or newer):
+
+```bash
+git fetch --tags upstream          # the snapshots are read from the tags
+BUNDLE_GEMFILE=scripts/docs-site/Gemfile bundle install
+DOCS_BASE_PATH="" ./scripts/build-docs-site.sh _site
+python3 -m http.server 4000 --directory _site   # http://localhost:4000, /v0.2.0/, /latest/
+```
+
+`DOCS_BASE_PATH=""` serves the site from `/` for local preview; CI sets the
+real path. `DOCS_TAGS=""` builds `main` only.
 
 ## Adding a contract event
 

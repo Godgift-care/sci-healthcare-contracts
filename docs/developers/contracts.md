@@ -15,6 +15,45 @@ Protocol terminology used across the docs is defined in [docs/glossary.md](../gl
 
 ---
 
+## Who calls whom
+
+```mermaid
+flowchart LR
+    funder([Funder])
+    clinic([Clinic])
+    attester([Attester])
+    admin([Registry / voucher admin])
+    anyone([Anyone, e.g. a keeper])
+    org([Sponsor organisation])
+
+    registry["registry<br/>providers, services, attesters"]
+    voucher["voucher<br/>escrow and lifecycle"]
+    receipt["receipt book<br/>non-transferable care records"]
+    sponsor["sponsor<br/>sponsorship desk"]
+    faucet["faucet<br/>testnet only"]
+    token[("USDC<br/>SEP-41 token")]
+
+    funder -. "create_voucher, redirect,<br/>reduce_amount, dispute" .-> voucher
+    clinic -. "claim, claim_with_proof,<br/>decline" .-> voucher
+    attester -. "attest" .-> voucher
+    anyone -. "settle, refund" .-> voucher
+    admin -. "resolve_dispute, resolve_split" .-> voucher
+    clinic -. "register_provider, upsert_service,<br/>set_capacity, retire" .-> registry
+    admin -. "set_provider_status,<br/>add_attester" .-> registry
+    org -. "deposit, set_rules,<br/>match_voucher, withdraw" .-> sponsor
+    funder -. "drip" .-> faucet
+
+    voucher == "is_active_provider, get_service_price,<br/>is_service_available, get_capacity,<br/>is_attester" ==> registry
+    voucher == "mint" ==> receipt
+    voucher == "transfer, balance" ==> token
+    sponsor == "create_voucher,<br/>voucher_summary" ==> voucher
+    sponsor == "get_provider_country" ==> registry
+    sponsor == "transfer, balance" ==> token
+    faucet == "mint, set_admin" ==> token
+```
+
+Thick arrows are cross-contract calls, declared in [`contracts/voucher/src/interfaces.rs`](https://github.com/Godgift-care/sci-healthcare-contracts/blob/main/contracts/voucher/src/interfaces.rs) and [`contracts/sponsor/src/interfaces.rs`](https://github.com/Godgift-care/sci-healthcare-contracts/blob/main/contracts/sponsor/src/interfaces.rs), plus the standard token interface. Dotted arrows are calls a person or app signs; each is labelled with its main functions, and admin settings such as caps and handovers are left out. Only the voucher contract can `mint` a receipt: the receipt book names it as minter at initialisation.
+
 ## registry
 
 Answers one question: who is allowed to do what.
@@ -53,7 +92,7 @@ pub struct ServiceItem {
 | `set_provider_status` | `admin, provider_addr, status, reason_code: u32` | `()` | `admin` | `NotAuthorized`, `ProviderNotFound`, `InvalidTransition` |
 | `retire` | `owner, reason_code: u32` | `()` | `owner` | `ProviderNotFound`, `InvalidTransition` |
 | `upsert_service` | `provider_addr, code, label, price` | `()` | `provider_addr` | `InvalidPrice`, `EmptyName`, `ProviderNotActive`, `PriceIncreaseNeedsNotice` |
-| `schedule_service_price` | `provider_addr, code, price, effective_at` | `()` | `provider_addr` | `InvalidPrice`, `ProviderNotActive`, `ServiceNotFound`, `PriceNoticeTooShort` |
+| `schedule_service_price` | `provider_addr, code, price, effective_at, confirm_large_change: bool` | `()` | `provider_addr` | `InvalidPrice`, `ProviderNotActive`, `ServiceNotFound`, `PriceNoticeTooShort`, `LargePriceJumpNeedsConfirmation` |
 | `remove_service` | `provider_addr, code` | `()` | `provider_addr` | `ServiceNotFound` |
 | `set_service_available` | `provider_addr, code, available: bool` | `()` | `provider_addr` | `ServiceNotFound` |
 | `set_capacity` | `provider_addr, max_outstanding: u32` | `()` | `provider_addr` | `ProviderNotFound` |
@@ -86,7 +125,7 @@ pub struct ServiceItem {
 
 A clinic that temporarily cannot deliver a service (out of test kits, say) calls `set_service_available(provider_addr, code, false)` instead of delisting it. The service keeps its catalogue entry and its price, `is_service_available` returns `false`, and `voucher` refuses to fund it with `ServiceUnavailable`. Vouchers already funded against it are unaffected. `upsert_service` keeps a paused service paused; only `set_service_available(…, true)` puts it back on sale. New services are listed as available.
 
-Price changes are scheduled, not sprung. `schedule_service_price(provider_addr, code, price, effective_at)` records a new price that takes effect at `effective_at`, which must be at least `MIN_PRICE_NOTICE_SECS` (24 hours) away or the call fails with `PriceNoticeTooShort`. Until then `get_service_price` returns the current price and `get_upcoming_price` returns `(price, effective_at)` so apps can warn funders; from `effective_at` on, every read returns the new price — no keeper has to call in. Scheduling again replaces the earlier schedule, and scheduling the current price calls a change off. `upsert_service` still lists a new service, or lowers an existing price, at once, but rejects a rise with `PriceIncreaseNeedsNotice`. A service that is removed and listed again starts fresh, at whatever price it is listed with.
+Price changes are scheduled, not sprung. `schedule_service_price(provider_addr, code, price, effective_at, confirm_large_change)` records a new price that takes effect at `effective_at`, which must be at least `MIN_PRICE_NOTICE_SECS` (24 hours) away or the call fails with `PriceNoticeTooShort`. A price of `MAX_PRICE_JUMP` (5) times the current price or more is rejected with `LargePriceJumpNeedsConfirmation` unless `confirm_large_change` is `true`: a fat-fingered zero would otherwise overcharge every funder that day. Until `effective_at`, `get_service_price` returns the current price and `get_upcoming_price` returns `(price, effective_at)` so apps can warn funders; from `effective_at` on, every read returns the new price — no keeper has to call in. Scheduling again replaces the earlier schedule, and scheduling the current price calls a change off. `upsert_service` still lists a new service, or lowers an existing price, at once, but rejects a rise with `PriceIncreaseNeedsNotice`; prices rise only through `schedule_service_price`, which is where the large-jump check lives. A service that is removed and listed again starts fresh, at whatever price it is listed with.
 
 A clinic declares how many vouchers it can serve at once with `set_capacity(provider_addr, max_outstanding)`; `0` — the default — means unlimited. `voucher` counts each clinic's outstanding vouchers (funded, claimed, attested or disputed) and refuses a new one at capacity with `ProviderAtCapacity`; the count drops when a voucher settles or refunds. Lowering the capacity never affects vouchers already funded. The change emits `capacity_changed` (topic `provider`; data `max_outstanding`).
 
@@ -161,10 +200,28 @@ A signer is not the same as a role: `admin` must be the stored admin **and** sig
 | 12 | `PriceNoticeTooShort` |
 | 13 | `PriceIncreaseNeedsNotice` |
 | 14 | `InvalidTransition` |
+| 15 | `LargePriceJumpNeedsConfirmation` |
 
 ### Events
 
-`provider_registered`, `provider_status_changed` (topics `provider`; data `status`, `reason_code`), `service_upserted`, `service_removed`, `service_price_scheduled` (topics `provider`, `code`; data `price`, `effective_at`), `service_availability_changed` (topics `provider`, `code`; data `available`), `capacity_changed` (topic `provider`; data `max_outstanding`), `attester_added`, `attester_removed`, `admin_changed`, `initialized`
+| Event | Topics | Data |
+| --- | --- | --- |
+| `initialized` | — | `admin` |
+| `provider_registered` | `provider` | `name`, `country`, `registered_at` |
+| `provider_status_changed` | `provider` | `status`, `reason_code` |
+| `service_upserted` | `provider`, `code` | `label`, `price` |
+| `service_removed` | `provider` | `code` |
+| `service_price_scheduled` | `provider`, `code` | `price`, `effective_at` |
+| `service_availability_changed` | `provider`, `code` | `available` |
+| `attester_added` | `attester` | — |
+| `capacity_changed` | `provider` | `max_outstanding` |
+| `attester_removed` | `attester` | — |
+| `admin_proposed` | `admin` | `pending_admin` |
+| `admin_changed` | — | `new_admin` |
+
+> Fields listed under **Topics** are published in the event's topic list, **not** in its data map. The table is checked against the `#[contractevent]` structs in `contracts/registry/src/events.rs` by `event_table_in_the_docs_matches_the_source`; adding, renaming or moving a field fails that test until the table is updated in the same change.
+
+The full schema — every topic, data field, type and the function that emits it — is in [Reading contract events](events.md).
 
 ---
 
@@ -227,10 +284,12 @@ pub struct Exposure {            // a clinic's open vouchers
 | `initialize` | `admin, registry, receipt_book, token, dispute_window, fee_bps, attester_share_bps, fee_account` | `()` | once |
 | `create_voucher` | `funder, beneficiary_ref, provider, service_code, amount, expires_at` | `u64` | `funder` |
 | `create_voucher_with_options` | `funder, beneficiary_ref, provider, service_code, amount, expires_at, options: VoucherOptions` | `u64` | `funder` |
+| `create_voucher_at_price` | `funder, beneficiary_ref, provider, service_code, amount, expires_at, expected_price` | `u64` | `funder` |
 | `reduce_amount` | `funder, voucher_id, new_amount` | `()` | `funder` |
 | `redirect` | `funder, voucher_id, new_provider` | `()` | `funder` |
 | `claim` | `provider, voucher_id` | `()` | `provider` |
 | `claim_with_proof` | `provider, voucher_id, secret: Bytes` | `()` | `provider` |
+| `decline` | `provider, voucher_id, reason_code` | `()` | `provider` |
 | `attest` | `attester, voucher_id` | `()` | `attester` |
 | `dispute` | `funder, voucher_id, reason_code` | `()` | `funder` |
 | `settle` | `voucher_id` | `()` | **none** |
@@ -270,10 +329,12 @@ Every public function, with the exact signer it demands. `AUTH_MATRIX` in `contr
 | `initialize` | none (one-shot) |
 | `create_voucher` | `funder` |
 | `create_voucher_with_options` | `funder` |
+| `create_voucher_at_price` | `funder` |
 | `reduce_amount` | `funder` |
 | `redirect` | `funder` |
 | `claim` | `provider` |
 | `claim_with_proof` | `provider` |
+| `decline` | `provider` |
 | `attest` | `attester` |
 | `dispute` | `funder` |
 | `settle` | none (permissionless) |
@@ -311,6 +372,8 @@ rejects the voucher's own provider even if it holds that role.
 
 **`set_max_escrow_per_provider`** — caller is admin; `max` ≥ 0 (`InvalidEscrowCap`). `0`, the default, is unlimited. The cap limits what one clinic can hold in escrow across all its open vouchers, so a verified clinic that turns out to be fraudulent is exposed to at most this much. `get_exposure(provider)` returns the clinic's open voucher count and escrowed value; both fall when a voucher settles or refunds, including through `resolve_dispute` and `resolve_split`, and the value falls by the refunded difference when `reduce_amount` lowers a voucher. Lowering the cap only affects new vouchers.
 
+**`create_voucher_at_price`** — the same checks, plus the registry price must equal `expected_price` at execution (`PriceChanged`). Use it when the funder was shown a quote before signing: if the clinic changed the price in between, in either direction, nothing is escrowed and the client can re-quote. The old `create_voucher` entry point is unchanged and still reads the current price; it remains suitable for callers that do not show a price first.
+
 **`reduce_amount`** — caller is the funder of this voucher (`NotAuthorized`); status is `Funded` (`InvalidStatus`); `new_amount` > 0 (`InvalidAmount`) and strictly below the escrowed amount (`AmountNotReduced`); the service is still listed (`ServiceNotOffered`); and `new_amount` ≥ the price the registry lists **at call time** (`AmountBelowPrice`). The difference goes straight back to the funder and the escrow keeps the rest; no fee is taken on money that never became care, and the `open_escrow` total follows the difference down. The price at call time is the floor, not the price at funding time: a clinic that has raised its price cannot have a funded voucher reduced below that price, and a clinic that has lowered it frees the funder to reduce further. A voucher whose service has been delisted cannot be reduced at all — there is no floor to reduce towards — and is refunded at expiry instead. Once the clinic has claimed the voucher the amount is what the clinic expects to be paid, so the reduction is closed.
 
 **`create_voucher_with_options`** — everything `create_voucher` checks, plus: a `dispute_window`, when set, lies within `get_dispute_window_bounds()` (`InvalidDisputeWindow`). With both options unset it is exactly `create_voucher`.
@@ -318,6 +381,10 @@ rejects the voucher's own provider even if it holds that role.
 **`claim`** — caller is the named provider; provider is still `Active` in the registry; status is `Funded`; not expired; the voucher has no presence commitment (`PresenceProofRequired`).
 
 **`claim_with_proof`** — the same checks as `claim`, for a voucher funded with a `presence_commitment`: `sha256(secret)` must equal it (`InvalidPresenceProof`), and a voucher without one is `NoPresenceCommitment`. The funder gives the secret to the patient, so a claim shows the clinic had the patient in front of it rather than only saying so. The secret becomes public with the claim; it was only ever good for that voucher.
+
+**`decline`** — caller is the named provider; status is `Funded`. Returns the full escrow to the funder immediately, with no fee, and records the clinic's `reason_code` in `voucher_declined`. The existing `voucher_refunded` event is also emitted for the refund. The indexer needs `voucher_declined: ['provider']` in `TOPIC_FIELDS` in `sci-healthcare-backend/src/stellar/events.ts`.
+
+**`attest`** — caller is a registry attester; caller is **not** the provider; status is `Claimed`; the attester has attestations left today. Stores the attester on the voucher and sets `dispute_deadline = now + dispute_window`.
 
 **`attest`** — caller is a registry attester; caller is **not** the provider; status is `Claimed`; the attester has attestations left today. Stores the attester on the voucher and sets `dispute_deadline = now + window`, where `window` is the voucher's own `dispute_window` if it was funded with one and `Config.dispute_window` otherwise.
 
@@ -367,13 +434,16 @@ rejects the voucher's own provider even if it holds that role.
 |  |  | 30 | `NoPresenceCommitment` |
 |  |  | 31 | `InvalidDisputeWindow` |
 |  |  | 34 | `SelfFunded` |
+|  |  | 42 | `PriceChanged` |
 
 ### Events
 
 | Event | Topics | Data |
 | --- | --- | --- |
+| `initialized` | — | `admin` |
 | `voucher_created` | `funder`, `provider`, `beneficiary_ref` | `voucher_id`, `service_code`, `amount`, `created_at`, `expires_at` |
 | `voucher_claimed` | `provider` | `voucher_id`, `claimed_at`, `service_code`, `amount` |
+| `voucher_declined` | `provider` | `voucher_id`, `reason_code`, `service_code`, `amount` |
 | `voucher_attested` | `attester` | `voucher_id`, `attested_at`, `dispute_deadline`, `service_code`, `amount`, `remaining_today` |
 | `voucher_disputed` | `funder` | `voucher_id`, `reason_code`, `service_code`, `amount` |
 | `voucher_settled` | `provider` | `voucher_id`, `net`, `fee`, `service_code`, `amount`, `attester_share` |
@@ -384,8 +454,14 @@ rejects the voucher's own provider even if it holds that role.
 | `attestation_cap_changed` | `admin` | `cap` |
 | `dispute_window_bounds_changed` | `admin` | `min`, `max` |
 | `escrow_cap_changed` | `admin` | `max` |
+| `admin_proposed` | `admin` | `pending_admin` |
+| `admin_changed` | — | `new_admin` |
 
+> The table is checked against the `#[contractevent]` structs in `contracts/voucher/src/events.rs` by `event_table_in_the_docs_matches_the_source`; adding, renaming or moving a field fails that test until the table is updated in the same change.
+>
 > Fields listed under **Topics** are published in the event's topic list, **not** in its data map. An indexer reading them off the data map gets `undefined`.
+>
+> The complete per-event reference, with decoded JS examples, is in [Reading contract events](events.md).
 >
 > Every event in this table has a snapshot test that reads the decoded XDR and asserts the exact topic list and data map — `*_event_snapshot` in each contract's `src/test.rs`. Changing a field name, moving a field between topic and data, or adding a field fails that test with a message naming `TOPIC_FIELDS` in `sci-healthcare-backend/src/stellar/events.ts`.
 >
@@ -483,9 +559,18 @@ Every public function, with the exact signer it demands. `AUTH_MATRIX` in `contr
 
 ### Events
 
-`receipt_minted` — topics `beneficiary_ref`, `provider`; data `voucher_id`, `service_code`, `amount`, `settled_at`
+| Event | Topics | Data |
+| --- | --- | --- |
+| `initialized` | — | `admin` |
+| `minter_proposed` | `admin` | `pending_minter` |
+| `minter_changed` | — | `minter` |
+| `admin_proposed` | `admin` | `pending_admin` |
+| `admin_changed` | — | `new_admin` |
+| `receipt_minted` | `beneficiary_ref`, `provider` | `voucher_id`, `service_code`, `amount`, `settled_at` |
 
-`minter_proposed` — topic `admin`; data `pending_minter`. `minter_changed` — data `minter`. The indexer should treat `minter_proposed` as a pending state only: `get_minter()` changes on `minter_changed`, after the nominee accepts.
+The indexer should treat `minter_proposed` as a pending state only: `get_minter()` changes on `minter_changed`, after the nominee accepts.
+
+The table is checked against the `#[contractevent]` structs in `contracts/receipt/src/lib.rs` by `event_table_in_the_docs_matches_the_source`; adding, renaming or moving a field fails that test until the table is updated in the same change.
 
 ## faucet (testnet only)
 
@@ -509,6 +594,21 @@ Lets anyone trying the demo get test USDC without a server holding the issuer ke
 `initialize` also sets a per-address `lifetime_cap`: the total base units one address may ever receive. It is tracked in a persistent counter per address and never resets, so an address at its cap is rejected with `LifetimeCapReached` even on a new UTC day. A `lifetime_cap` of `0` means unlimited; a negative value is rejected with `InvalidAmount`. The counter is TTL-extended on every read and write.
 
 On testnet the faucet drips 50 USDC once a day: [`CCB25WG7DQ2CSNXPTOHZO2PDZ324FQPZLH3LSNCCLWYM3FEH52GEXC47`](https://stellar.expert/explorer/testnet/contract/CCB25WG7DQ2CSNXPTOHZO2PDZ324FQPZLH3LSNCCLWYM3FEH52GEXC47).
+
+### Authorisation matrix
+
+Every public function, with the exact signer it demands. `AUTH_MATRIX` in `contracts/faucet/src/test.rs` drives both `authorisation_matrix_matches_every_public_function` and this table, through `authorisation_table_in_the_docs_matches_the_matrix`.
+
+| Function | Signer required |
+| --- | --- |
+| `initialize` | none (one-shot) |
+| `drip` | `to` |
+| `set_drip` | `admin` |
+| `set_paused` | `admin` |
+| `release_token_admin` | `admin` |
+| `get_config` | none (view) |
+| `next_drip_at` | none (view) |
+| `version` | none (view) |
 
 | # | Error |
 | --- | --- |
@@ -631,6 +731,10 @@ Every public function, with the exact signer it demands. `AUTH_MATRIX` in `contr
 
 These events are new to the indexer: `sci-healthcare-backend` decodes them
 once their topic names are added to `TOPIC_FIELDS` in `src/stellar/events.ts`.
+The table is checked against the `#[contractevent]` structs in
+`contracts/sponsor/src/events.rs` by `event_table_in_the_docs_matches_the_source`;
+adding, renaming or moving a field fails that test until the table is updated in
+the same change.
 
 ---
 
@@ -694,6 +798,55 @@ These expectations are tested, not assumed:
   and `registry_reads_restore_a_lapsed_entry`.
 - `contracts/receipt/src/test.rs` — `receipt_survives_sixty_days_of_activity`,
   `receipt_read_restores_a_lapsed_entry` and `count_for_extends_its_own_entry`.
+
+### Storage read and write costs
+
+Every public entry point has a committed read and write count in
+`contracts/<crate>/storage-counts.md`. The count comes from running the same
+`AUTH_MATRIX` case as the authorisation test once in the state that makes the
+call valid, then reading `memory_read_entries` and `write_entries` from
+`Env::cost_estimate().resources()`.
+
+| Contract | Table |
+| --- | --- |
+| registry | [`contracts/registry/storage-counts.md`](../../contracts/registry/storage-counts.md) |
+| voucher | [`contracts/voucher/storage-counts.md`](../../contracts/voucher/storage-counts.md) |
+| receipt | [`contracts/receipt/storage-counts.md`](../../contracts/receipt/storage-counts.md) |
+| sponsor | [`contracts/sponsor/storage-counts.md`](../../contracts/sponsor/storage-counts.md) |
+| faucet | [`contracts/faucet/storage-counts.md`](../../contracts/faucet/storage-counts.md) |
+
+The tests fail on any change, including a decrease: the committed table would
+otherwise stop describing the code. Regenerate intentionally with:
+
+```bash
+just storage-counts
+# or: ./scripts/refresh-storage-counts.sh
+```
+
+Explain a changed count in the pull request. An increase is a fee and
+entry-limit regression, and a decrease is a cost improvement worth recording.
+
+### Stored-type upgrade safety
+
+Entries written by one release may outlive the release that wrote them. Each
+contract keeps XDR fixtures for the `#[contracttype]` values it stores under
+`contracts/<crate>/fixtures/stored_types/`. The
+`stored_type_fixtures_decode_against_current_code` test decodes each fixture
+with the current types and compares it with a freshly built value.
+
+Adding, removing, renaming or reordering a field makes the old fixture fail to
+decode (or decode to a different value). That is a breaking storage change: keep
+the old layout, put new fields under a new data key with a default, or add a
+versioned migration before refreshing the fixture. Refreshing is deliberately
+explicit and should happen only at release time:
+
+```bash
+just stored-type-fixtures
+# or: ./scripts/refresh-stored-type-fixtures.sh
+```
+
+The same tests honour `UPDATE_STORAGE_COUNTS=1` and
+`UPDATE_STORED_TYPE_FIXTURES=1` when run directly with `cargo test`.
 
 ---
 

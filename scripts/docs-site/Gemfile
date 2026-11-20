@@ -1,0 +1,34 @@
+# Gems for building the documentation site, used by
+# scripts/build-docs-site.sh and .github/workflows/docs-site.yml.
+#
+# Until the versioned site, GitHub's legacy Pages builder rendered docs/ and
+# quietly enabled a set of default plugins. The ones that change the output
+# are listed here, and switched on by the build script, so pages render as
+# they did — including old release snapshots whose pages have no front
+# matter.
+source "https://rubygems.org"
+
+gem "jekyll", "~> 4.4"
+
+group :jekyll_plugins do
+  # Named in docs/_config.yml.
+  gem "jekyll-remote-theme", "~> 0.4"
+  gem "jekyll-relative-links", "~> 0.7"
+  # Pages defaults: render .md without front matter, title it from its first
+  # heading, give it the default layout, serve README.md as the index.
+  gem "jekyll-optional-front-matter", "~> 0.3"
+  gem "jekyll-titles-from-headings", "~> 0.5"
+  gem "jekyll-default-layout", "~> 0.1"
+  gem "jekyll-readme-index", "~> 0.3"
+  gem "jekyll-seo-tag", "~> 2.8"
+  gem "jekyll-include-cache", "~> 0.2"
+end
+
+# Kramdown with GitHub-flavoured markdown, as Pages renders it.
+gem "kramdown-parser-gfm", "~> 1.1"
+
+# Standard-library gems that newer Rubies no longer load by default.
+gem "csv"
+gem "base64"
+gem "bigdecimal"
+gem "logger"

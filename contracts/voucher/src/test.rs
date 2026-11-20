@@ -1,5 +1,7 @@
 #![cfg(test)]
 
+use std::string::ToString;
+
 use soroban_sdk::{
     testutils::{Address as _, IssuerFlags, Ledger as _, StellarAssetContract},
     token, Address, Bytes, BytesN, Env, String,
@@ -192,6 +194,57 @@ fn escrow_summary_tracks_a_refund() {
 }
 
 #[test]
+fn provider_declines_funded_voucher_and_refunds_funder() {
+    let f = setup();
+    let before = f.token.balance(&f.funder);
+    let id = fund(&f);
+
+    f.voucher.decline(&f.provider, &id, &7u32);
+
+    assert_eq!(f.token.balance(&f.funder), before);
+    assert_eq!(f.token.balance(&f.provider), 0);
+    assert_eq!(f.token.balance(&f.fee_account), 0);
+    assert_eq!(f.voucher.get_voucher(&id).status, VoucherStatus::Refunded);
+    assert_escrow(&f, 0);
+}
+
+#[test]
+fn another_provider_cannot_decline_voucher() {
+    let f = setup();
+    let id = fund(&f);
+    let other_provider = Address::generate(&f.env);
+
+    let err = f
+        .voucher
+        .try_decline(&other_provider, &id, &7u32)
+        .err()
+        .unwrap()
+        .unwrap();
+
+    assert_eq!(err, VoucherError::NotAuthorized);
+    assert_eq!(f.voucher.get_voucher(&id).status, VoucherStatus::Funded);
+    assert_escrow(&f, CONSULT_PRICE);
+}
+
+#[test]
+fn claimed_voucher_cannot_be_declined() {
+    let f = setup();
+    let id = fund(&f);
+    f.voucher.claim(&f.provider, &id);
+
+    let err = f
+        .voucher
+        .try_decline(&f.provider, &id, &7u32)
+        .err()
+        .unwrap()
+        .unwrap();
+
+    assert_eq!(err, VoucherError::InvalidStatus);
+    assert_eq!(f.voucher.get_voucher(&id).status, VoucherStatus::Claimed);
+    assert_escrow(&f, CONSULT_PRICE);
+}
+
+#[test]
 fn escrow_summary_tracks_each_voucher_and_dispute_resolution() {
     let f = setup();
     let first = fund(&f);
@@ -270,6 +323,100 @@ fn voucher_ids_increment() {
     assert_eq!(fund(&f), 1);
     assert_eq!(fund(&f), 2);
     assert_eq!(f.voucher.next_voucher_id(), 3);
+}
+
+#[test]
+fn create_voucher_at_price_funds_at_the_agreed_price() {
+    let f = setup();
+    let before = f.token.balance(&f.funder);
+
+    let id = f.voucher.create_voucher_at_price(
+        &f.funder,
+        &patient(&f.env),
+        &f.provider,
+        &CONSULT,
+        &CONSULT_PRICE,
+        &(START_TIME + 30 * 24 * 60 * 60),
+        &CONSULT_PRICE,
+    );
+
+    let voucher = f.voucher.get_voucher(&id);
+    assert_eq!(voucher.status, VoucherStatus::Funded);
+    assert_eq!(voucher.amount, CONSULT_PRICE);
+    assert_eq!(f.token.balance(&f.funder), before - CONSULT_PRICE);
+    assert_escrow(&f, CONSULT_PRICE);
+}
+
+#[test]
+fn create_voucher_at_price_rejects_a_raised_price() {
+    let f = setup();
+    let before = f.token.balance(&f.funder);
+    let effective_at = START_TIME + MIN_PRICE_NOTICE_SECS;
+
+    f.registry.schedule_service_price(
+        &f.provider,
+        &CONSULT,
+        &(CONSULT_PRICE * 2),
+        &effective_at,
+        &false,
+    );
+    advance(&f.env, MIN_PRICE_NOTICE_SECS);
+
+    let err = f
+        .voucher
+        .try_create_voucher_at_price(
+            &f.funder,
+            &patient(&f.env),
+            &f.provider,
+            &CONSULT,
+            &CONSULT_PRICE,
+            &(START_TIME + 30 * 24 * 60 * 60),
+            &CONSULT_PRICE,
+        )
+        .err()
+        .unwrap()
+        .unwrap();
+    assert_eq!(err, VoucherError::PriceChanged);
+
+    // Nothing moved and no voucher was written.
+    assert_eq!(f.token.balance(&f.funder), before);
+    assert_escrow(&f, 0);
+    assert_eq!(f.voucher.next_voucher_id(), 1);
+}
+
+#[test]
+fn create_voucher_at_price_rejects_a_lowered_price() {
+    let f = setup();
+    // The clinic lowers the price between the quote and the signing call. The
+    // funder did not agree to the new terms, so the call is rejected even
+    // though the amount would still cover it.
+    f.registry.upsert_service(
+        &f.provider,
+        &CONSULT,
+        &String::from_str(&f.env, "Outpatient consult"),
+        &(CONSULT_PRICE / 2),
+    );
+
+    let err = f
+        .voucher
+        .try_create_voucher_at_price(
+            &f.funder,
+            &patient(&f.env),
+            &f.provider,
+            &CONSULT,
+            &CONSULT_PRICE,
+            &(START_TIME + 30 * 24 * 60 * 60),
+            &CONSULT_PRICE,
+        )
+        .err()
+        .unwrap()
+        .unwrap();
+    assert_eq!(err, VoucherError::PriceChanged);
+
+    // The old entry point is unchanged: it funds at the current price.
+    let id = fund(&f);
+    assert_eq!(f.voucher.get_voucher(&id).amount, CONSULT_PRICE);
+    assert!(f.token.balance(&f.funder) > 0);
 }
 
 #[test]
@@ -567,8 +714,13 @@ fn pausing_a_service_does_not_affect_funded_vouchers() {
 fn scheduled_price_rise_applies_to_funding_at_the_effective_time() {
     let f = setup();
     let effective_at = START_TIME + MIN_PRICE_NOTICE_SECS;
-    f.registry
-        .schedule_service_price(&f.provider, &CONSULT, &(CONSULT_PRICE * 2), &effective_at);
+    f.registry.schedule_service_price(
+        &f.provider,
+        &CONSULT,
+        &(CONSULT_PRICE * 2),
+        &effective_at,
+        &false,
+    );
 
     // Before the effective time the listed price still funds.
     assert_eq!(fund(&f), 1);
@@ -859,8 +1011,13 @@ fn cannot_reduce_below_a_price_the_clinic_has_raised() {
     let overpaid = CONSULT_PRICE * 2;
     let id = fund_overpaid(&f, overpaid);
     let effective_at = START_TIME + MIN_PRICE_NOTICE_SECS;
-    f.registry
-        .schedule_service_price(&f.provider, &CONSULT, &(CONSULT_PRICE * 3), &effective_at);
+    f.registry.schedule_service_price(
+        &f.provider,
+        &CONSULT,
+        &(CONSULT_PRICE * 3),
+        &effective_at,
+        &false,
+    );
     f.env.ledger().with_mut(|li| li.timestamp = effective_at);
 
     let err = f
@@ -2296,6 +2453,33 @@ fn claim_event_snapshot_carries_service_and_amount() {
 }
 
 #[test]
+fn decline_event_snapshot_carries_reason_and_amount() {
+    let f = setup();
+    let id = fund(&f);
+
+    f.voucher.decline(&f.provider, &id, &7u32);
+
+    let events = f.env.events().all().filter_by_contract(&f.voucher.address);
+    let published = events.events();
+    assert_eq!(
+        published.len(),
+        2,
+        "decline publishes refund and decline events"
+    );
+    let e = published[1].clone();
+    assert_layout(
+        &e,
+        "voucher_declined",
+        &[ScVal::from(&f.provider)],
+        &["voucher_id", "reason_code", "service_code", "amount"],
+    );
+    assert_eq!(field_u64(&e, "voucher_id"), id);
+    assert_eq!(field_u32(&e, "reason_code"), 7);
+    assert_eq!(field_u32(&e, "service_code"), CONSULT);
+    assert_eq!(field_i128(&e, "amount"), CONSULT_PRICE);
+}
+
+#[test]
 fn attest_event_snapshot_carries_service_and_amount() {
     let f = setup();
     let id = fund(&f);
@@ -2520,6 +2704,10 @@ const AUTH_MATRIX: &[AuthCase] = &[
         auth: signer("`funder`", funder_addr),
     },
     AuthCase {
+        function: "create_voucher_at_price",
+        auth: signer("`funder`", funder_addr),
+    },
+    AuthCase {
         function: "reduce_amount",
         auth: signer("`funder`", funder_addr),
     },
@@ -2533,6 +2721,10 @@ const AUTH_MATRIX: &[AuthCase] = &[
     },
     AuthCase {
         function: "claim_with_proof",
+        auth: signer("`provider`", provider_addr),
+    },
+    AuthCase {
+        function: "decline",
         auth: signer("`provider`", provider_addr),
     },
     AuthCase {
@@ -2645,10 +2837,29 @@ fn recorded_auths(env: &Env) -> std::vec::Vec<Address> {
         .collect()
 }
 
+/// What one successful call demanded and touched.
+struct CaseRun {
+    auths: std::vec::Vec<Address>,
+    /// In-memory ledger entries read by the last top-level invocation.
+    reads: u32,
+    /// Ledger entries written by the last top-level invocation.
+    writes: u32,
+}
+
+fn case_run(env: &Env) -> CaseRun {
+    let resources = env.cost_estimate().resources();
+    CaseRun {
+        auths: recorded_auths(env),
+        reads: resources.memory_read_entries,
+        writes: resources.write_entries,
+    }
+}
+
 /// Runs `function` in the state that makes it a valid call, so the only thing
 /// under test is who it demands. Every arm leaves the function under test as
-/// the last invocation, which is what `env.auths()` reports.
-fn run_case(f: &AuthFixture, function: &str) -> std::vec::Vec<Address> {
+/// the last invocation, which is what `env.auths()` and the resource meter
+/// report.
+fn run_case(f: &AuthFixture, function: &str) -> CaseRun {
     let voucher = &f.f.voucher;
     let env = &f.f.env;
 
@@ -2670,13 +2881,24 @@ fn run_case(f: &AuthFixture, function: &str) -> std::vec::Vec<Address> {
                 &ATTESTER_SHARE_BPS,
                 &a,
             );
-            return recorded_auths(&env);
+            return case_run(&env);
         }
         "create_voucher" => {
             fund(&f.f);
         }
         "create_voucher_with_options" => {
             fund_with(&f.f, &VoucherOptions::default());
+        }
+        "create_voucher_at_price" => {
+            voucher.create_voucher_at_price(
+                &f.f.funder,
+                &patient(env),
+                &f.f.provider,
+                &CONSULT,
+                &CONSULT_PRICE,
+                &(START_TIME + 30 * 24 * 60 * 60),
+                &CONSULT_PRICE,
+            );
         }
         "reduce_amount" => {
             let id = fund_overpaid(&f.f, CONSULT_PRICE * 2);
@@ -2728,6 +2950,10 @@ fn run_case(f: &AuthFixture, function: &str) -> std::vec::Vec<Address> {
         "get_voucher_options" => {
             let id = fund(&f.f);
             voucher.get_voucher_options(&id);
+        }
+        "decline" => {
+            let id = fund(&f.f);
+            voucher.decline(&f.f.provider, &id, &7u32);
         }
         "attest" => {
             let id = fund(&f.f);
@@ -2819,7 +3045,7 @@ fn run_case(f: &AuthFixture, function: &str) -> std::vec::Vec<Address> {
         }
     }
 
-    recorded_auths(env)
+    case_run(env)
 }
 
 fn assert_demands(f: &AuthFixture, case: &AuthCase, got: &[Address]) {
@@ -2858,15 +3084,19 @@ fn assert_demands(f: &AuthFixture, case: &AuthCase, got: &[Address]) {
 fn authorisation_matrix_matches_every_public_function() {
     for case in AUTH_MATRIX {
         let f = AuthFixture::new();
-        let got = run_case(&f, case.function);
-        assert_demands(&f, case, &got);
+        let run = run_case(&f, case.function);
+        assert_demands(&f, case, &run.auths);
     }
 }
 
 /// The rows of the authorisation table in `docs/developers/contracts.md` for
 /// one contract, as written.
 fn doc_rows<'a>(docs: &'a str, contract: &str) -> std::vec::Vec<&'a str> {
-    let heading = std::format!("## {contract}\n");
+    let heading = if contract == "faucet" {
+        "## faucet (testnet only)\n".to_string()
+    } else {
+        std::format!("## {contract}\n")
+    };
     let start = docs
         .find(&heading)
         .unwrap_or_else(|| panic!("contracts.md has no `{contract}` section"));
@@ -2875,16 +3105,25 @@ fn doc_rows<'a>(docs: &'a str, contract: &str) -> std::vec::Vec<&'a str> {
         .find("### Authorisation matrix")
         .unwrap_or_else(|| panic!("the `{contract}` section has no authorisation matrix"));
     let section = &section[start..];
-    // The matrix is its own subsection: stop at the next heading so the
-    // errors and events tables further down are not counted as rows.
-    let end = section
-        .find("\n### ")
-        .or_else(|| section.find("\n## "))
-        .unwrap_or(section.len());
+    let end = find_section_end(section);
     section[..end]
         .lines()
         .filter(|line| line.starts_with("| `"))
         .collect()
+}
+
+fn find_section_end(section: &str) -> usize {
+    let mut end = section.len();
+    if let Some(pos) = section.find("\n### ") {
+        end = end.min(pos);
+    }
+    if let Some(pos) = section.find("\n## ") {
+        end = end.min(pos);
+    }
+    if let Some(pos) = section.find("\n---") {
+        end = end.min(pos);
+    }
+    end
 }
 
 #[test]
@@ -2908,6 +3147,69 @@ fn authorisation_table_in_the_docs_matches_the_matrix() {
              one the tests prove",
         );
     }
+}
+
+// ----- storage read and write counts -----
+//
+// Entry counts drive fees and the resource limits a transaction can hit. This
+// table is generated by running every row of `AUTH_MATRIX` once in the state
+// that makes the call valid, and recording the host's metered ledger entries.
+//
+// The test fails when a count changes: an increase is a cost regression, and a
+// decrease still means the committed table is stale. Regenerate intentionally
+// with `just storage-counts` (or `./scripts/refresh-storage-counts.sh`) and
+// explain the change in the pull request.
+//
+// What breaks if this is wrong: a new storage read or write in a hot path is
+// invisible until a real transaction hits the network's entry limit.
+
+const STORAGE_COUNTS_FILE: &str = "storage-counts.md";
+
+fn storage_counts_table() -> std::string::String {
+    let mut table = std::string::String::from(
+        "# Storage reads and writes per public entry point\n\
+         \n\
+         Generated by `just storage-counts` from `AUTH_MATRIX` in this crate. \
+         Reads are `memory_read_entries` and writes are `write_entries` from \
+         `Env::cost_estimate().resources()` after one successful call. Update \
+         the table in the same pull request as an intentional change.\n\
+         \n\
+         | Function | Reads | Writes |\n\
+         | --- | --- | --- |\n",
+    );
+    for case in AUTH_MATRIX {
+        let f = AuthFixture::new();
+        let run = run_case(&f, case.function);
+        table.push_str(&std::format!(
+            "| `{}` | {} | {} |\n",
+            case.function,
+            run.reads,
+            run.writes,
+        ));
+    }
+    table
+}
+
+#[test]
+fn storage_counts_match_the_committed_table() {
+    let table = storage_counts_table();
+    let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join(STORAGE_COUNTS_FILE);
+    if std::env::var_os("UPDATE_STORAGE_COUNTS").is_some() {
+        std::fs::write(&path, &table).unwrap();
+        return;
+    }
+    let committed = std::fs::read_to_string(&path).unwrap_or_else(|_| {
+        panic!(
+            "{} is missing; regenerate it with `just storage-counts`",
+            path.display()
+        )
+    });
+    assert_eq!(
+        committed, table,
+        "storage reads or writes changed for a voucher entry point. If the change is \
+         intentional, run `just storage-counts` and explain the new cost in the pull \
+         request; if it is not, the call is doing more ledger work than it used to",
+    );
 }
 
 // ----- storage lifetime (TTL) -----
@@ -4246,3 +4548,5 @@ fn reducing_a_voucher_lowers_the_clinics_exposure() {
     let (open_escrow, _) = f.voucher.escrow_summary();
     assert_eq!(open_escrow, 3 * CONSULT_PRICE);
 }
+#[cfg(test)]
+mod costs;

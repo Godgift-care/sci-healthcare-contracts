@@ -136,7 +136,7 @@ The communications lead owns this; the incident commander approves every message
 1. **Within 1 hour of confirming an incident:** a short notice on the status page and in the app — what is affected (for example "new vouchers to some clinics are paused"), what is not, and what users should do. Funders of exposed vouchers are contacted directly and asked to dispute before their deadline.
 2. **Never** publish details that let someone exploit an unfixed bug. Say what is affected, not how.
 3. **Every 4 hours** until resolved: what changed since the last update.
-4. **Security reporters** are answered as `SECURITY.md` commits to: acknowledgement within 72 hours, assessment within 7 days.
+4. **Security reporters** are answered as [`SECURITY.md`](../../SECURITY.md#what-happens-next) commits to: acknowledgement within 72 hours, assessment within 7 days.
 5. **When resolved:** a closing notice with the outcome and the date the post-mortem will be published.
 
 ## 5. Recovery

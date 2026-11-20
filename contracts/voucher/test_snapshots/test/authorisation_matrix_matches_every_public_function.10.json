@@ -218,38 +218,16 @@
           "function": {
             "contract_fn": {
               "contract_address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAATYON",
-              "function_name": "claim",
+              "function_name": "decline",
               "args": [
                 {
                   "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHK3M"
                 },
                 {
                   "u64": "1"
-                }
-              ]
-            }
-          },
-          "sub_invocations": []
-        }
-      ]
-    ],
-    [
-      [
-        "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFCT4",
-        {
-          "function": {
-            "contract_fn": {
-              "contract_address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAATYON",
-              "function_name": "dispute",
-              "args": [
-                {
-                  "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFCT4"
                 },
                 {
-                  "u64": "1"
-                },
-                {
-                  "u32": 1
+                  "u32": 7
                 }
               ]
             }
@@ -340,26 +318,6 @@
               "key": {
                 "ledger_key_nonce": {
                   "nonce": "4837995959683129791"
-                }
-              },
-              "durability": "temporary",
-              "val": "void"
-            }
-          },
-          "ext": "v0"
-        },
-        "live_until": 6311999
-      },
-      {
-        "entry": {
-          "last_modified_ledger_seq": 0,
-          "data": {
-            "contract_data": {
-              "ext": "v0",
-              "contract": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFCT4",
-              "key": {
-                "ledger_key_nonce": {
-                  "nonce": "5806905060045992000"
                 }
               },
               "durability": "temporary",
@@ -829,7 +787,7 @@
                       "symbol": "value"
                     },
                     "val": {
-                      "i128": "30000000"
+                      "i128": "0"
                     }
                   },
                   {
@@ -837,7 +795,7 @@
                       "symbol": "vouchers"
                     },
                     "val": {
-                      "u32": 1
+                      "u32": 0
                     }
                   }
                 ]
@@ -884,7 +842,7 @@
                     "i128": "30000000"
                   },
                   {
-                    "u32": 4
+                    "u32": 5
                   },
                   {
                     "u64": "1700000000"
@@ -893,7 +851,7 @@
                     "u64": "1702592000"
                   },
                   {
-                    "u64": "1700000000"
+                    "u64": "0"
                   },
                   {
                     "u64": "0"
@@ -1023,7 +981,7 @@
                         ]
                       },
                       "val": {
-                        "i128": "30000000"
+                        "i128": "0"
                       }
                     }
                   ]
@@ -1108,7 +1066,7 @@
                       "symbol": "amount"
                     },
                     "val": {
-                      "i128": "970000000"
+                      "i128": "1000000000"
                     }
                   },
                   {
@@ -1160,7 +1118,7 @@
                       "symbol": "amount"
                     },
                     "val": {
-                      "i128": "30000000"
+                      "i128": "0"
                     }
                   },
                   {
@@ -1338,13 +1296,42 @@
     {
       "event": {
         "ext": "v0",
+        "contract_id": "CDS3FDGQ4JA2V3F26Y4BMWWJEC5TT26RJBN7KIQKUMVO2MAOCMDTSZ7A",
+        "type": "contract",
+        "body": {
+          "v0": {
+            "topics": [
+              {
+                "symbol": "transfer"
+              },
+              {
+                "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAATYON"
+              },
+              {
+                "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFCT4"
+              },
+              {
+                "string": "aaa:GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAPP4V"
+              }
+            ],
+            "data": {
+              "i128": "30000000"
+            }
+          }
+        }
+      },
+      "failed_call": false
+    },
+    {
+      "event": {
+        "ext": "v0",
         "contract_id": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAATYON",
         "type": "contract",
         "body": {
           "v0": {
             "topics": [
               {
-                "symbol": "voucher_disputed"
+                "symbol": "voucher_refunded"
               },
               {
                 "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFCT4"
@@ -1362,10 +1349,58 @@
                 },
                 {
                   "key": {
+                    "symbol": "service_code"
+                  },
+                  "val": {
+                    "u32": 101
+                  }
+                },
+                {
+                  "key": {
+                    "symbol": "voucher_id"
+                  },
+                  "val": {
+                    "u64": "1"
+                  }
+                }
+              ]
+            }
+          }
+        }
+      },
+      "failed_call": false
+    },
+    {
+      "event": {
+        "ext": "v0",
+        "contract_id": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAATYON",
+        "type": "contract",
+        "body": {
+          "v0": {
+            "topics": [
+              {
+                "symbol": "voucher_declined"
+              },
+              {
+                "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHK3M"
+              }
+            ],
+            "data": {
+              "map": [
+                {
+                  "key": {
+                    "symbol": "amount"
+                  },
+                  "val": {
+                    "i128": "30000000"
+                  }
+                },
+                {
+                  "key": {
                     "symbol": "reason_code"
                   },
                   "val": {
-                    "u32": 1
+                    "u32": 7
                   }
                 },
                 {
