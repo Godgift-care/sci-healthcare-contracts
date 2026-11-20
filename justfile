@@ -40,6 +40,14 @@ clippy:
 # Everything CI runs on a pull request before the wasm build.
 check: fmt-check clippy test
 
+# Regenerate the per-contract storage read/write tables.
+storage-counts:
+    ./scripts/refresh-storage-counts.sh
+
+# Regenerate the stored-type XDR fixtures (release time only).
+stored-type-fixtures:
+    ./scripts/refresh-stored-type-fixtures.sh
+
 # Build the release wasm and SHA256SUMS into OUT (needs wasm-opt, binaryen 133).
 wasm out="dist":
     ./scripts/build-wasm.sh {{out}}

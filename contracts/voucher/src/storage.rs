@@ -21,7 +21,7 @@ use crate::types::{
 /// Not in the contract spec: it is `pub(crate)` and never crosses the
 /// contract boundary, which is what soroban-sdk 29 keys the spec off.
 #[contracttype]
-#[derive(Clone)]
+#[derive(Clone, Debug, PartialEq)]
 pub(crate) struct StoredVoucher(
     Address,         // funder
     BytesN<32>,      // beneficiary_ref
