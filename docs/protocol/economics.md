@@ -3,6 +3,7 @@ title: Economics
 nav_order: 3
 language: en
 translations:
+  fr: /fr/protocol/economics.html
   sw: /sw/protocol/economics.html
 ---
 

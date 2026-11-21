@@ -3,6 +3,7 @@ title: How a voucher works
 nav_order: 2
 language: en
 translations:
+  fr: /fr/protocol/lifecycle.html
   sw: /sw/protocol/lifecycle.html
 ---
 

@@ -4,6 +4,7 @@ nav_order: 4
 language: sw
 translations:
   en: /protocol/trust.html
+  fr: /fr/protocol/trust.html
 ---
 
 # Mfumo wa uaminifu

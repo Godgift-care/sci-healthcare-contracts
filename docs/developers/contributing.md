@@ -218,7 +218,7 @@ real path. `DOCS_TAGS=""` builds `main` only.
 
 The funder, clinic and attester guides and the protocol pages also exist in
 French (`docs/fr/`) and Swahili (`docs/sw/`). A translated page declares its
-counterparts in front matter, and `docs/_includes/language-switcher.html`
+counterparts in front matter, and the switcher in `docs/_includes/header_custom.html`
 renders them at the top of the page:
 
 ```yaml

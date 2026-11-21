@@ -3,6 +3,7 @@ title: Privacy
 nav_order: 5
 language: en
 translations:
+  fr: /fr/protocol/privacy.html
   sw: /sw/protocol/privacy.html
 ---
 

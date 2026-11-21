@@ -25,10 +25,8 @@
 # Every build is told which version it is, which release is the newest and
 # where the site root is, through a generated config file. The banner in
 # docs/_includes/header_custom.html reads those values, and is copied into
-# each snapshot so tags cut before it existed get the banner too. The language
-# switcher that include renders is copied with it; snapshot pages have no
-# translation front matter, so it renders nothing there. A tag whose docs/ has
-# no _config.yml (v0.1.0) is built with the current one.
+# each snapshot so tags cut before it existed get the banner too. A tag whose
+# docs/ has no _config.yml (v0.1.0) is built with the current one.
 #
 # What breaks if this is wrong: the site root is replaced on every publish,
 # so a bug here can take the whole docs site down, or label the docs for
@@ -121,7 +119,6 @@ for tag in $TAGS; do
   fi
   mkdir -p "$src/_includes"
   cp "$ROOT/docs/_includes/header_custom.html" "$src/_includes/header_custom.html"
-  cp "$ROOT/docs/_includes/language-switcher.html" "$src/_includes/language-switcher.html"
   build "$src" "$OUT/$tag" "$tag" "$BASE/$tag"
 done
 

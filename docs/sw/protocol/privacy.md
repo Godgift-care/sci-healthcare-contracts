@@ -4,6 +4,7 @@ nav_order: 5
 language: sw
 translations:
   en: /protocol/privacy.html
+  fr: /fr/protocol/privacy.html
 ---
 
 # Faragha

@@ -4,6 +4,7 @@ nav_order: 2
 language: sw
 translations:
   en: /protocol/lifecycle.html
+  fr: /fr/protocol/lifecycle.html
 ---
 
 # Vocha inavyofanya kazi

@@ -4,6 +4,7 @@ nav_order: 3
 language: sw
 translations:
   en: /protocol/economics.html
+  fr: /fr/protocol/economics.html
 ---
 
 # Uchumi

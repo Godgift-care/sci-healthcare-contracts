@@ -3,6 +3,7 @@ title: Trust model
 nav_order: 4
 language: en
 translations:
+  fr: /fr/protocol/trust.html
   sw: /sw/protocol/trust.html
 ---
 
