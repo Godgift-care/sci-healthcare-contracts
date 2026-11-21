@@ -1,11 +1,13 @@
 ---
 title: Kuendesha kliniki
 nav_order: 7
+language: sw
+translations:
+  en: /guides/clinics.html
+  fr: /fr/clinics.html
 ---
 
 # Kuendesha kliniki
-
-🇬🇧 [Soma mwongozo huu kwa Kiingereza](../guides/clinics.md) · 🇫🇷 [Lire ce guide en français](../fr/clinics.md)
 
 Wewe ni kliniki, duka la dawa au maabara inayotaka kulipwa kupitia itifaki hii.
 

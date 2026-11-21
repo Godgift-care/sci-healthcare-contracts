@@ -1,11 +1,12 @@
 ---
 title: Privacy
 nav_order: 5
+language: en
+translations:
+  sw: /sw/protocol/privacy.html
 ---
 
 # Privacy
-
-🇰🇪🇹🇿 [Soma ukurasa huu kwa Kiswahili](../sw/protocol/privacy.md)
 
 The single hardest rule in this project: **no protected health information reaches the ledger, ever.**
 

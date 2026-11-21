@@ -55,3 +55,12 @@
   });
 </script>
 {%- endif -%}
+{%- include language-switcher.html -%}
+<script>
+  document.addEventListener('DOMContentLoaded', function () {
+    var switcher = document.getElementById('language-switcher');
+    var wrap = document.querySelector('.main-content-wrap');
+    if (switcher && wrap) wrap.insertBefore(switcher, wrap.firstChild);
+  });
+</script>
+

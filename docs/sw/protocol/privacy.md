@@ -1,6 +1,9 @@
 ---
 title: Faragha
 nav_order: 5
+language: sw
+translations:
+  en: /protocol/privacy.html
 ---
 
 # Faragha

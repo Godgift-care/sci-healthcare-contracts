@@ -1,11 +1,13 @@
 ---
 title: Kulipia matibabu ya mtu
 nav_order: 6
+language: sw
+translations:
+  en: /guides/funders.html
+  fr: /fr/funders.html
 ---
 
 # Kulipia matibabu ya mtu
-
-🇬🇧 [Soma mwongozo huu kwa Kiingereza](../guides/funders.md) · 🇫🇷 [Lire ce guide en français](../fr/funders.md)
 
 Unalipia matibabu mahususi katika kliniki mahususi, kwa ajili yako mwenyewe au kwa ajili ya mtu mwingine.
 

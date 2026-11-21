@@ -1,11 +1,13 @@
 ---
 title: Running a clinic
 nav_order: 7
+language: en
+translations:
+  fr: /fr/clinics.html
+  sw: /sw/clinics.html
 ---
 
 # Running a clinic
-
-🇫🇷 [Lire ce guide en français](../fr/clinics.md) · 🇰🇪🇹🇿 [Soma mwongozo huu kwa Kiswahili](../sw/clinics.md)
 
 You are a clinic, pharmacy or lab that wants to be paid through the protocol.
 

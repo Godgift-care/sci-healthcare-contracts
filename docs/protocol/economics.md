@@ -1,11 +1,12 @@
 ---
 title: Economics
 nav_order: 3
+language: en
+translations:
+  sw: /sw/protocol/economics.html
 ---
 
 # Economics
-
-🇰🇪🇹🇿 [Soma ukurasa huu kwa Kiswahili](../sw/protocol/economics.md)
 
 ## The fee
 

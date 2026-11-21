@@ -1,6 +1,9 @@
 ---
 title: Mfumo wa uaminifu
 nav_order: 4
+language: sw
+translations:
+  en: /protocol/trust.html
 ---
 
 # Mfumo wa uaminifu
