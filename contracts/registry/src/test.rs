@@ -927,9 +927,9 @@ fn providers_in_tracks_active_status() {
         &ProviderCategory::Clinic,
     );
     f.client
-        .set_provider_status(&f.admin, &a, &ProviderStatus::Active, &0u32);
+        .set_provider_status(&f.admin, &a, &ProviderStatus::Active, &REASON_VERIFIED);
     f.client
-        .set_provider_status(&f.admin, &b, &ProviderStatus::Active, &0u32);
+        .set_provider_status(&f.admin, &b, &ProviderStatus::Active, &REASON_VERIFIED);
     // c stays Pending.
 
     let ng = f
@@ -940,8 +940,12 @@ fn providers_in_tracks_active_status() {
     assert_eq!(ng.get_unchecked(1).owner, b);
 
     // Suspending b removes it; only a remains.
-    f.client
-        .set_provider_status(&f.admin, &b, &ProviderStatus::Suspended, &0u32);
+    f.client.set_provider_status(
+        &f.admin,
+        &b,
+        &ProviderStatus::Suspended,
+        &REASON_SUSPENDED_WHILE_TESTING,
+    );
     let ng = f
         .client
         .providers_in(&String::from_str(&f.env, "NG"), &0u32, &10u32);
@@ -950,7 +954,7 @@ fn providers_in_tracks_active_status() {
 
     // Reactivating b re-adds it once.
     f.client
-        .set_provider_status(&f.admin, &b, &ProviderStatus::Active, &0u32);
+        .set_provider_status(&f.admin, &b, &ProviderStatus::Active, &REASON_VERIFIED);
     let ng = f
         .client
         .providers_in(&String::from_str(&f.env, "NG"), &0u32, &10u32);
@@ -982,8 +986,12 @@ fn providers_in_pages() {
             &String::from_str(&f.env, "NG"),
             &ProviderCategory::Clinic,
         );
-        f.client
-            .set_provider_status(&f.admin, &provider, &ProviderStatus::Active, &0u32);
+        f.client.set_provider_status(
+            &f.admin,
+            &provider,
+            &ProviderStatus::Active,
+            &REASON_VERIFIED,
+        );
         providers.push_back(provider);
     }
 
@@ -3175,4 +3183,239 @@ fn stored_type_fixtures_decode_against_current_code() {
             effective_at: 1_700_086_400,
         },
     );
+}
+
+// ----- reinstating a suspended provider (#302) -----
+//
+// `Suspended → Active` re-opens a clinic to funding, so it is the most
+// sensitive move in the state machine. Only the stored admin, signing, may
+// make it, and it must always say why. Every other caller is tried below,
+// and each failure is checked to leave the clinic suspended with its
+// suspension reason intact.
+//
+// What breaks if this is wrong: a clinic suspended for fraud reinstates
+// itself (or is reinstated by an attester or a stale admin key) and funders
+// start escrowing money for it again, or it is reinstated with no recorded
+// reason and nobody can tell from the history why it was trusted again.
+
+const REASON_FRAUD: u32 = 4;
+
+/// A registered, activated, then suspended (for fraud) provider.
+fn suspended_provider(f: &Fixture) -> Address {
+    let provider = register_active_provider(f);
+    f.client.set_provider_status(
+        &f.admin,
+        &provider,
+        &ProviderStatus::Suspended,
+        &REASON_FRAUD,
+    );
+    provider
+}
+
+/// `caller` tries to reinstate `provider` with a valid reason; the typed error.
+fn try_reinstate_as(f: &Fixture, caller: &Address, provider: &Address) -> RegistryError {
+    f.client
+        .try_set_provider_status(caller, provider, &ProviderStatus::Active, &REASON_VERIFIED)
+        .err()
+        .unwrap()
+        .unwrap()
+}
+
+fn assert_still_suspended(f: &Fixture, provider: &Address) {
+    let p = f.client.get_provider(provider);
+    assert_eq!(p.status, ProviderStatus::Suspended);
+    assert_eq!(
+        p.reason_code, REASON_FRAUD,
+        "the suspension reason must survive"
+    );
+    assert!(!f.client.is_active_provider(provider));
+    assert_eq!(f.client.provider_counts(), (0, 0, 1));
+}
+
+#[test]
+fn admin_can_reinstate_a_suspended_provider_with_a_reason() {
+    let f = setup();
+    let provider = suspended_provider(&f);
+
+    f.client.set_provider_status(
+        &f.admin,
+        &provider,
+        &ProviderStatus::Active,
+        &REASON_VERIFIED,
+    );
+
+    // Exactly the admin signed for it.
+    let auths = f.env.auths();
+    assert_eq!(auths.len(), 1);
+    assert_eq!(auths[0].0, f.admin);
+
+    let p = f.client.get_provider(&provider);
+    assert_eq!(p.status, ProviderStatus::Active);
+    assert_eq!(p.reason_code, REASON_VERIFIED);
+    assert!(f.client.is_active_provider(&provider));
+}
+
+#[test]
+fn provider_cannot_reinstate_itself() {
+    let f = setup();
+    let provider = suspended_provider(&f);
+    assert_eq!(
+        try_reinstate_as(&f, &provider, &provider),
+        RegistryError::NotAuthorized
+    );
+    assert_still_suspended(&f, &provider);
+}
+
+#[test]
+fn stranger_cannot_reinstate_a_provider() {
+    let f = setup();
+    let provider = suspended_provider(&f);
+    let stranger = Address::generate(&f.env);
+    assert_eq!(
+        try_reinstate_as(&f, &stranger, &provider),
+        RegistryError::NotAuthorized
+    );
+    assert_still_suspended(&f, &provider);
+}
+
+#[test]
+fn attester_cannot_reinstate_a_provider() {
+    let f = setup();
+    let provider = suspended_provider(&f);
+    let attester = Address::generate(&f.env);
+    f.client.add_attester(&f.admin, &attester);
+    assert_eq!(
+        try_reinstate_as(&f, &attester, &provider),
+        RegistryError::NotAuthorized
+    );
+    assert_still_suspended(&f, &provider);
+}
+
+#[test]
+fn another_active_provider_cannot_reinstate_a_provider() {
+    let f = setup();
+    let provider = suspended_provider(&f);
+    let other = Address::generate(&f.env);
+    activate(&f, &other);
+    assert_eq!(
+        try_reinstate_as(&f, &other, &provider),
+        RegistryError::NotAuthorized
+    );
+    let p = f.client.get_provider(&provider);
+    assert_eq!(p.status, ProviderStatus::Suspended);
+    assert_eq!(p.reason_code, REASON_FRAUD);
+}
+
+#[test]
+fn pending_admin_cannot_reinstate_before_accepting() {
+    let f = setup();
+    let provider = suspended_provider(&f);
+    let nominee = Address::generate(&f.env);
+    f.client.propose_admin(&f.admin, &nominee);
+    assert_eq!(
+        try_reinstate_as(&f, &nominee, &provider),
+        RegistryError::NotAuthorized
+    );
+    assert_still_suspended(&f, &provider);
+}
+
+#[test]
+fn previous_admin_cannot_reinstate_after_handover() {
+    let f = setup();
+    let provider = suspended_provider(&f);
+    let new_admin = Address::generate(&f.env);
+    f.client.propose_admin(&f.admin, &new_admin);
+    f.client.accept_admin(&new_admin);
+
+    assert_eq!(
+        try_reinstate_as(&f, &f.admin, &provider),
+        RegistryError::NotAuthorized
+    );
+    assert_still_suspended(&f, &provider);
+
+    // The new admin can.
+    f.client.set_provider_status(
+        &new_admin,
+        &provider,
+        &ProviderStatus::Active,
+        &REASON_VERIFIED,
+    );
+    assert!(f.client.is_active_provider(&provider));
+}
+
+#[test]
+fn admin_address_without_its_signature_cannot_reinstate() {
+    let f = setup();
+    let provider = suspended_provider(&f);
+
+    // The right address, but nobody signed: the host refuses.
+    f.env.mock_auths(&[]);
+    assert!(
+        f.client
+            .try_set_provider_status(
+                &f.admin,
+                &provider,
+                &ProviderStatus::Active,
+                &REASON_VERIFIED
+            )
+            .is_err(),
+        "an unsigned reinstatement must not go through"
+    );
+    f.env.mock_all_auths();
+    assert_still_suspended(&f, &provider);
+}
+
+#[test]
+fn reinstating_with_reason_zero_is_rejected() {
+    let f = setup();
+    let provider = suspended_provider(&f);
+    let err = f
+        .client
+        .try_set_provider_status(&f.admin, &provider, &ProviderStatus::Active, &0u32)
+        .err()
+        .unwrap()
+        .unwrap();
+    assert_eq!(err, RegistryError::MissingReasonCode);
+    assert_still_suspended(&f, &provider);
+}
+
+#[test]
+fn every_admin_status_change_requires_a_reason() {
+    // Not only reinstatement: each allowed transition refuses code 0, which
+    // is reserved for "no status change yet".
+    for (from, to) in [
+        (ProviderStatus::Pending, ProviderStatus::Active),
+        (ProviderStatus::Pending, ProviderStatus::Suspended),
+        (ProviderStatus::Active, ProviderStatus::Suspended),
+        (ProviderStatus::Suspended, ProviderStatus::Active),
+    ] {
+        let f = setup();
+        let provider = provider_in(&f, from);
+        let before = f.client.get_provider(&provider);
+        let err = f
+            .client
+            .try_set_provider_status(&f.admin, &provider, &to, &0u32)
+            .err()
+            .unwrap()
+            .unwrap();
+        assert_eq!(err, RegistryError::MissingReasonCode, "`{from:?} → {to:?}`");
+        assert_eq!(f.client.get_provider(&provider), before);
+    }
+}
+
+#[test]
+fn non_admin_with_reason_zero_gets_not_authorized() {
+    // Authorisation is checked first, so a stranger learns nothing about
+    // the reason-code rule or the provider.
+    let f = setup();
+    let provider = suspended_provider(&f);
+    let stranger = Address::generate(&f.env);
+    let err = f
+        .client
+        .try_set_provider_status(&stranger, &provider, &ProviderStatus::Active, &0u32)
+        .err()
+        .unwrap()
+        .unwrap();
+    assert_eq!(err, RegistryError::NotAuthorized);
+    assert_still_suspended(&f, &provider);
 }

@@ -70,6 +70,9 @@
                 },
                 {
                   "string": "NG"
+                },
+                {
+                  "u32": 0
                 }
               ]
             }
@@ -255,6 +258,9 @@
                 },
                 {
                   "string": "NG"
+                },
+                {
+                  "u32": 0
                 }
               ]
             }
@@ -1136,6 +1142,57 @@
               "key": {
                 "vec": [
                   {
+                    "symbol": "AttesterAt"
+                  },
+                  {
+                    "u32": 0
+                  }
+                ]
+              },
+              "durability": "persistent",
+              "val": {
+                "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAITA4"
+              }
+            }
+          },
+          "ext": "v0"
+        },
+        "live_until": 1555200
+      },
+      {
+        "entry": {
+          "last_modified_ledger_seq": 0,
+          "data": {
+            "contract_data": {
+              "ext": "v0",
+              "contract": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAARQG5",
+              "key": {
+                "vec": [
+                  {
+                    "symbol": "AttesterCount"
+                  }
+                ]
+              },
+              "durability": "persistent",
+              "val": {
+                "u32": 1
+              }
+            }
+          },
+          "ext": "v0"
+        },
+        "live_until": 1555200
+      },
+      {
+        "entry": {
+          "last_modified_ledger_seq": 0,
+          "data": {
+            "contract_data": {
+              "ext": "v0",
+              "contract": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAARQG5",
+              "key": {
+                "vec": [
+                  {
                     "symbol": "CountryAt"
                   },
                   {
@@ -1235,6 +1292,14 @@
                 "map": [
                   {
                     "key": {
+                      "symbol": "category"
+                    },
+                    "val": {
+                      "u32": 0
+                    }
+                  },
+                  {
+                    "key": {
                       "symbol": "country"
                     },
                     "val": {
@@ -1280,6 +1345,12 @@
                     "val": {
                       "u32": 1
                     }
+                  },
+                  {
+                    "key": {
+                      "symbol": "verification_evidence"
+                    },
+                    "val": "void"
                   }
                 ]
               }
@@ -1309,6 +1380,14 @@
               "durability": "persistent",
               "val": {
                 "map": [
+                  {
+                    "key": {
+                      "symbol": "category"
+                    },
+                    "val": {
+                      "u32": 0
+                    }
+                  },
                   {
                     "key": {
                       "symbol": "country"
@@ -1356,6 +1435,12 @@
                     "val": {
                       "u32": 1
                     }
+                  },
+                  {
+                    "key": {
+                      "symbol": "verification_evidence"
+                    },
+                    "val": "void"
                   }
                 ]
               }
@@ -1616,6 +1701,60 @@
           "ext": "v0"
         },
         "live_until": 1555201
+      },
+      {
+        "entry": {
+          "last_modified_ledger_seq": 0,
+          "data": {
+            "contract_data": {
+              "ext": "v0",
+              "contract": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAARQG5",
+              "key": {
+                "vec": [
+                  {
+                    "symbol": "StatusCount"
+                  },
+                  {
+                    "u32": 0
+                  }
+                ]
+              },
+              "durability": "persistent",
+              "val": {
+                "u32": 0
+              }
+            }
+          },
+          "ext": "v0"
+        },
+        "live_until": 1555200
+      },
+      {
+        "entry": {
+          "last_modified_ledger_seq": 0,
+          "data": {
+            "contract_data": {
+              "ext": "v0",
+              "contract": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAARQG5",
+              "key": {
+                "vec": [
+                  {
+                    "symbol": "StatusCount"
+                  },
+                  {
+                    "u32": 1
+                  }
+                ]
+              },
+              "durability": "persistent",
+              "val": {
+                "u32": 2
+              }
+            }
+          },
+          "ext": "v0"
+        },
+        "live_until": 1555200
       },
       {
         "entry": {

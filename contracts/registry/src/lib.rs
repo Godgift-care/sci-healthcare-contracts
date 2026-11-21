@@ -172,7 +172,12 @@ impl Registry {
     /// `reason_code` is the documented reason for the change (see
     /// `docs/protocol/trust.md`); it is stored on the provider and emitted
     /// with the status, so a suspended clinic knows why and a funder can
-    /// tell a fraud suspension from a paperwork one.
+    /// tell a fraud suspension from a paperwork one. Code `0` is reserved for
+    /// "no status change yet" (written by registration) and is refused with
+    /// `MissingReasonCode`, so every change — reinstating a suspended clinic
+    /// included — records a real reason. Only the stored admin, signing, can
+    /// call this; the check runs before anything else is read.
+    ///
     /// When a provider becomes `Active`, they are added to the per-country
     /// index so `providers_in` can find them. When they become non-`Active`
     /// (e.g. `Suspended`), they are removed from the index using swap-and-pop
@@ -185,6 +190,9 @@ impl Registry {
         reason_code: u32,
     ) -> Result<(), RegistryError> {
         Self::require_admin(&env, &admin)?;
+        if reason_code == 0 {
+            return Err(RegistryError::MissingReasonCode);
+        }
 
         let mut provider = read_provider(&env, &provider_addr)?;
         if !ProviderStatus::is_transition_allowed(provider.status, status) {

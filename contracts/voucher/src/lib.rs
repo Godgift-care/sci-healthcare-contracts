@@ -1034,9 +1034,8 @@ impl VoucherEscrow {
 
         // Escrow first, record second: if the transfer fails the whole
         // invocation reverts and no voucher is written.
-        let escrow = env.current_contract_address();
         let token_client = token::Client::new(env, &config.token);
-        token_client.transfer(&funder, &escrow, &amount);
+        Self::receive(env, &token_client, &funder, amount)?;
         increase_open_escrow(env, amount)?;
 
         write_exposure(
@@ -1215,17 +1214,59 @@ impl VoucherEscrow {
         Ok(())
     }
 
+    /// Pulls `amount` from `from` into escrow and checks the escrow balance
+    /// rose by exactly `amount`.
+    ///
+    /// Every voucher's escrow is one shared token balance, and `open_escrow`
+    /// counts what was requested. A token that skims a transfer fee or runs
+    /// a hook that redirects part of it would otherwise leave the voucher
+    /// recording more than the contract holds, and the shortfall would land
+    /// silently on whichever voucher pays out last. Measuring the balance
+    /// makes such a token fail closed with `TokenAmountMismatch` instead.
+    fn receive(
+        env: &Env,
+        token_client: &token::Client,
+        from: &Address,
+        amount: i128,
+    ) -> Result<(), VoucherError> {
+        let escrow = env.current_contract_address();
+        let before = token_client.balance(&escrow);
+        token_client.transfer(from, &escrow, &amount);
+        let after = token_client.balance(&escrow);
+        Self::require_moved(before, after, amount)
+    }
+
     /// Moves `amount` out of escrow, turning a refused transfer — a frozen
     /// (deauthorized) escrow or recipient — into `TokenTransferFailed`.
+    ///
+    /// It then checks the escrow fell by exactly `amount` (a token that
+    /// debits more would eat into other vouchers' escrow) and the recipient
+    /// rose by exactly `amount` (a token that delivers less would short the
+    /// clinic, attester or funder). Either mismatch is `TokenAmountMismatch`.
     fn send(
         env: &Env,
         token_client: &token::Client,
         to: &Address,
         amount: i128,
     ) -> Result<(), VoucherError> {
-        match token_client.try_transfer(&env.current_contract_address(), to, &amount) {
-            Ok(Ok(())) => Ok(()),
-            _ => Err(VoucherError::TokenTransferFailed),
+        let escrow = env.current_contract_address();
+        let escrow_before = token_client.balance(&escrow);
+        let to_before = token_client.balance(to);
+        match token_client.try_transfer(&escrow, to, &amount) {
+            Ok(Ok(())) => {}
+            _ => return Err(VoucherError::TokenTransferFailed),
+        }
+        let escrow_after = token_client.balance(&escrow);
+        let to_after = token_client.balance(to);
+        Self::require_moved(escrow_after, escrow_before, amount)?;
+        Self::require_moved(to_before, to_after, amount)
+    }
+
+    /// `TokenAmountMismatch` unless `after - before == amount`.
+    fn require_moved(before: i128, after: i128, amount: i128) -> Result<(), VoucherError> {
+        match after.checked_sub(before) {
+            Some(moved) if moved == amount => Ok(()),
+            _ => Err(VoucherError::TokenAmountMismatch),
         }
     }
 

@@ -56,7 +56,7 @@ Every status change in the registry records **why**, as a `reason_code` stored o
 
 | Code | Meaning |
 | --- | --- |
-| 0 | No status change yet (set at registration) |
+| 0 | No status change yet (set at registration; `set_provider_status` refuses it with `MissingReasonCode`) |
 | 1 | Verified |
 | 2 | Documents expired |
 | 3 | Complaint under review |
@@ -67,13 +67,16 @@ Codes are **added, never renumbered or reused**. A retired code keeps its meanin
 
 The other thing the registry records about status is what it refuses: `set_provider_status` only accepts `Pending → Active`, `Pending → Suspended`, `Active → Suspended` and `Suspended → Active` (see the [status lifecycle](../developers/contracts.md#status-lifecycle)), so the event history contains no no-op changes and no backwards moves nobody can explain. A clinic that closes retires itself; nothing — not even the admin — can bring a retired clinic back, so no reason code is ever an exit from `Retired`.
 
+Reinstating a suspended clinic (`Suspended → Active`) re-opens it to funding, so it is held to the same rule as every other change: only the stored admin, with its own signature, and always with a non-zero reason code. The clinic cannot reinstate itself, and neither can an attester, another clinic, an admin nominee who has not accepted, or an admin who has handed over. Each of those has a test.
+
 ### The settlement token's issuer
 
 USDC is a regulated stablecoin, and its issuer can **claw back** funds from any balance and **freeze** (deauthorize) one. Escrowed vouchers sit in the voucher contract's own token balance, so the issuer can reach them; nothing in the contract can prevent that. What the contract does is behave predictably when it happens:
 
 - **Clawback.** Before paying anything out, `settle`, `refund`, `resolve_dispute`, `resolve_split` and `reduce_amount` check that the contract still holds the voucher's amount. If it does not, they fail with `EscrowShortfall` (#23) instead of a panic inside the token. Escrow is one balance shared by every open voucher, so a clawback is borne by whichever vouchers draw on it last: earlier ones settle or refund in full, and the rest fail with `EscrowShortfall` until the balance is restored.
 - **Freeze.** If the issuer has frozen the contract, the clinic or the funder, the token refuses the transfer and the call fails with `TokenTransferFailed` (#24).
-- **Nothing is half-paid.** Either error reverts the whole call: the voucher keeps its status, no receipt is minted and no fee is taken. A voucher held up by a freeze settles or refunds normally once the freeze is lifted.
+- **Fee-charging or hook tokens.** The contract assumes the settlement token moves exactly the amount requested, which USDC's Stellar asset contract does. A token that skims a transfer fee, debits the sender extra or runs a hook that changes balances would break the escrow invariant without anyone noticing. So the contract measures balances around every transfer. Funding checks that the escrow rose by exactly the voucher amount. Every payout checks that the escrow fell by exactly the amount sent and the recipient rose by exactly that amount. Any difference fails with `TokenAmountMismatch` (#34). The `nonstandard_token` tests in `contracts/voucher/src/test/nonstandard_token.rs` run the lifecycle against a mock token in each of these modes.
+- **Nothing is half-paid.** Any of these errors reverts the whole call: the voucher keeps its status, no receipt is minted and no fee is taken. A voucher held up by a freeze settles or refunds normally once the freeze is lifted.
 
 These are covered by the `clawback_*`, `partial_clawback_*` and `frozen_*` tests in `contracts/voucher/src/test.rs`, which run against a Stellar asset contract with clawback and revocation enabled.
 

@@ -480,7 +480,8 @@ What to show users:
 
 For a refund, `refundable_at(voucher_id)` returns the ledger time at which
 `refund` will succeed. `refund` and `settle` are permissionless, so either party
-can submit them when eligible.
+can submit them when eligible, and so can a keeper bot. See
+[Running a settlement keeper](keepers.md).
 
 ## 5. Read receipts and care history
 

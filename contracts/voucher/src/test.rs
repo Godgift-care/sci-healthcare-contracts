@@ -4218,6 +4218,7 @@ fn updated_ledger_is_stamped_by_every_transition() {
         &new_provider,
         &String::from_str(&f.env, "Second Clinic"),
         &String::from_str(&f.env, "NG"),
+        &ProviderCategory::Clinic,
     );
     f.registry.set_provider_status(
         &f.admin,
@@ -4948,3 +4949,5 @@ fn reducing_a_voucher_lowers_the_clinics_exposure() {
 }
 #[cfg(test)]
 mod costs;
+#[cfg(test)]
+mod nonstandard_token;

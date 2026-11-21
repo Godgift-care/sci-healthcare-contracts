@@ -173,6 +173,10 @@ pub enum RegistryError {
     /// needs the explicit `confirm_large_change` flag. Large jumps are almost
     /// always a typo, and a typo here overcharges every funder that day.
     LargePriceJumpNeedsConfirmation = 15,
+    /// `set_provider_status` was called with `reason_code` 0. Code 0 means
+    /// "no status change yet" and is only ever written by registration, so a
+    /// real change — above all reinstating a suspended clinic — must say why.
+    MissingReasonCode = 16,
 }
 
 /// Maps the shared helpers' failures onto this contract's error numbers, so

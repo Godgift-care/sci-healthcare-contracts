@@ -263,7 +263,7 @@ npm run lifecycle -- settle <voucher-id>         # finish a voucher later, if th
 
 ### Run the settlement keeper
 
-[`examples/keeper.ts`](examples/keeper.ts) asks the backend API which vouchers are due, reads each one from the chain, simulates `settle` or `refund`, and only then submits it. `settle` and `refund` are permissionless, so the keeper does not need a USDC trustline; its account only pays the XLM transaction fee. A failed simulation, a status change or an open dispute window means the voucher is skipped, never sent.
+[`examples/keeper.ts`](examples/keeper.ts) asks the backend API which vouchers are due, reads each one from the chain, simulates `settle` or `refund`, and only then submits it. `settle` and `refund` are permissionless, so the keeper does not need a USDC trustline. Its account pays only in XLM: the transaction fee, plus the rent for the care receipt that each `settle` mints. A failed simulation, a status change or an open dispute window means the voucher is skipped, never sent. [Running a settlement keeper](docs/developers/keepers.md) lists every permissionless call and why it is safe, how to find due vouchers, what a keeper costs, and a minimal loop.
 
 ```bash
 cd examples && npm install

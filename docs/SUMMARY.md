@@ -36,6 +36,7 @@
 * [Contract reference](developers/contracts.md)
 * [Reading contract events](developers/events.md)
 * [Integrating from another app](developers/integration.md)
+* [Running a settlement keeper](developers/keepers.md)
 * [Trying it by hand in Stellar Lab](developers/stellar-lab.md)
 * [Using a multisig admin](developers/multisig-admin.md)
 * [Mainnet launch checklist](developers/mainnet-checklist.md)

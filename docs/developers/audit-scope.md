@@ -36,6 +36,7 @@ These are design decisions documented so they are not mistaken for bugs. See [th
 
 4. **The settlement token issuer can claw back or freeze**. USDC is a regulated stablecoin; its issuer can reach the voucher contract's escrow balance. The contract behaves predictably when this happens: `EscrowShortfall` (#23) and `TokenTransferFailed` (#24) revert the whole call so nothing is half-paid.
    - *Tests*: `clawback_*`, `partial_clawback_*`, `frozen_*` in `contracts/voucher/src/test.rs`.
+   - The token is assumed to move exactly the requested amount. A token with transfer fees or hooks is refused at the first transfer with `TokenAmountMismatch` (#34). *Tests*: `contracts/voucher/src/test/nonstandard_token.rs`.
 
 5. **Registry verification is off-chain**. The registry only records the outcome of a human check (licence, site visit). If a clinic is verified that should not have been, funders can send money to it.
 

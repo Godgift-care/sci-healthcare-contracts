@@ -31,6 +31,10 @@ fn setup() -> Fixture {
 }
 
 fn setup_with_caps(daily_cap: i128, lifetime_cap: i128) -> Fixture {
+    setup_full(COOLDOWN, daily_cap, lifetime_cap)
+}
+
+fn setup_full(cooldown: u64, daily_cap: i128, lifetime_cap: i128) -> Fixture {
     let env = Env::default();
     env.mock_all_auths();
     env.ledger().with_mut(|li| li.timestamp = START_TIME);
@@ -46,7 +50,7 @@ fn setup_with_caps(daily_cap: i128, lifetime_cap: i128) -> Fixture {
         &admin,
         &token_addr,
         &DRIP,
-        &COOLDOWN,
+        &cooldown,
         &daily_cap,
         &lifetime_cap,
     );
@@ -1040,4 +1044,301 @@ fn stored_type_fixtures_decode_against_current_code() {
             paused: false,
         },
     );
+}
+
+// ----- many addresses, day boundaries and cap orderings (#299) -----
+//
+// The daily cap is shared by every address, so the interesting cases are
+// several addresses hitting it together, around midnight UTC, while some of
+// them also run into their lifetime cap. Each test below drives ten
+// addresses through a schedule and compares every drip with a small
+// reference model of the rules (cooldown, then lifetime cap, then the shared
+// daily cap), asserting after every call that nothing minted more than the
+// caps allow.
+//
+// What breaks if this is wrong: the faucet mints more test USDC in a day
+// than its cap — or one address more than its lifetime allowance — when
+// many addresses drip in an unlucky order, which is exactly what a script
+// draining the faucet would do.
+
+const ADDRESSES: usize = 10;
+const SECONDS_PER_DAY: u64 = 24 * 60 * 60;
+/// Spacing of the repeated rounds of attempts in the longer schedules.
+const ROUND: u64 = 4 * 60 * 60;
+const ROUNDS_PER_DAY: u64 = SECONDS_PER_DAY / ROUND;
+/// The first midnight UTC after `START_TIME`.
+const MIDNIGHT: u64 = (START_TIME / SECONDS_PER_DAY + 1) * SECONDS_PER_DAY;
+
+fn addresses(env: &Env) -> std::vec::Vec<Address> {
+    (0..ADDRESSES).map(|_| Address::generate(env)).collect()
+}
+
+/// The faucet's rules, written out independently of the contract.
+struct Model {
+    cooldown: u64,
+    daily_cap: i128,
+    lifetime_cap: i128,
+    last: std::vec::Vec<Option<u64>>,
+    lifetime: std::vec::Vec<i128>,
+    /// Minted per UTC day, keyed by day number.
+    per_day: std::collections::BTreeMap<u64, i128>,
+}
+
+impl Model {
+    fn new(cooldown: u64, daily_cap: i128, lifetime_cap: i128) -> Self {
+        Model {
+            cooldown,
+            daily_cap,
+            lifetime_cap,
+            last: std::vec![None; ADDRESSES],
+            lifetime: std::vec![0; ADDRESSES],
+            per_day: std::collections::BTreeMap::new(),
+        }
+    }
+
+    fn drip(&mut self, who: usize, now: u64) -> Result<i128, FaucetError> {
+        if let Some(t) = self.last[who] {
+            if now < t + self.cooldown {
+                return Err(FaucetError::CoolingDown);
+            }
+        }
+        if self.lifetime_cap > 0 && self.lifetime[who] + DRIP > self.lifetime_cap {
+            return Err(FaucetError::LifetimeCapReached);
+        }
+        let day = now / SECONDS_PER_DAY;
+        let today = self.per_day.get(&day).copied().unwrap_or(0);
+        if today + DRIP > self.daily_cap {
+            return Err(FaucetError::DailyCapReached);
+        }
+        self.last[who] = Some(now);
+        self.lifetime[who] += DRIP;
+        self.per_day.insert(day, today + DRIP);
+        Ok(DRIP)
+    }
+
+    fn total(&self) -> i128 {
+        self.lifetime.iter().sum()
+    }
+}
+
+/// One step of a schedule: move the clock forward, then `who` drips.
+type Step = (u64, usize);
+
+/// Runs `steps` against both the contract and the model, checking every
+/// outcome matches and the caps hold after every call. Returns the model.
+fn run_schedule(f: &Fixture, model: &mut Model, users: &[Address], steps: &[Step]) {
+    for (i, &(wait, who)) in steps.iter().enumerate() {
+        advance(&f.env, wait);
+        let now = f.env.ledger().timestamp();
+        let expected = model.drip(who, now);
+        let got = match f.faucet.try_drip(&users[who]) {
+            Ok(Ok(amount)) => Ok(amount),
+            Err(Ok(e)) => Err(e),
+            other => panic!("step {i}: unexpected result {other:?}"),
+        };
+        assert_eq!(got, expected, "step {i}: address {who} at t={now}");
+
+        // Invariants, after every single call: the real balances match the
+        // model, no address is over its lifetime cap and no day is over the
+        // shared cap.
+        let mut minted = 0;
+        for (idx, u) in users.iter().enumerate() {
+            let bal = f.token.balance(u);
+            assert_eq!(bal, model.lifetime[idx], "step {i}: balance of {idx}");
+            if model.lifetime_cap > 0 {
+                assert!(
+                    bal <= model.lifetime_cap,
+                    "step {i}: {idx} over lifetime cap"
+                );
+            }
+            minted += bal;
+        }
+        assert_eq!(minted, model.total(), "step {i}: minted total drifted");
+        for (day, amount) in &model.per_day {
+            assert!(
+                *amount <= model.daily_cap,
+                "step {i}: day {day} minted {amount} over the cap"
+            );
+        }
+    }
+}
+
+/// The orderings exercised: forward, reverse, evens then odds, and a few
+/// deterministic shuffles.
+fn orderings() -> std::vec::Vec<std::vec::Vec<usize>> {
+    let mut out = std::vec![
+        (0..ADDRESSES).collect::<std::vec::Vec<_>>(),
+        (0..ADDRESSES).rev().collect(),
+        (0..ADDRESSES)
+            .step_by(2)
+            .chain((1..ADDRESSES).step_by(2))
+            .collect(),
+    ];
+    for seed in [7u64, 42, 1_234_567] {
+        // Fisher–Yates with a small LCG: reproducible, no extra crates.
+        let mut order: std::vec::Vec<usize> = (0..ADDRESSES).collect();
+        let mut x = seed;
+        for i in (1..ADDRESSES).rev() {
+            x = x.wrapping_mul(6_364_136_223_846_793_005).wrapping_add(1);
+            let j = (x >> 33) as usize % (i + 1);
+            order.swap(i, j);
+        }
+        out.push(order);
+    }
+    out
+}
+
+#[test]
+fn ten_addresses_exhaust_the_shared_daily_cap() {
+    let daily_cap = 4 * DRIP;
+    for order in orderings() {
+        let f = setup_full(COOLDOWN, daily_cap, 0);
+        let users = addresses(&f.env);
+        let mut model = Model::new(COOLDOWN, daily_cap, 0);
+
+        let steps: std::vec::Vec<Step> = order.iter().map(|&who| (0, who)).collect();
+        run_schedule(&f, &mut model, &users, &steps);
+
+        // Exactly four drips went through, whoever came first.
+        let minted: i128 = users.iter().map(|u| f.token.balance(u)).sum();
+        assert_eq!(minted, daily_cap, "order {order:?}");
+        for (pos, &who) in order.iter().enumerate() {
+            let expected = if pos < 4 { DRIP } else { 0 };
+            assert_eq!(f.token.balance(&users[who]), expected, "order {order:?}");
+        }
+
+        // A drip refused by the daily cap does not start a cooldown.
+        for &who in &order[4..] {
+            assert_eq!(f.faucet.next_drip_at(&users[who]), 0);
+        }
+    }
+}
+
+#[test]
+fn daily_cap_resets_at_midnight_not_after_a_day() {
+    // Start one minute before midnight UTC. The cap is used up, then resets
+    // a minute later at the day boundary — not 24 hours after the first
+    // drip — while the 24-hour cooldown still holds the earlier drippers.
+    let daily_cap = 4 * DRIP;
+    for order in orderings() {
+        let f = setup_full(COOLDOWN, daily_cap, 0);
+        f.env.ledger().with_mut(|li| li.timestamp = MIDNIGHT - 60);
+        let users = addresses(&f.env);
+        let mut model = Model::new(COOLDOWN, daily_cap, 0);
+
+        // Everyone tries before midnight: four succeed.
+        let mut steps: std::vec::Vec<Step> = order.iter().map(|&who| (0, who)).collect();
+        // Midnight passes; everyone tries again in the same order. The four
+        // earlier drippers are cooling down; the next four succeed.
+        steps.push((60, order[0]));
+        steps.extend(order[1..].iter().map(|&who| (0, who)));
+        run_schedule(&f, &mut model, &users, &steps);
+
+        let day_before = (MIDNIGHT - 60) / SECONDS_PER_DAY;
+        assert_eq!(model.per_day[&day_before], daily_cap);
+        assert_eq!(model.per_day[&(day_before + 1)], daily_cap);
+        let minted: i128 = users.iter().map(|u| f.token.balance(u)).sum();
+        assert_eq!(minted, 2 * daily_cap, "order {order:?}");
+        // Two addresses never got a drip: the cap, not the cooldown, stopped them.
+        for &who in &order[8..] {
+            assert_eq!(f.token.balance(&users[who]), 0);
+        }
+    }
+}
+
+#[test]
+fn frequent_attempts_across_three_days_never_exceed_the_daily_cap() {
+    // A short cooldown makes the daily cap the only brake: ten addresses try
+    // every four hours for three days, starting mid-afternoon so two
+    // midnights fall inside the run.
+    let cooldown = ROUND;
+    let daily_cap = 7 * DRIP;
+    for order in orderings() {
+        let f = setup_full(cooldown, daily_cap, 0);
+        f.env
+            .ledger()
+            .with_mut(|li| li.timestamp = MIDNIGHT - 9 * 60 * 60);
+        let users = addresses(&f.env);
+        let mut model = Model::new(cooldown, daily_cap, 0);
+
+        let mut steps = std::vec::Vec::new();
+        for round in 0..(3 * ROUNDS_PER_DAY) {
+            for (pos, &who) in order.iter().enumerate() {
+                let wait = if pos == 0 && round > 0 { ROUND - 9 } else { 1 };
+                steps.push((wait, who));
+            }
+        }
+        run_schedule(&f, &mut model, &users, &steps);
+
+        // Every full day minted exactly the cap; the partial ones no more.
+        let days: std::vec::Vec<_> = model.per_day.iter().collect();
+        assert!(days.len() >= 3, "the run must cross midnight twice");
+        for (_, minted) in &days[1..days.len() - 1] {
+            assert_eq!(**minted, daily_cap, "order {order:?}");
+        }
+    }
+}
+
+#[test]
+fn lifetime_caps_hit_in_different_orders_never_overmint() {
+    // Each address may receive two drips ever; the faucet may mint five a
+    // day. Over five days of attempts every four hours in each ordering, the
+    // daily cap runs out first, then lifetime caps take over, and the total
+    // ends at exactly ten addresses × two drips.
+    let cooldown = ROUND;
+    let daily_cap = 5 * DRIP;
+    let lifetime_cap = 2 * DRIP;
+    for order in orderings() {
+        let f = setup_full(cooldown, daily_cap, lifetime_cap);
+        let users = addresses(&f.env);
+        let mut model = Model::new(cooldown, daily_cap, lifetime_cap);
+
+        let mut steps = std::vec::Vec::new();
+        for round in 0..(5 * ROUNDS_PER_DAY as usize) {
+            // Rotate the order each round so a different address leads.
+            for k in 0..ADDRESSES {
+                let who = order[(k + round) % ADDRESSES];
+                let wait = if k == 0 && round > 0 { ROUND - 9 } else { 1 };
+                steps.push((wait, who));
+            }
+        }
+        run_schedule(&f, &mut model, &users, &steps);
+
+        let minted: i128 = users.iter().map(|u| f.token.balance(u)).sum();
+        assert_eq!(minted, ADDRESSES as i128 * lifetime_cap, "order {order:?}");
+        for u in &users {
+            assert_eq!(f.token.balance(u), lifetime_cap);
+            let err = f.faucet.try_drip(u).err().unwrap().unwrap();
+            assert!(
+                err == FaucetError::LifetimeCapReached || err == FaucetError::CoolingDown,
+                "an exhausted address must stay refused"
+            );
+        }
+    }
+}
+
+#[test]
+fn lifetime_cap_refusals_do_not_use_up_the_daily_cap() {
+    // Five addresses reach their lifetime cap on day one. On day two they
+    // keep trying first, and are refused; those refusals must not eat into
+    // the shared daily cap, so the other five still get their drips.
+    let cooldown = ROUND;
+    let daily_cap = 5 * DRIP;
+    let lifetime_cap = DRIP;
+    let f = setup_full(cooldown, daily_cap, lifetime_cap);
+    let users = addresses(&f.env);
+    let mut model = Model::new(cooldown, daily_cap, lifetime_cap);
+
+    let mut steps: std::vec::Vec<Step> = (0..5).map(|who| (0, who)).collect();
+    steps.push((SECONDS_PER_DAY, 0));
+    for _ in 0..3 {
+        steps.extend((1..5).map(|who| (1, who)));
+        steps.push((1, 0));
+    }
+    steps.extend((5..ADDRESSES).map(|who| (1, who)));
+    run_schedule(&f, &mut model, &users, &steps);
+
+    for u in &users {
+        assert_eq!(f.token.balance(u), DRIP);
+    }
 }

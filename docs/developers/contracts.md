@@ -96,7 +96,7 @@ pub struct ServiceItem {
 | `initialize` | `admin: Address` | `()` | once | `AlreadyInitialized` |
 | `register_provider` | `owner, name, country, category: ProviderCategory` | `()` | `owner` | `EmptyName`, `InvalidCountry`, `ProviderExists` |
 | `update_provider_category` | `provider_addr, category: ProviderCategory` | `()` | `provider_addr` | `ProviderNotFound` |
-| `set_provider_status` | `admin, provider_addr, status, reason_code: u32` | `()` | `admin` | `NotAuthorized`, `ProviderNotFound`, `InvalidTransition` |
+| `set_provider_status` | `admin, provider_addr, status, reason_code: u32` | `()` | `admin` | `NotAuthorized`, `MissingReasonCode`, `ProviderNotFound`, `InvalidTransition` |
 | `set_verification_evidence` | `admin, provider_addr, evidence_hash: BytesN<32>` | `()` | `admin` | `NotAuthorized`, `ProviderNotFound` |
 | `retire` | `owner, reason_code: u32` | `()` | `owner` | `ProviderNotFound`, `InvalidTransition` |
 | `upsert_service` | `provider_addr, code, label, price` | `()` | `provider_addr` | `InvalidPrice`, `EmptyName`, `ProviderNotActive`, `PriceIncreaseNeedsNotice` |
@@ -152,7 +152,9 @@ A provider's status only moves where the move carries information. `set_provider
 | `Suspended` | ✗ | ✓ | ✗ | ✗ |
 | `Retired` | ✗ | ✗ | ✗ | ✗ |
 
-Every change carries a `reason_code: u32` — stored on the provider as its last reason, and published in `provider_status_changed` — so a suspended clinic knows why it was suspended and funders can tell a fraud suspension from paperwork. The codes are documented in [the trust model](../protocol/trust.md#reason-codes) and are added, never renumbered; registration records `0` before any change has happened.
+Every change carries a `reason_code: u32` — stored on the provider as its last reason, and published in `provider_status_changed` — so a suspended clinic knows why it was suspended and funders can tell a fraud suspension from paperwork. The codes are documented in [the trust model](../protocol/trust.md#reason-codes) and are added, never renumbered; registration records `0` before any change has happened. Because `0` means "no change yet", `set_provider_status` refuses it with `MissingReasonCode` (#16): every change an admin makes has to say why.
+
+**Reinstatement** (`Suspended → Active`) re-opens a clinic to funding, so it gets no special path: like every other change it needs the stored admin's own signature and a non-zero reason code. The clinic itself, an attester, another clinic, a nominated admin who has not yet called `accept_admin`, and a previous admin after a handover are all refused with `NotAuthorized`. Authorisation is checked before the reason code, so a caller who is not the admin learns nothing about the provider. Each of these callers has its own test in `contracts/registry/src/test.rs` (`provider_cannot_reinstate_itself`, `attester_cannot_reinstate_a_provider`, `pending_admin_cannot_reinstate_before_accepting`, `previous_admin_cannot_reinstate_after_handover`, `reinstating_with_reason_zero_is_rejected` and the rest of the `#302` block). There is no separate verifier role yet. If one is added, it should be added to this rule and to those tests.
 
 **Retirement** is the one status the admin cannot assign. A clinic that closes calls `retire(owner, reason_code)` — its own signature only — which sets the terminal `Retired` status. A retired clinic is not an active provider, so `voucher` refuses to fund it any new vouchers; vouchers already funded against it refund as they always could (immediately, before expiry), and a voucher claimed while the clinic was active still attests and settles as care delivered. Nothing can move a retired clinic back — not the admin, not the owner — so the way back is to register again; retiring an already-retired clinic is refused with `InvalidTransition`.
 
@@ -215,6 +217,7 @@ A signer is not the same as a role: `admin` must be the stored admin **and** sig
 | 13 | `PriceIncreaseNeedsNotice` |
 | 14 | `InvalidTransition` |
 | 15 | `LargePriceJumpNeedsConfirmation` |
+| 16 | `MissingReasonCode` |
 
 ### Events
 
@@ -338,7 +341,7 @@ pub struct Exposure {            // a clinic's open vouchers
 
 `fee_bps` is capped at 1000 (10%) at initialisation. `attester_share_bps` is the part of the voucher amount paid to the attester who confirmed delivery, and must be **no greater than `fee_bps`** (`InvalidAttesterShare`, #21). It is carved out of the fee, so the clinic's net is unchanged and the payouts sum exactly to the voucher amount. Zero keeps the pre-attester-share behaviour: the fee account receives the whole fee.
 
-`settle` and `refund` take no authorisation deliberately: a clinic that has delivered attested care must never depend on the funder or an operator to be paid.
+`settle` and `refund` take no authorisation deliberately: a clinic that has delivered attested care must never depend on the funder or an operator to be paid. [Running a settlement keeper](keepers.md) explains how to call them for everyone.
 
 ### Authorisation matrix
 
@@ -391,7 +394,7 @@ rejects the voucher's own provider even if it holds that role.
 
 ### What each function checks
 
-**`create_voucher`** — amount > 0; expiry in the future; provider is `Active`; the service exists and is active; amount ≥ listed price; the service is not paused (`ServiceUnavailable`); the clinic is below the capacity it declared in the registry (`ProviderAtCapacity`); the clinic's escrow plus this amount stays within the per-clinic cap (`EscrowCapReached`); an amount above `get_presence_threshold()` carries a `presence_commitment` (`PresenceCommitmentRequired`). Transfers the token *before* writing the voucher, so a failed transfer reverts everything.
+**`create_voucher`** — amount > 0; expiry in the future; provider is `Active`; the service exists and is active; amount ≥ listed price; the service is not paused (`ServiceUnavailable`); the clinic is below the capacity it declared in the registry (`ProviderAtCapacity`); the clinic's escrow plus this amount stays within the per-clinic cap (`EscrowCapReached`); an amount above `get_presence_threshold()` carries a `presence_commitment` (`PresenceCommitmentRequired`). Transfers the token *before* writing the voucher, so a failed transfer reverts everything. The contract measures its own token balance before and after the transfer and fails with `TokenAmountMismatch` unless it rose by exactly `amount`, so a token that charges transfer fees can never fund a voucher with less than its recorded amount.
 
 **`set_max_escrow_per_provider`** — caller is admin; `max` ≥ 0 (`InvalidEscrowCap`). `0`, the default, is unlimited. The cap limits what one clinic can hold in escrow across all its open vouchers, so a verified clinic that turns out to be fraudulent is exposed to at most this much. `get_exposure(provider)` returns the clinic's open voucher count and escrowed value; both fall when a voucher settles or refunds, including through `resolve_dispute` and `resolve_split`, and the value falls by the refunded difference when `reduce_amount` lowers a voucher. Lowering the cap only affects new vouchers.
 
@@ -423,7 +426,7 @@ rejects the voucher's own provider even if it holds that role.
 
 **`settle`** — status is `Attested`; now ≥ `dispute_deadline`; the contract still holds the voucher's amount (`EscrowShortfall` if the token issuer clawed escrow back); the token accepts the transfers (`TokenTransferFailed` if the issuer froze the escrow, the clinic or the attester). Pays the clinic `amount - fee`, the attester its share (`amount * attester_share_bps / 10_000`), and the fee account the remaining fee, then mints a receipt. The three payouts sum to `amount` exactly. If no attester is recorded — a dispute resolved for the provider without an attestation — the fee account receives the whole fee.
 
-**`refund`** — status is `Funded` and either now ≥ `expires_at` or the provider is no longer active in the registry (so a suspended clinic's voucher is refundable immediately, before expiry), or status is `Claimed` and now ≥ `expires_at + CLAIM_GRACE_SECS` (7 days). Suspension does not shorten the claim grace: care may already have been given. Returns the full amount, no fee. `refundable_at` returns the exact time, which is the current ledger time when a funded voucher's provider is inactive. It has the same `EscrowShortfall` and `TokenTransferFailed` checks as `settle`, and so do `resolve_dispute`, `resolve_split` and the refund in `reduce_amount`, which pay through the same paths. Either error reverts the whole call, so the voucher keeps its status; see [the settlement token's issuer](../protocol/trust.md#the-settlement-tokens-issuer).
+**`refund`** — status is `Funded` and either now ≥ `expires_at` or the provider is no longer active in the registry (so a suspended clinic's voucher is refundable immediately, before expiry), or status is `Claimed` and now ≥ `expires_at + CLAIM_GRACE_SECS` (7 days). Suspension does not shorten the claim grace: care may already have been given. Returns the full amount, no fee. `refundable_at` returns the exact time, which is the current ledger time when a funded voucher's provider is inactive. It has the same `EscrowShortfall`, `TokenTransferFailed` and `TokenAmountMismatch` checks as `settle`, and so do `resolve_dispute`, `resolve_split` and the refund in `reduce_amount`, which pay through the same paths. Every payout checks that the escrow fell by exactly the amount sent and the recipient rose by exactly that amount; otherwise it fails with `TokenAmountMismatch` (a token with transfer fees or hooks). Any of these errors reverts the whole call, so the voucher keeps its status; see [the settlement token's issuer](../protocol/trust.md#the-settlement-tokens-issuer).
 
 **`redirect`** — caller is the funder; status is `Funded`. The replacement clinic must be active, offer the voucher's service, have it available, and list it at no more than the escrowed amount. Changes only the provider: amount, expiry and escrow are unchanged. Emits `voucher_redirected` with `funder` and `new_provider` topics and the previous provider, voucher id and service code in its data.
 
@@ -460,6 +463,9 @@ rejects the voucher's own provider even if it holds that role.
 |  |  | 29 | `InvalidPresenceProof` |
 |  |  | 30 | `NoPresenceCommitment` |
 |  |  | 31 | `InvalidDisputeWindow` |
+|  |  | 32 | `PresenceCommitmentRequired` |
+|  |  | 33 | `InvalidPresenceThreshold` |
+|  |  | 34 | `TokenAmountMismatch` |
 |  |  | 42 | `PriceChanged` |
 
 ### Events
