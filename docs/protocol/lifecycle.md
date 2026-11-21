@@ -7,18 +7,20 @@ nav_order: 2
 
 A voucher is one commitment to pay one clinic for one service. It moves through a fixed set of states, and every transition is a contract call that someone specific is authorised to make.
 
-```
-                 claim              attest             settle
-  Funded ──────────────> Claimed ───────────> Attested ────────> Settled
-    │                       │                     │
-    │ refund                │ dispute             │ dispute
-    │ (expired or           ▼                     ▼
-    │  clinic inactive)  Disputed <───────────────┘
-    ▼                       │
- Refunded  <──── resolve ────┴──── resolve ────> Settled
-    ▲
-    └── refund (Claimed, never attested, 7 days past expiry)
-```
+```mermaid
+stateDiagram-v2
+    [*] --> Funded : create_voucher (funder)
+    Funded --> Claimed : claim (clinic)
+    Funded --> Refunded : refund (expired / clinic inactive)
+    Claimed --> Attested : attest (attester)
+    Claimed --> Disputed : dispute (funder)
+    Claimed --> Refunded : refund (7 days past expiry, never attested)
+    Attested --> Settled : settle (permissionless, after dispute window)
+    Attested --> Disputed : dispute (funder, within window)
+    Disputed --> Settled : resolve_dispute → approve (admin)
+    Disputed --> Refunded : resolve_dispute → reject (admin)
+    Settled --> [*]
+    Refunded --> [*]
 
 `Settled` and `Refunded` are terminal. Nothing leaves them.
 
