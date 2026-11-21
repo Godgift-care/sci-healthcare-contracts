@@ -13,6 +13,10 @@ so no one person can suspend a clinic or route escrowed funds alone.
 This guide creates that account on testnet, hands it the admin role through the
 two-step handover, and shows how to submit an admin call with two signatures.
 
+This is the **admin** account. An organisation that funds vouchers from a shared
+wallet needs a separate funder multisig, not the admin account; see
+[Funding from an organisation wallet](../guides/organisation-funders.md).
+
 ## What the contracts see
 
 Each contract stores one `Address` as admin and checks it before calling

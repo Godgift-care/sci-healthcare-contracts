@@ -5,6 +5,8 @@ nav_order: 3
 
 # Economics
 
+🇫🇷 [Lire cette page en français](../fr/protocol/economics.md) · 🇰🇪🇹🇿 [Soma ukurasa huu kwa Kiswahili](../sw/protocol/economics.md)
+
 ## The fee
 
 The protocol takes a fee in basis points on settlement only. The production configuration is **100 basis points — 1%**. The contract caps it at 1000 bps (10%) and this ceiling is enforced at initialisation, so a misconfigured deployment cannot charge more.
@@ -96,6 +98,8 @@ Stellar transaction fees are paid in XLM and are a fraction of a cent. At the ti
 
 This matters more than it sounds. A voucher's whole lifecycle is four transactions: create, claim, attest, settle. On a chain where a transaction costs $0.50, that is $2.00 of overhead on a $3.00 consultation, and the product does not exist. Here it is a rounding error.
 
+The other running cost is storage rent: every voucher, provider, service and receipt is a ledger entry that rents space for its TTL. [Storage and rent costs](costs.md) lists the measured size and rent of each object and shows how to reproduce the numbers.
+
 ## Who pays what
 
 | Action | Who submits | Who pays the network fee |
@@ -107,7 +111,13 @@ This matters more than it sounds. A voucher's whole lifecycle is four transactio
 | `settle` | Anyone | Whoever submits |
 | `refund` | Anyone | Whoever submits |
 
-Because `settle` and `refund` are permissionless, an operator can run a keeper that settles eligible vouchers on everyone's behalf and absorbs those fees. Nothing in the protocol depends on that keeper existing — it is a convenience, not a dependency.
+Because `settle` and `refund` are permissionless, an operator can run a keeper that settles eligible vouchers on everyone's behalf and absorbs those fees, including the rent for the receipt that `settle` mints ([Running a settlement keeper](../developers/keepers.md#what-it-costs)). Nothing in the protocol depends on that keeper existing — it is a convenience, not a dependency.
+
+## Assumption: the token moves exact amounts
+
+Every number on this page assumes that a transfer of `x` moves exactly `x`: the sender loses `x` and the recipient gains `x`. USDC's Stellar asset contract behaves this way. A token with transfer fees, burn-on-transfer or balance-changing hooks does not, and an escrow built on it would record more than it holds.
+
+The voucher contract does not trust this assumption blindly. It checks balances around every transfer and fails closed with `TokenAmountMismatch` (#34) if the amounts differ, so such a token cannot be used. It does not support one either. Deploy only against a standard Stellar asset contract; item 3.11 of the [mainnet checklist](../developers/mainnet-checklist.md#3-parameters) makes this a launch gate.
 
 ## Why there is no float
 

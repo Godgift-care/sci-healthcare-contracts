@@ -92,17 +92,44 @@ The full recipe, and what "byte-identical" does and does not cover, is in [docs/
 
 ## Architecture
 
-Three contracts, one responsibility each.
+Three core contracts, one responsibility each: `registry` says who may bill, for what, and who may attest; `voucher` holds the escrow and runs the lifecycle; the receipt book keeps a non-transferable record of care that was paid for. The sponsorship desk (`sponsor`) and the testnet faucet sit on top and are optional.
 
+```mermaid
+flowchart LR
+    funder([Funder])
+    clinic([Clinic])
+    attester([Attester])
+    admin([Registry / voucher admin])
+    anyone([Anyone, e.g. a keeper])
+    org([Sponsor organisation])
+
+    registry["registry<br/>providers, services, attesters"]
+    voucher["voucher<br/>escrow and lifecycle"]
+    receipt["receipt book<br/>non-transferable care records"]
+    sponsor["sponsor<br/>sponsorship desk"]
+    faucet["faucet<br/>testnet only"]
+    token[("USDC<br/>SEP-41 token")]
+
+    funder -. "create_voucher, redirect,<br/>reduce_amount, dispute" .-> voucher
+    clinic -. "claim, claim_with_proof,<br/>decline" .-> voucher
+    attester -. "attest" .-> voucher
+    anyone -. "settle, refund" .-> voucher
+    admin -. "resolve_dispute, resolve_split" .-> voucher
+    clinic -. "register_provider, upsert_service,<br/>set_capacity, retire" .-> registry
+    admin -. "set_provider_status,<br/>add_attester" .-> registry
+    org -. "deposit, set_rules,<br/>match_voucher, withdraw" .-> sponsor
+    funder -. "drip" .-> faucet
+
+    voucher == "is_active_provider, get_service_price,<br/>is_service_available, get_capacity,<br/>is_attester" ==> registry
+    voucher == "mint" ==> receipt
+    voucher == "transfer, balance" ==> token
+    sponsor == "create_voucher,<br/>voucher_summary" ==> voucher
+    sponsor == "get_provider_country" ==> registry
+    sponsor == "transfer, balance" ==> token
+    faucet == "mint, set_admin" ==> token
 ```
-  registry ──────────┐         who may bill, for what, and who may attest
-  (providers,        │
-   services,         ├──────>  voucher  ──────>  receipt
-   attesters)        │        (escrow +         (non-transferable
-                     │         lifecycle)        care record)
-  SEP-41 token ──────┘
-  (USDC)
-```
+
+Thick arrows are cross-contract calls, declared in [`contracts/voucher/src/interfaces.rs`](contracts/voucher/src/interfaces.rs) and [`contracts/sponsor/src/interfaces.rs`](contracts/sponsor/src/interfaces.rs), plus the standard token interface. Dotted arrows are calls a person or app signs; each is labelled with its main functions, and admin settings such as caps and handovers are left out. Only the voucher contract can `mint` a receipt: the receipt book names it as minter at initialisation.
 
 `registry` and `receipt` hold no references and deploy first. `voucher` points at both and deploys last.
 
@@ -130,6 +157,8 @@ This is trust-*minimised*, not trustless. Whether care actually happened is an o
 - The contract **refuses an attestation from the provider being paid**, even if that provider holds an attester role. Separating who gets paid from who confirms delivery is the main check here.
 - The funder gets a dispute window after attestation, before any money moves.
 - Dispute resolution is a trusted human decision, scoped as narrowly as possible: the admin can only route already-escrowed funds to one of the two parties, never divert them elsewhere.
+
+The reasoning behind these choices — why the provider cannot attest its own payment, why `settle` and `refund` are permissionless, why beneficiary references are HMACs rather than plain hashes, and why the contract has no general balance — is recorded in the [architecture decision records](docs/adr/). Read those before simplifying one of them away.
 
 ## Quick start
 
@@ -187,6 +216,8 @@ stellar keys generate --network testnet --fund sci-issuer
 | `cargo deny check` | dependencies with a known advisory or an incompatible licence |
 | `./scripts/build-wasm.sh` | a contract that no longer compiles to wasm |
 | `./scripts/test-deploy.sh` | deploy-script overwrite, `--force` and `--dry-run` regressions |
+| [`changelog.yml`](.github/workflows/changelog.yml) | a pull request that changes `contracts/` without a `CHANGELOG.md` entry (maintainers can waive it with the `skip-changelog` label) |
+| [`docs-site.yml`](.github/workflows/docs-site.yml) | a docs change that breaks the site build; on `main` and on release tags it publishes the versioned docs |
 
 **Coverage.** The `coverage` job prints the coverage table in the job output
 and fails when the contract sources drop below the threshold. Today the
@@ -205,6 +236,12 @@ today, and any future one has to carry a reason.
 `SHA256SUMS` file and notes that explain how to compare the hash with a
 deployed contract.
 
+**Versioned docs.** The [docs site](https://godgift-care.github.io/sci-healthcare-contracts/) serves `main` at its root and a frozen copy for every release under `/<tag>/`, for example [`/v0.2.0/`](https://godgift-care.github.io/sci-healthcare-contracts/v0.2.0/), with [`/latest/`](https://godgift-care.github.io/sci-healthcare-contracts/latest/) pointing at the newest release. Each page carries a banner that says which version it describes, so someone integrating the deployed release does not read about functions that are only on `main`. Pushing a tag publishes its snapshot, and the release notes link to it. [`scripts/build-docs-site.sh`](scripts/build-docs-site.sh) builds the same site locally.
+
+### Try it by hand in Stellar Lab
+
+[Trying it by hand in Stellar Lab](docs/developers/stellar-lab.md) walks one voucher through fund, claim, attest and settle on testnet from a browser, one form per call, with nothing installed. It suits workshops: a facilitator deploys a copy from a GitHub Codespace and plays the admin, and everyone else uses only [Stellar Lab](https://lab.stellar.org).
+
 ### Run the lifecycle in TypeScript
 
 [`examples/lifecycle.ts`](examples/lifecycle.ts) is the same journey as `seed.sh` — fund, claim, attest, settle — written with [`@stellar/stellar-sdk`](https://github.com/stellar/js-stellar-sdk) and local keys instead of the CLI, and it finishes the story: it waits out the dispute window, calls `settle`, and prints the receipt the contract minted.
@@ -222,7 +259,27 @@ npm run lifecycle -- settle <voucher-id>         # finish a voucher later, if th
 - `CLINIC_SECRET`, `ATTESTER_SECRET` and `FUNDER_SECRET` are optional — a missing one is generated, printed and friendbotted, so only `ADMIN_SECRET` is required. `ISSUER_SECRET` is needed only when the deployment has no faucet.
 - Activation and attestation are admin-gated, so a full run needs a deployment you control; the shared ids in the table above belong to the maintainer's deployment.
 - Node 18+ is required; the script polyfills the Web Crypto global that older Node versions hide from `tsx`.
-- CI type-checks the example, so it stays working.
+- CI type-checks both examples and runs the keeper's unit tests, so they stay working.
+
+### Run the settlement keeper
+
+[`examples/keeper.ts`](examples/keeper.ts) asks the backend API which vouchers are due, reads each one from the chain, simulates `settle` or `refund`, and only then submits it. `settle` and `refund` are permissionless, so the keeper does not need a USDC trustline. Its account pays only in XLM: the transaction fee, plus the rent for the care receipt that each `settle` mints. A failed simulation, a status change or an open dispute window means the voucher is skipped, never sent. [Running a settlement keeper](docs/developers/keepers.md) lists every permissionless call and why it is safe, how to find due vouchers, what a keeper costs, and a minimal loop.
+
+```bash
+cd examples && npm install
+
+# Print the plan without a key: no signature, no transaction.
+npm run keeper -- --dry-run
+
+# Submit from a funded account, once, or keep running every 30 seconds.
+KEEPER_SECRET=<funded account seed> npm run keeper
+KEEPER_SECRET=<funded account seed> npm run keeper -- --watch
+```
+
+- `KEEPER_API_URL` defaults to `http://localhost:8080`; `KEEPER_RPC_URL` and `KEEPER_NETWORK_PASSPHRASE` default to testnet.
+- `VOUCHER_CONTRACT_ID` comes from `deployments/testnet.env`, with the published testnet id as the fallback.
+- With `KEEPER_SECRET` set, `--dry-run` also simulates each call, so a preflight failure is reported without sending anything.
+- `npm test` covers the time parsing, API filters, due rules and CLI parsing; there is no network access in the tests.
 
 ## Contract reference
 
@@ -235,7 +292,7 @@ npm run lifecycle -- settle <voucher-id>         # finish a voucher later, if th
 | `set_provider_status(admin, provider, status, reason_code)` | admin | Only `Pending` → `Active`/`Suspended`, `Active` → `Suspended`, `Suspended` → `Active` |
 | `retire(owner, reason_code)` | owner | Clinic leaves the registry for good (`Retired`, terminal) |
 | `upsert_service(provider, code, label, price)` | provider | Lists a billable service or lowers its price; requires `Active` |
-| `schedule_service_price(provider, code, price, effective_at)` | provider | Schedules a price change at least 24 h ahead |
+| `schedule_service_price(provider, code, price, effective_at, confirm_large_change)` | provider | Schedules a price change at least 24 h ahead; a 5× rise needs `confirm_large_change = true` |
 | `remove_service(provider, code)` | provider | Delists a service |
 | `set_service_available(provider, code, available)` | provider | Pauses or resumes a service without delisting it |
 | `add_attester(admin, attester)` | admin | Grants attester rights |
@@ -254,6 +311,7 @@ npm run lifecycle -- settle <voucher-id>         # finish a voucher later, if th
 | --- | --- | --- |
 | `initialize(admin, registry, receipt_book, token, dispute_window, fee_bps, attester_share_bps, fee_account)` | once | Fixes protocol config; fee capped at 10%, attester share at the fee |
 | `create_voucher(funder, beneficiary_ref, provider, service_code, amount, expires_at)` | funder | Escrows funds against one service at one active provider |
+| `create_voucher_at_price(funder, beneficiary_ref, provider, service_code, amount, expires_at, expected_price)` | funder | Same, but fails with `PriceChanged` if the registry price moved since the quote |
 | `reduce_amount(funder, voucher_id, new_amount)` | funder | Returns an overpayment to the funder while the voucher is still `Funded` |
 | `claim(provider, voucher_id)` | provider | Marks the patient as presented |
 | `attest(attester, voucher_id)` | attester | Confirms delivery; opens the dispute window |
@@ -292,6 +350,11 @@ The admin should be a 2-of-3 Stellar multisig account, not one key. The
 [multisig admin guide](docs/developers/multisig-admin.md) creates it, hands all
 three contracts to it through the two-step `propose_admin` / `accept_admin`
 handover, and shows how to submit an admin call with two signatures.
+
+An organisation funding many vouchers should use a separate 2-of-3 **funder**
+multisig. [Funding from an organisation wallet](docs/guides/organisation-funders.md)
+covers setup, every funder action and its signatures, refunds back to the shared
+account, and per-voucher record keeping.
 
 Wallets and remittance apps can add care vouchers without this UI. The
 [integration guide](docs/developers/integration.md) covers deriving a

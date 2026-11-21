@@ -5,6 +5,8 @@ nav_order: 5
 
 # Privacy
 
+🇫🇷 [Lire cette page en français](../fr/protocol/privacy.md) · 🇰🇪🇹🇿 [Soma ukurasa huu kwa Kiswahili](../sw/protocol/privacy.md)
+
 The single hardest rule in this project: **no protected health information reaches the ledger, ever.**
 
 A public blockchain is permanent and worldwide. Anything written to it is written for good. Health data does not belong there, and most attempts to put it there — encrypted, hashed, or otherwise — eventually leak through metadata or key compromise.

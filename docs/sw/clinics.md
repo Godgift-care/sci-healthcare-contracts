@@ -51,4 +51,4 @@ Unapokea kiasi cha vocha ukiondoa ada ya itifaki ya 1%. Vocha ya $3.00 inakulipa
 
 ## Maswali zaidi
 
-Tazama [Maswali ya kliniki](../guides/clinics-faq.md) (kwa Kiingereza) kuhusu muda wa malipo, mapingamizi, ada na maswali mengine ya kawaida, kila moja likiwa na viungo vya chanzo.
+Tazama [Maswali ya kliniki](clinics-faq.md) kuhusu muda wa malipo, mapingamizi, ada na maswali mengine ya kawaida, kila moja likiwa na viungo vya chanzo.

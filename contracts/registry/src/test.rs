@@ -1,13 +1,15 @@
 #![cfg(test)]
 
+use std::string::ToString;
+
 use soroban_sdk::{
     testutils::{Address as _, Ledger as _},
-    Address, Env, String, Vec,
+    Address, BytesN, Env, String, Vec,
 };
 
 use crate::{
-    ProviderStatus, Registry, RegistryClient, RegistryError, MAX_PROVIDERS_PAGE,
-    MIN_PRICE_NOTICE_SECS,
+    Provider, ProviderCategory, ProviderStatus, Registry, RegistryClient, RegistryError,
+    ServiceItem, MAX_PRICE_JUMP, MAX_PROVIDERS_PAGE, MIN_PRICE_NOTICE_SECS,
 };
 
 /// Reason codes as documented in `docs/protocol/trust.md`: codes are added,
@@ -44,6 +46,7 @@ fn activate(f: &Fixture, provider: &Address) {
         provider,
         &String::from_str(&f.env, "Ikeja General Clinic"),
         &String::from_str(&f.env, "NG"),
+        &ProviderCategory::Clinic,
     );
     f.client.set_provider_status(
         &f.admin,
@@ -90,6 +93,7 @@ fn provider_registers_as_pending() {
         &provider,
         &String::from_str(&f.env, "Nairobi Health Post"),
         &String::from_str(&f.env, "KE"),
+        &ProviderCategory::Clinic,
     );
 
     let stored = f.client.get_provider(&provider);
@@ -105,11 +109,12 @@ fn duplicate_registration_rejected() {
     let provider = Address::generate(&f.env);
     let name = String::from_str(&f.env, "Clinic");
     let country = String::from_str(&f.env, "NG");
-    f.client.register_provider(&provider, &name, &country);
+    f.client
+        .register_provider(&provider, &name, &country, &ProviderCategory::Clinic);
 
     let err = f
         .client
-        .try_register_provider(&provider, &name, &country)
+        .try_register_provider(&provider, &name, &country, &ProviderCategory::Clinic)
         .err()
         .unwrap()
         .unwrap();
@@ -126,6 +131,7 @@ fn bad_country_code_rejected() {
             &provider,
             &String::from_str(&f.env, "Clinic"),
             &String::from_str(&f.env, "NGA"),
+            &ProviderCategory::Clinic,
         )
         .err()
         .unwrap()
@@ -143,6 +149,7 @@ fn empty_name_rejected() {
             &provider,
             &String::from_str(&f.env, ""),
             &String::from_str(&f.env, "NG"),
+            &ProviderCategory::Clinic,
         )
         .err()
         .unwrap()
@@ -151,10 +158,128 @@ fn empty_name_rejected() {
 }
 
 #[test]
+fn register_with_each_category() {
+    let f = setup();
+    for (category, name) in [
+        (ProviderCategory::Clinic, "Clinic A"),
+        (ProviderCategory::Pharmacy, "Pharmacy B"),
+        (ProviderCategory::Laboratory, "Lab C"),
+        (ProviderCategory::Maternity, "Maternity D"),
+        (ProviderCategory::Other, "Other E"),
+    ] {
+        let provider = Address::generate(&f.env);
+        f.client.register_provider(
+            &provider,
+            &String::from_str(&f.env, name),
+            &String::from_str(&f.env, "NG"),
+            &category,
+        );
+        let stored = f.client.get_provider(&provider);
+        assert_eq!(stored.category, category);
+    }
+}
+
+#[test]
+fn update_provider_category_by_owner() {
+    let f = setup();
+    let provider = register_active_provider(&f);
+    assert_eq!(
+        f.client.get_provider(&provider).category,
+        ProviderCategory::Clinic
+    );
+
+    f.client
+        .update_provider_category(&provider, &ProviderCategory::Laboratory);
+    assert_eq!(
+        f.client.get_provider(&provider).category,
+        ProviderCategory::Laboratory
+    );
+
+    f.client
+        .update_provider_category(&provider, &ProviderCategory::Maternity);
+    assert_eq!(
+        f.client.get_provider(&provider).category,
+        ProviderCategory::Maternity
+    );
+
+    f.client
+        .update_provider_category(&provider, &ProviderCategory::Other);
+    assert_eq!(
+        f.client.get_provider(&provider).category,
+        ProviderCategory::Other
+    );
+
+    f.client
+        .update_provider_category(&provider, &ProviderCategory::Pharmacy);
+    assert_eq!(
+        f.client.get_provider(&provider).category,
+        ProviderCategory::Pharmacy
+    );
+}
+
+#[test]
+fn update_category_unknown_provider() {
+    let f = setup();
+    let stranger = Address::generate(&f.env);
+
+    let err = f
+        .client
+        .try_update_provider_category(&stranger, &ProviderCategory::Pharmacy)
+        .err()
+        .unwrap()
+        .unwrap();
+    assert_eq!(err, RegistryError::ProviderNotFound);
+}
+
+#[test]
 fn admin_activates_provider() {
     let f = setup();
     let provider = register_active_provider(&f);
     assert!(f.client.is_active_provider(&provider));
+}
+
+#[test]
+fn admin_sets_verification_evidence() {
+    let f = setup();
+    let provider = register_active_provider(&f);
+    let hash = BytesN::from_array(&f.env, &[7u8; 32]);
+
+    f.client
+        .set_verification_evidence(&f.admin, &provider, &hash);
+
+    let stored = f.client.get_provider(&provider);
+    assert_eq!(stored.verification_evidence, Some(hash));
+}
+
+#[test]
+fn non_admin_cannot_set_verification_evidence() {
+    let f = setup();
+    let provider = register_active_provider(&f);
+    let impostor = Address::generate(&f.env);
+    let hash = BytesN::from_array(&f.env, &[7u8; 32]);
+
+    let err = f
+        .client
+        .try_set_verification_evidence(&impostor, &provider, &hash)
+        .err()
+        .unwrap()
+        .unwrap();
+    assert_eq!(err, RegistryError::NotAuthorized);
+}
+
+#[test]
+fn set_verification_evidence_unknown_provider() {
+    let f = setup();
+    let stranger = Address::generate(&f.env);
+    let hash = BytesN::from_array(&f.env, &[7u8; 32]);
+
+    let err = f
+        .client
+        .try_set_verification_evidence(&f.admin, &stranger, &hash)
+        .err()
+        .unwrap()
+        .unwrap();
+    assert_eq!(err, RegistryError::ProviderNotFound);
 }
 
 #[test]
@@ -272,7 +397,7 @@ fn scheduled_price_applies_at_the_effective_time() {
     let effective_at = START + MIN_PRICE_NOTICE_SECS;
 
     f.client
-        .schedule_service_price(&provider, &CONSULT, &(PRICE * 2), &effective_at);
+        .schedule_service_price(&provider, &CONSULT, &(PRICE * 2), &effective_at, &false);
 
     // Before: the current price stands and the upcoming one is visible.
     assert_eq!(f.client.get_service_price(&provider, &CONSULT), PRICE);
@@ -308,13 +433,78 @@ fn scheduled_price_needs_the_minimum_notice() {
     for effective_at in [START, START + MIN_PRICE_NOTICE_SECS - 1] {
         let err = f
             .client
-            .try_schedule_service_price(&provider, &CONSULT, &(PRICE * 2), &effective_at)
+            .try_schedule_service_price(&provider, &CONSULT, &(PRICE * 2), &effective_at, &false)
             .err()
             .unwrap()
             .unwrap();
         assert_eq!(err, RegistryError::PriceNoticeTooShort);
     }
     assert_eq!(f.client.get_upcoming_price(&provider, &CONSULT), (0, 0));
+}
+
+#[test]
+fn large_price_jump_needs_explicit_confirmation() {
+    let f = setup();
+    let provider = priced_service(&f);
+    let effective_at = START + MIN_PRICE_NOTICE_SECS;
+    let five_times = PRICE * MAX_PRICE_JUMP as i128;
+
+    // A 5x rise is rejected unless the clinic acknowledges it.
+    let err = f
+        .client
+        .try_schedule_service_price(&provider, &CONSULT, &five_times, &effective_at, &false)
+        .err()
+        .unwrap()
+        .unwrap();
+    assert_eq!(err, RegistryError::LargePriceJumpNeedsConfirmation);
+    assert_eq!(f.client.get_upcoming_price(&provider, &CONSULT), (0, 0));
+
+    // A smaller rise still needs no flag.
+    let four_times = PRICE * 4;
+    f.client
+        .schedule_service_price(&provider, &CONSULT, &four_times, &effective_at, &false);
+    assert_eq!(
+        f.client.get_upcoming_price(&provider, &CONSULT),
+        (four_times, effective_at)
+    );
+
+    // With the flag the same 5x rise is accepted.
+    f.client
+        .schedule_service_price(&provider, &CONSULT, &five_times, &effective_at, &true);
+    assert_eq!(
+        f.client.get_upcoming_price(&provider, &CONSULT),
+        (five_times, effective_at)
+    );
+}
+
+#[test]
+fn large_price_jump_confirmation_cannot_skip_the_notice() {
+    let f = setup();
+    let provider = priced_service(&f);
+    let five_times = PRICE * MAX_PRICE_JUMP as i128;
+
+    let err = f
+        .client
+        .try_schedule_service_price(&provider, &CONSULT, &five_times, &START, &true)
+        .err()
+        .unwrap()
+        .unwrap();
+    assert_eq!(err, RegistryError::PriceNoticeTooShort);
+}
+
+#[test]
+fn price_jump_threshold_handles_overflow_as_a_large_jump() {
+    let f = setup();
+    let provider = priced_service(&f);
+    let effective_at = START + MIN_PRICE_NOTICE_SECS;
+
+    let err = f
+        .client
+        .try_schedule_service_price(&provider, &CONSULT, &i128::MAX, &effective_at, &false)
+        .err()
+        .unwrap()
+        .unwrap();
+    assert_eq!(err, RegistryError::LargePriceJumpNeedsConfirmation);
 }
 
 #[test]
@@ -325,10 +515,10 @@ fn rescheduling_replaces_the_earlier_schedule() {
     let second = START + 2 * MIN_PRICE_NOTICE_SECS;
 
     f.client
-        .schedule_service_price(&provider, &CONSULT, &(PRICE * 2), &first);
+        .schedule_service_price(&provider, &CONSULT, &(PRICE * 2), &first, &false);
     // Scheduling the current price is how a clinic calls a change off.
     f.client
-        .schedule_service_price(&provider, &CONSULT, &PRICE, &second);
+        .schedule_service_price(&provider, &CONSULT, &PRICE, &second, &false);
 
     f.env.ledger().with_mut(|li| li.timestamp = first);
     assert_eq!(f.client.get_service_price(&provider, &CONSULT), PRICE);
@@ -344,7 +534,7 @@ fn upsert_keeps_a_scheduled_price() {
     let provider = priced_service(&f);
     let effective_at = START + MIN_PRICE_NOTICE_SECS;
     f.client
-        .schedule_service_price(&provider, &CONSULT, &(PRICE * 2), &effective_at);
+        .schedule_service_price(&provider, &CONSULT, &(PRICE * 2), &effective_at, &false);
 
     f.client.upsert_service(
         &provider,
@@ -367,7 +557,7 @@ fn schedule_rejects_bad_input() {
 
     let err = f
         .client
-        .try_schedule_service_price(&provider, &CONSULT, &0i128, &effective_at)
+        .try_schedule_service_price(&provider, &CONSULT, &0i128, &effective_at, &false)
         .err()
         .unwrap()
         .unwrap();
@@ -375,7 +565,7 @@ fn schedule_rejects_bad_input() {
 
     let err = f
         .client
-        .try_schedule_service_price(&provider, &999u32, &PRICE, &effective_at)
+        .try_schedule_service_price(&provider, &999u32, &PRICE, &effective_at, &false)
         .err()
         .unwrap()
         .unwrap();
@@ -397,7 +587,7 @@ fn schedule_rejects_bad_input() {
     );
     let err = f
         .client
-        .try_schedule_service_price(&provider, &CONSULT, &PRICE, &effective_at)
+        .try_schedule_service_price(&provider, &CONSULT, &PRICE, &effective_at, &false)
         .err()
         .unwrap()
         .unwrap();
@@ -412,6 +602,7 @@ fn pending_provider_cannot_add_services() {
         &provider,
         &String::from_str(&f.env, "Unverified Clinic"),
         &String::from_str(&f.env, "NG"),
+        &ProviderCategory::Clinic,
     );
 
     let err = f
@@ -618,16 +809,19 @@ fn list_providers_in_registration_order() {
         &a,
         &String::from_str(&f.env, "A Clinic"),
         &String::from_str(&f.env, "NG"),
+        &ProviderCategory::Clinic,
     );
     f.client.register_provider(
         &b,
         &String::from_str(&f.env, "B Clinic"),
         &String::from_str(&f.env, "KE"),
+        &ProviderCategory::Clinic,
     );
     f.client.register_provider(
         &c,
         &String::from_str(&f.env, "C Clinic"),
         &String::from_str(&f.env, "GH"),
+        &ProviderCategory::Clinic,
     );
 
     let first = f.client.list_providers(&0u32, &2u32);
@@ -667,6 +861,7 @@ fn list_providers_start_beyond_end_is_empty() {
         &provider,
         &String::from_str(&f.env, "A Clinic"),
         &String::from_str(&f.env, "NG"),
+        &ProviderCategory::Clinic,
     );
 
     assert_eq!(f.client.list_providers(&1u32, &10u32).len(), 0);
@@ -684,6 +879,7 @@ fn list_providers_limit_is_capped() {
             &provider,
             &String::from_str(&f.env, "Clinic"),
             &String::from_str(&f.env, "NG"),
+            &ProviderCategory::Clinic,
         );
     }
 
@@ -716,21 +912,24 @@ fn providers_in_tracks_active_status() {
         &a,
         &String::from_str(&f.env, "A Clinic"),
         &String::from_str(&f.env, "NG"),
+        &ProviderCategory::Clinic,
     );
     f.client.register_provider(
         &b,
         &String::from_str(&f.env, "B Clinic"),
         &String::from_str(&f.env, "NG"),
+        &ProviderCategory::Clinic,
     );
     f.client.register_provider(
         &c,
         &String::from_str(&f.env, "C Clinic"),
         &String::from_str(&f.env, "NG"),
+        &ProviderCategory::Clinic,
     );
     f.client
-        .set_provider_status(&f.admin, &a, &ProviderStatus::Active, &0u32);
+        .set_provider_status(&f.admin, &a, &ProviderStatus::Active, &REASON_VERIFIED);
     f.client
-        .set_provider_status(&f.admin, &b, &ProviderStatus::Active, &0u32);
+        .set_provider_status(&f.admin, &b, &ProviderStatus::Active, &REASON_VERIFIED);
     // c stays Pending.
 
     let ng = f
@@ -741,8 +940,12 @@ fn providers_in_tracks_active_status() {
     assert_eq!(ng.get_unchecked(1).owner, b);
 
     // Suspending b removes it; only a remains.
-    f.client
-        .set_provider_status(&f.admin, &b, &ProviderStatus::Suspended, &0u32);
+    f.client.set_provider_status(
+        &f.admin,
+        &b,
+        &ProviderStatus::Suspended,
+        &REASON_SUSPENDED_WHILE_TESTING,
+    );
     let ng = f
         .client
         .providers_in(&String::from_str(&f.env, "NG"), &0u32, &10u32);
@@ -751,7 +954,7 @@ fn providers_in_tracks_active_status() {
 
     // Reactivating b re-adds it once.
     f.client
-        .set_provider_status(&f.admin, &b, &ProviderStatus::Active, &0u32);
+        .set_provider_status(&f.admin, &b, &ProviderStatus::Active, &REASON_VERIFIED);
     let ng = f
         .client
         .providers_in(&String::from_str(&f.env, "NG"), &0u32, &10u32);
@@ -781,9 +984,14 @@ fn providers_in_pages() {
             &provider,
             &String::from_str(&f.env, "Clinic"),
             &String::from_str(&f.env, "NG"),
+            &ProviderCategory::Clinic,
         );
-        f.client
-            .set_provider_status(&f.admin, &provider, &ProviderStatus::Active, &0u32);
+        f.client.set_provider_status(
+            &f.admin,
+            &provider,
+            &ProviderStatus::Active,
+            &REASON_VERIFIED,
+        );
         providers.push_back(provider);
     }
 
@@ -829,11 +1037,13 @@ fn list_providers_extends_index_ttl() {
         &a,
         &String::from_str(&f.env, "A Clinic"),
         &String::from_str(&f.env, "NG"),
+        &ProviderCategory::Clinic,
     );
     f.client.register_provider(
         &b,
         &String::from_str(&f.env, "B Clinic"),
         &String::from_str(&f.env, "KE"),
+        &ProviderCategory::Clinic,
     );
 
     // Jump far enough that the 90-day TTL would lapse on every entry.
@@ -874,6 +1084,162 @@ fn attester_lifecycle() {
 
     f.client.remove_attester(&f.admin, &attester);
     assert!(!f.client.is_attester(&attester));
+}
+
+#[test]
+fn provider_counts_lifecycle() {
+    let f = setup();
+    assert_eq!(f.client.provider_counts(), (0, 0, 0));
+
+    let provider = Address::generate(&f.env);
+    f.client.register_provider(
+        &provider,
+        &String::from_str(&f.env, "A Clinic"),
+        &String::from_str(&f.env, "NG"),
+        &ProviderCategory::Clinic,
+    );
+    assert_eq!(f.client.provider_counts(), (1, 0, 0));
+
+    // Pending -> Active
+    f.client
+        .set_provider_status(&f.admin, &provider, &ProviderStatus::Active, &1u32);
+    assert_eq!(f.client.provider_counts(), (0, 1, 0));
+
+    // Active -> Suspended
+    f.client
+        .set_provider_status(&f.admin, &provider, &ProviderStatus::Suspended, &2u32);
+    assert_eq!(f.client.provider_counts(), (0, 0, 1));
+
+    // Suspended -> Active
+    f.client
+        .set_provider_status(&f.admin, &provider, &ProviderStatus::Active, &1u32);
+    assert_eq!(f.client.provider_counts(), (0, 1, 0));
+
+    // Active -> Retired
+    f.client.retire(&provider, &5u32);
+    assert_eq!(f.client.provider_counts(), (0, 0, 0));
+
+    // New provider Pending -> Suspended -> Retired
+    let p2 = Address::generate(&f.env);
+    f.client.register_provider(
+        &p2,
+        &String::from_str(&f.env, "B Clinic"),
+        &String::from_str(&f.env, "KE"),
+        &ProviderCategory::Pharmacy,
+    );
+    assert_eq!(f.client.provider_counts(), (1, 0, 0));
+
+    f.client
+        .set_provider_status(&f.admin, &p2, &ProviderStatus::Suspended, &3u32);
+    assert_eq!(f.client.provider_counts(), (0, 0, 1));
+
+    f.client.retire(&p2, &5u32);
+    assert_eq!(f.client.provider_counts(), (0, 0, 0));
+
+    // New provider Pending -> Retired directly
+    let p3 = Address::generate(&f.env);
+    f.client.register_provider(
+        &p3,
+        &String::from_str(&f.env, "C Clinic"),
+        &String::from_str(&f.env, "GH"),
+        &ProviderCategory::Laboratory,
+    );
+    assert_eq!(f.client.provider_counts(), (1, 0, 0));
+    f.client.retire(&p3, &5u32);
+    assert_eq!(f.client.provider_counts(), (0, 0, 0));
+
+    // Trying to retire an already retired provider fails
+    let err = f.client.try_retire(&p3, &5u32).err().unwrap().unwrap();
+    assert_eq!(err, RegistryError::InvalidTransition);
+}
+
+#[test]
+fn list_attesters_lifecycle() {
+    let f = setup();
+    let a = Address::generate(&f.env);
+    let b = Address::generate(&f.env);
+    let c = Address::generate(&f.env);
+
+    f.client.add_attester(&f.admin, &a);
+    f.client.add_attester(&f.admin, &b);
+    f.client.add_attester(&f.admin, &c);
+
+    let list = f.client.list_attesters(&0u32, &10u32);
+    assert_eq!(list.len(), 3);
+    assert_eq!(list.get_unchecked(0), a);
+    assert_eq!(list.get_unchecked(1), b);
+    assert_eq!(list.get_unchecked(2), c);
+
+    // Remove the middle one (b): swap-and-pop replaces it with c.
+    f.client.remove_attester(&f.admin, &b);
+    let list = f.client.list_attesters(&0u32, &10u32);
+    assert_eq!(list.len(), 2);
+    assert_eq!(list.get_unchecked(0), a);
+    assert_eq!(list.get_unchecked(1), c);
+
+    // Remove c: only a remains.
+    f.client.remove_attester(&f.admin, &c);
+    let list = f.client.list_attesters(&0u32, &10u32);
+    assert_eq!(list.len(), 1);
+    assert_eq!(list.get_unchecked(0), a);
+
+    // Remove a: list is empty.
+    f.client.remove_attester(&f.admin, &a);
+    assert_eq!(f.client.list_attesters(&0u32, &10u32).len(), 0);
+}
+
+#[test]
+fn list_attesters_pagination() {
+    let f = setup();
+    let mut addrs = std::vec::Vec::new();
+    for _ in 0..5 {
+        let addr = Address::generate(&f.env);
+        f.client.add_attester(&f.admin, &addr);
+        addrs.push(addr);
+    }
+
+    let p1 = f.client.list_attesters(&0u32, &2u32);
+    assert_eq!(p1.len(), 2);
+    assert_eq!(p1.get_unchecked(0), addrs[0]);
+    assert_eq!(p1.get_unchecked(1), addrs[1]);
+
+    let p2 = f.client.list_attesters(&2u32, &2u32);
+    assert_eq!(p2.len(), 2);
+    assert_eq!(p2.get_unchecked(0), addrs[2]);
+    assert_eq!(p2.get_unchecked(1), addrs[3]);
+
+    let p3 = f.client.list_attesters(&4u32, &2u32);
+    assert_eq!(p3.len(), 1);
+    assert_eq!(p3.get_unchecked(0), addrs[4]);
+
+    let p_empty = f.client.list_attesters(&5u32, &2u32);
+    assert_eq!(p_empty.len(), 0);
+
+    let p_zero_limit = f.client.list_attesters(&0u32, &0u32);
+    assert_eq!(p_zero_limit.len(), 0);
+
+    let p_start_out_of_bounds = f.client.list_attesters(&100u32, &10u32);
+    assert_eq!(p_start_out_of_bounds.len(), 0);
+
+    let p_large_limit = f.client.list_attesters(&0u32, &100u32);
+    assert_eq!(p_large_limit.len(), 5);
+
+    // Removing an address that is not an attester does not fail and does not panic
+    let stranger = Address::generate(&f.env);
+    f.client.remove_attester(&f.admin, &stranger);
+}
+
+#[test]
+fn list_attesters_duplicate_add_no_duplicate_index() {
+    let f = setup();
+    let a = Address::generate(&f.env);
+
+    f.client.add_attester(&f.admin, &a);
+    f.client.add_attester(&f.admin, &a);
+
+    let list = f.client.list_attesters(&0u32, &10u32);
+    assert_eq!(list.len(), 1);
+    assert_eq!(list.get_unchecked(0), a);
 }
 
 #[test]
@@ -1106,7 +1472,15 @@ const AUTH_MATRIX: &[AuthCase] = &[
         auth: signer("`owner`", new_provider_addr),
     },
     AuthCase {
+        function: "update_provider_category",
+        auth: signer("`provider_addr`", provider_addr),
+    },
+    AuthCase {
         function: "set_provider_status",
+        auth: signer("`admin`", admin_addr),
+    },
+    AuthCase {
+        function: "set_verification_evidence",
         auth: signer("`admin`", admin_addr),
     },
     AuthCase {
@@ -1170,6 +1544,10 @@ const AUTH_MATRIX: &[AuthCase] = &[
         auth: Auth::Free("none (view)"),
     },
     AuthCase {
+        function: "provider_counts",
+        auth: Auth::Free("none (view)"),
+    },
+    AuthCase {
         function: "is_active_provider",
         auth: Auth::Free("none (view)"),
     },
@@ -1198,6 +1576,10 @@ const AUTH_MATRIX: &[AuthCase] = &[
         auth: Auth::Free("none (view)"),
     },
     AuthCase {
+        function: "list_attesters",
+        auth: Auth::Free("none (view)"),
+    },
+    AuthCase {
         function: "get_capacity",
         auth: Auth::Free("none (view)"),
     },
@@ -1215,10 +1597,29 @@ fn recorded_auths(env: &Env) -> std::vec::Vec<Address> {
         .collect()
 }
 
+/// What one successful call demanded and touched.
+struct CaseRun {
+    auths: std::vec::Vec<Address>,
+    /// In-memory ledger entries read by the last top-level invocation.
+    reads: u32,
+    /// Ledger entries written by the last top-level invocation.
+    writes: u32,
+}
+
+fn case_run(env: &Env) -> CaseRun {
+    let resources = env.cost_estimate().resources();
+    CaseRun {
+        auths: recorded_auths(env),
+        reads: resources.memory_read_entries,
+        writes: resources.write_entries,
+    }
+}
+
 /// Runs `function` in the state that makes it a valid call, so the only thing
 /// under test is who it demands. Every arm leaves the function under test as
-/// the last invocation, which is what `env.auths()` reports.
-fn run_case(f: &AuthFixture, function: &str) -> std::vec::Vec<Address> {
+/// the last invocation, which is what `env.auths()` and the resource meter
+/// report.
+fn run_case(f: &AuthFixture, function: &str) -> CaseRun {
     let env = &f.f.env;
     let client = &f.f.client;
     let label = |text: &'static str| String::from_str(env, text);
@@ -1232,10 +1633,19 @@ fn run_case(f: &AuthFixture, function: &str) -> std::vec::Vec<Address> {
             env.mock_all_auths();
             let address = env.register(Registry, ());
             RegistryClient::new(&env, &address).initialize(&Address::generate(&env));
-            return recorded_auths(&env);
+            return case_run(&env);
         }
         "register_provider" => {
-            client.register_provider(&f.new_provider, &label("Lagos Clinic"), &label("NG"));
+            client.register_provider(
+                &f.new_provider,
+                &label("Lagos Clinic"),
+                &label("NG"),
+                &ProviderCategory::Clinic,
+            );
+        }
+        "update_provider_category" => {
+            activate(&f.f, &f.provider);
+            client.update_provider_category(&f.provider, &ProviderCategory::Pharmacy);
         }
         "set_provider_status" => {
             activate(&f.f, &f.provider);
@@ -1245,6 +1655,11 @@ fn run_case(f: &AuthFixture, function: &str) -> std::vec::Vec<Address> {
                 &ProviderStatus::Suspended,
                 &REASON_VERIFIED,
             );
+        }
+        "set_verification_evidence" => {
+            activate(&f.f, &f.provider);
+            let hash = BytesN::from_array(env, &[42u8; 32]);
+            client.set_verification_evidence(&f.f.admin, &f.provider, &hash);
         }
         "retire" => {
             activate(&f.f, &f.provider);
@@ -1262,7 +1677,13 @@ fn run_case(f: &AuthFixture, function: &str) -> std::vec::Vec<Address> {
         "schedule_service_price" => {
             activate(&f.f, &f.provider);
             upsert();
-            client.schedule_service_price(&f.provider, &CONSULT, &PRICE, &MIN_PRICE_NOTICE_SECS);
+            client.schedule_service_price(
+                &f.provider,
+                &CONSULT,
+                &PRICE,
+                &MIN_PRICE_NOTICE_SECS,
+                &false,
+            );
         }
         "get_upcoming_price" => {
             activate(&f.f, &f.provider);
@@ -1312,6 +1733,9 @@ fn run_case(f: &AuthFixture, function: &str) -> std::vec::Vec<Address> {
         "list_providers" => {
             client.list_providers(&0u32, &10u32);
         }
+        "provider_counts" => {
+            client.provider_counts();
+        }
         "is_active_provider" => {
             activate(&f.f, &f.provider);
             client.is_active_provider(&f.provider);
@@ -1339,6 +1763,9 @@ fn run_case(f: &AuthFixture, function: &str) -> std::vec::Vec<Address> {
         "is_attester" => {
             client.is_attester(&f.provider);
         }
+        "list_attesters" => {
+            client.list_attesters(&0u32, &10u32);
+        }
         "version" => {
             client.version();
         }
@@ -1347,7 +1774,7 @@ fn run_case(f: &AuthFixture, function: &str) -> std::vec::Vec<Address> {
         }
     }
 
-    recorded_auths(env)
+    case_run(env)
 }
 
 fn assert_demands(f: &AuthFixture, case: &AuthCase, got: &[Address]) {
@@ -1387,15 +1814,19 @@ fn assert_demands(f: &AuthFixture, case: &AuthCase, got: &[Address]) {
 fn authorisation_matrix_matches_every_public_function() {
     for case in AUTH_MATRIX {
         let f = AuthFixture::new();
-        let got = run_case(&f, case.function);
-        assert_demands(&f, case, &got);
+        let run = run_case(&f, case.function);
+        assert_demands(&f, case, &run.auths);
     }
 }
 
 /// The rows of the authorisation table in `docs/developers/contracts.md` for
 /// one contract, as written.
 fn doc_rows<'a>(docs: &'a str, contract: &str) -> std::vec::Vec<&'a str> {
-    let heading = std::format!("## {contract}\n");
+    let heading = if contract == "faucet" {
+        "## faucet (testnet only)\n".to_string()
+    } else {
+        std::format!("## {contract}\n")
+    };
     let start = docs
         .find(&heading)
         .unwrap_or_else(|| panic!("contracts.md has no `{contract}` section"));
@@ -1404,16 +1835,25 @@ fn doc_rows<'a>(docs: &'a str, contract: &str) -> std::vec::Vec<&'a str> {
         .find("### Authorisation matrix")
         .unwrap_or_else(|| panic!("the `{contract}` section has no authorisation matrix"));
     let section = &section[start..];
-    // The matrix is its own subsection: stop at the next heading so the
-    // errors and events tables further down are not counted as rows.
-    let end = section
-        .find("\n### ")
-        .or_else(|| section.find("\n## "))
-        .unwrap_or(section.len());
+    let end = find_section_end(section);
     section[..end]
         .lines()
         .filter(|line| line.starts_with("| `"))
         .collect()
+}
+
+fn find_section_end(section: &str) -> usize {
+    let mut end = section.len();
+    if let Some(pos) = section.find("\n### ") {
+        end = end.min(pos);
+    }
+    if let Some(pos) = section.find("\n## ") {
+        end = end.min(pos);
+    }
+    if let Some(pos) = section.find("\n---") {
+        end = end.min(pos);
+    }
+    end
 }
 
 #[test]
@@ -1437,6 +1877,69 @@ fn authorisation_table_in_the_docs_matches_the_matrix() {
              one the tests prove",
         );
     }
+}
+
+// ----- storage read and write counts -----
+//
+// Entry counts drive fees and the resource limits a transaction can hit. This
+// table is generated by running every row of `AUTH_MATRIX` once in the state
+// that makes the call valid, and recording the host's metered ledger entries.
+//
+// The test fails when a count changes: an increase is a cost regression, and a
+// decrease still means the committed table is stale. Regenerate intentionally
+// with `just storage-counts` (or `./scripts/refresh-storage-counts.sh`) and
+// explain the change in the pull request.
+//
+// What breaks if this is wrong: a new storage read or write in a hot path is
+// invisible until a real transaction hits the network's entry limit.
+
+const STORAGE_COUNTS_FILE: &str = "storage-counts.md";
+
+fn storage_counts_table() -> std::string::String {
+    let mut table = std::string::String::from(
+        "# Storage reads and writes per public entry point\n\
+         \n\
+         Generated by `just storage-counts` from `AUTH_MATRIX` in this crate. \
+         Reads are `memory_read_entries` and writes are `write_entries` from \
+         `Env::cost_estimate().resources()` after one successful call. Update \
+         the table in the same pull request as an intentional change.\n\
+         \n\
+         | Function | Reads | Writes |\n\
+         | --- | --- | --- |\n",
+    );
+    for case in AUTH_MATRIX {
+        let f = AuthFixture::new();
+        let run = run_case(&f, case.function);
+        table.push_str(&std::format!(
+            "| `{}` | {} | {} |\n",
+            case.function,
+            run.reads,
+            run.writes,
+        ));
+    }
+    table
+}
+
+#[test]
+fn storage_counts_match_the_committed_table() {
+    let table = storage_counts_table();
+    let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join(STORAGE_COUNTS_FILE);
+    if std::env::var_os("UPDATE_STORAGE_COUNTS").is_some() {
+        std::fs::write(&path, &table).unwrap();
+        return;
+    }
+    let committed = std::fs::read_to_string(&path).unwrap_or_else(|_| {
+        panic!(
+            "{} is missing; regenerate it with `just storage-counts`",
+            path.display()
+        )
+    });
+    assert_eq!(
+        committed, table,
+        "storage reads or writes changed for a registry entry point. If the change is \
+         intentional, run `just storage-counts` and explain the new cost in the pull \
+         request; if it is not, the call is doing more ledger work than it used to",
+    );
 }
 
 // ----- event snapshots -----
@@ -1626,6 +2129,7 @@ fn provider_registered_event_snapshot() {
         &provider,
         &String::from_str(&f.env, "Lagos Clinic"),
         &String::from_str(&f.env, "NG"),
+        &ProviderCategory::Clinic,
     );
 
     let e = one_event(&f);
@@ -1633,11 +2137,30 @@ fn provider_registered_event_snapshot() {
         &e,
         "provider_registered",
         &[ScVal::from(&provider)],
-        &["name", "country", "registered_at"],
+        &["name", "country", "registered_at", "category"],
     );
     assert_eq!(field_text(&e, "name"), "Lagos Clinic");
     assert_eq!(field_text(&e, "country"), "NG");
     assert_eq!(field_u64(&e, "registered_at"), 1_700_000_000);
+    assert_eq!(field_u32(&e, "category"), 0);
+}
+
+#[test]
+fn provider_category_changed_event_snapshot() {
+    let f = setup();
+    let provider = register_active_provider(&f);
+
+    f.client
+        .update_provider_category(&provider, &ProviderCategory::Pharmacy);
+
+    let e = one_event(&f);
+    assert_layout(
+        &e,
+        "provider_category_changed",
+        &[ScVal::from(&provider)],
+        &["category"],
+    );
+    assert_eq!(field_u32(&e, "category"), 1);
 }
 
 #[test]
@@ -1662,6 +2185,24 @@ fn provider_status_changed_event_snapshot() {
     // Unit enum with explicit discriminants: Suspended is 2.
     assert_eq!(field_u32(&e, "status"), 2);
     assert_eq!(field_u32(&e, "reason_code"), REASON_SUSPENDED_WHILE_TESTING);
+}
+
+#[test]
+fn verification_evidence_set_event_snapshot() {
+    let f = setup();
+    let provider = register_active_provider(&f);
+    let hash = BytesN::from_array(&f.env, &[7u8; 32]);
+
+    f.client
+        .set_verification_evidence(&f.admin, &provider, &hash);
+
+    let e = one_event(&f);
+    assert_layout(
+        &e,
+        "verification_evidence_set",
+        &[ScVal::from(&provider)],
+        &["evidence_hash"],
+    );
 }
 
 #[test]
@@ -1716,8 +2257,13 @@ fn service_price_scheduled_event_snapshot() {
         &PRICE,
     );
 
-    f.client
-        .schedule_service_price(&provider, &CONSULT, &(PRICE * 2), &MIN_PRICE_NOTICE_SECS);
+    f.client.schedule_service_price(
+        &provider,
+        &CONSULT,
+        &(PRICE * 2),
+        &MIN_PRICE_NOTICE_SECS,
+        &false,
+    );
 
     let e = one_event(&f);
     assert_layout(
@@ -2024,7 +2570,7 @@ fn country_codes_need_two_uppercase_ascii_letters() {
         let country = String::from_str(&f.env, bad);
         let err = f
             .client
-            .try_register_provider(&provider, &name, &country)
+            .try_register_provider(&provider, &name, &country, &ProviderCategory::Clinic)
             .err()
             .unwrap()
             .unwrap();
@@ -2040,7 +2586,8 @@ fn country_codes_need_two_uppercase_ascii_letters() {
     for good in ["NG", "KE", "GB"] {
         let provider = Address::generate(&f.env);
         let country = String::from_str(&f.env, good);
-        f.client.register_provider(&provider, &name, &country);
+        f.client
+            .register_provider(&provider, &name, &country, &ProviderCategory::Clinic);
         assert_eq!(f.client.get_provider(&provider).country, country);
     }
 }
@@ -2063,6 +2610,7 @@ fn provider_in(f: &Fixture, status: ProviderStatus) -> Address {
         &provider,
         &String::from_str(&f.env, "Clinic"),
         &String::from_str(&f.env, "NG"),
+        &ProviderCategory::Clinic,
     );
     match status {
         ProviderStatus::Pending => {}
@@ -2202,6 +2750,7 @@ fn reason_code_is_recorded_on_every_status_change() {
         &provider,
         &String::from_str(&f.env, "Clinic"),
         &String::from_str(&f.env, "NG"),
+        &ProviderCategory::Clinic,
     );
     // No status change has happened yet.
     assert_eq!(f.client.get_provider(&provider).reason_code, 0);
@@ -2353,4 +2902,520 @@ fn a_retired_clinic_cannot_manage_its_catalog() {
         .unwrap()
         .unwrap();
     assert_eq!(err, RegistryError::ProviderNotActive);
+}
+
+// ----- event table in the docs -----
+//
+// Events are the indexer's API. This test reads the `#[contractevent]` structs
+// in `events.rs` and compares the event names, topics and data fields with the
+// table in `docs/developers/contracts.md`. Adding a field without documenting
+// it fails here rather than in a downstream decoder.
+//
+// What breaks if this is wrong: `sci-healthcare-backend` decodes by event name
+// and field name, so an undocumented rename becomes `undefined` in the indexer.
+
+#[derive(Debug)]
+struct SourceEvent {
+    name: std::string::String,
+    topics: std::vec::Vec<std::string::String>,
+    data: std::vec::Vec<std::string::String>,
+}
+
+fn snake_case(name: &str) -> std::string::String {
+    let mut out = std::string::String::new();
+    for (index, ch) in name.chars().enumerate() {
+        if ch.is_ascii_uppercase() {
+            if index != 0 {
+                out.push('_');
+            }
+            out.push(ch.to_ascii_lowercase());
+        } else {
+            out.push(ch);
+        }
+    }
+    out
+}
+
+fn events_in_source(source: &str) -> std::vec::Vec<SourceEvent> {
+    let mut events = std::vec::Vec::new();
+    let mut seen_attribute = false;
+    let mut current: Option<SourceEvent> = None;
+    let mut pending_topic = false;
+
+    for raw in source.lines() {
+        let line = raw.trim();
+        if line.starts_with("#[contractevent") {
+            seen_attribute = true;
+            continue;
+        }
+        let Some(event) = current.as_mut() else {
+            if seen_attribute {
+                if let Some(rest) = line.strip_prefix("pub struct ") {
+                    let name = rest.trim().trim_end_matches('{').trim();
+                    current = Some(SourceEvent {
+                        name: snake_case(name),
+                        topics: std::vec::Vec::new(),
+                        data: std::vec::Vec::new(),
+                    });
+                    seen_attribute = false;
+                }
+            }
+            continue;
+        };
+        if line == "}" {
+            events.push(current.take().unwrap());
+            continue;
+        }
+        if line == "#[topic]" {
+            pending_topic = true;
+            continue;
+        }
+        if let Some(rest) = line.strip_prefix("pub ") {
+            let field = rest.split(':').next().unwrap().trim();
+            if pending_topic {
+                event.topics.push(field.into());
+            } else {
+                event.data.push(field.into());
+            }
+            pending_topic = false;
+        }
+    }
+
+    events
+}
+
+fn doc_event_rows<'a>(docs: &'a str, contract: &str) -> std::vec::Vec<&'a str> {
+    let heading = if contract == "faucet" {
+        "## faucet (testnet only)\n".to_string()
+    } else {
+        std::format!("## {contract}\n")
+    };
+    let start = docs
+        .find(&heading)
+        .unwrap_or_else(|| panic!("contracts.md has no `{contract}` section"));
+    let section = &docs[start..];
+    let start = section
+        .find("### Events")
+        .unwrap_or_else(|| panic!("the `{contract}` section has no event table"));
+    let section = &section[start..];
+    let end = find_section_end(section);
+    section[..end]
+        .lines()
+        .filter(|line| line.starts_with("| `"))
+        .collect()
+}
+
+fn split_doc_fields(cell: &str) -> std::vec::Vec<std::string::String> {
+    let trimmed = cell.trim();
+    if trimmed.is_empty() || trimmed == "-" || trimmed == "—" {
+        return std::vec::Vec::new();
+    }
+    cell.split(',')
+        .map(|field| field.trim().trim_matches('`').into())
+        .collect()
+}
+
+fn doc_event_row(line: &str) -> std::vec::Vec<std::string::String> {
+    line.trim()
+        .trim_matches('|')
+        .split('|')
+        .map(|cell| cell.trim().trim_matches('`').into())
+        .collect()
+}
+
+#[test]
+fn event_table_in_the_docs_matches_the_source() {
+    const DOCS: &str = include_str!("../../../docs/developers/contracts.md");
+    const SOURCE: &str = include_str!("events.rs");
+
+    let source = events_in_source(SOURCE);
+    let rows = doc_event_rows(DOCS, "registry");
+    assert_eq!(
+        rows.len(),
+        source.len(),
+        "docs/developers/contracts.md documents {} registry events but the source has {}",
+        rows.len(),
+        source.len(),
+    );
+    for event in source {
+        let row = rows
+            .iter()
+            .map(|line| doc_event_row(line))
+            .find(|row| row[0] == event.name)
+            .unwrap_or_else(|| {
+                panic!(
+                    "docs/developers/contracts.md is missing the `{}` event. Add its row \
+                     to the registry event table with topics {:?} and data {:?}",
+                    event.name, event.topics, event.data,
+                )
+            });
+        assert_eq!(
+            split_doc_fields(&row[1]),
+            event.topics,
+            "the topics documented for `{}` do not match the #[topic] fields in \
+             contracts/registry/src/events.rs",
+            event.name,
+        );
+        assert_eq!(
+            split_doc_fields(&row[2]),
+            event.data,
+            "the data fields documented for `{}` do not match the non-topic fields in \
+             contracts/registry/src/events.rs. The indexer decodes them by name \
+             (TOPIC_FIELDS in sci-healthcare-backend/src/stellar/events.ts)",
+            event.name,
+        );
+    }
+}
+
+// ----- stored-type upgrade safety -----
+//
+// The fixtures in `fixtures/stored_types/` are XDR of the values the latest
+// release writes. If a change to a `#[contracttype]` struct makes an old
+// fixture undecodable, every entry written by the previous release is
+// unreadable unless the change is handled deliberately. Regenerate only at
+// release time with `just stored-type-fixtures`.
+//
+// What breaks if this is wrong: a deployed contract upgrade (or a redeploy
+// pointed at existing state) loses access to providers and services already
+// in the ledger.
+
+fn fixture_path(name: &str) -> std::path::PathBuf {
+    std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("fixtures/stored_types")
+        .join(std::format!("{name}.hex"))
+}
+
+fn to_hex(bytes: &soroban_sdk::Bytes) -> std::string::String {
+    use std::fmt::Write as _;
+
+    let mut out = std::string::String::new();
+    for byte in bytes.iter() {
+        write!(&mut out, "{byte:02x}").unwrap();
+    }
+    out
+}
+
+fn from_hex(env: &Env, text: &str) -> soroban_sdk::Bytes {
+    let text = text.trim();
+    assert_eq!(
+        text.len() % 2,
+        0,
+        "a stored-type fixture has an odd hex length"
+    );
+    let mut bytes = std::vec::Vec::with_capacity(text.len() / 2);
+    for index in (0..text.len()).step_by(2) {
+        bytes.push(u8::from_str_radix(&text[index..index + 2], 16).unwrap());
+    }
+    soroban_sdk::Bytes::from_slice(env, &bytes)
+}
+
+fn check_stored_type<T>(env: &Env, name: &str, expected: T)
+where
+    T: soroban_sdk::xdr::ToXdr + soroban_sdk::xdr::FromXdr + Clone + PartialEq + std::fmt::Debug,
+    <T as soroban_sdk::xdr::FromXdr>::Error: std::fmt::Debug,
+{
+    let bytes = expected.clone().to_xdr(env);
+    let path = fixture_path(name);
+
+    if std::env::var_os("UPDATE_STORED_TYPE_FIXTURES").is_some() {
+        std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+        std::fs::write(&path, std::format!("{}\n", to_hex(&bytes))).unwrap();
+        return;
+    }
+
+    let committed = std::fs::read_to_string(&path).unwrap_or_else(|_| {
+        panic!(
+            "{} is missing; regenerate fixtures with `just stored-type-fixtures`",
+            path.display()
+        )
+    });
+    let fixture = from_hex(env, &committed);
+    match T::from_xdr(env, &fixture) {
+        Ok(decoded) => assert_eq!(
+            decoded, expected,
+            "the stored `{name}` fixture decodes to a different value than the current \
+             code writes. This is a breaking storage change: keep the old layout, put \
+             new fields under a new data key, or add a versioned migration before \
+             refreshing the fixture",
+        ),
+        Err(error) => panic!(
+            "the stored `{name}` fixture no longer decodes into the current type: \
+             {error:?}. Adding, removing, renaming or reordering a field is a breaking \
+             storage change. Keep the old layout, put new fields under a new data key \
+             with a default, or add a versioned migration; only then refresh fixtures \
+             with `just stored-type-fixtures`",
+        ),
+    }
+}
+
+#[test]
+fn stored_type_fixtures_decode_against_current_code() {
+    let env = Env::default();
+    let owner = Address::from_str(
+        &env,
+        "GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWHF",
+    );
+
+    check_stored_type(
+        &env,
+        "provider",
+        Provider {
+            owner,
+            name: String::from_str(&env, "Ikeja General Clinic"),
+            country: String::from_str(&env, "NG"),
+            status: ProviderStatus::Active,
+            registered_at: 1_700_000_000,
+            reason_code: REASON_VERIFIED,
+            category: ProviderCategory::Clinic,
+            verification_evidence: None,
+        },
+    );
+    check_stored_type(
+        &env,
+        "service_item",
+        ServiceItem {
+            code: CONSULT,
+            label: String::from_str(&env, "Outpatient consult"),
+            price: PRICE,
+            active: true,
+            available: false,
+            pending_price: PRICE + 5_000_000,
+            effective_at: 1_700_086_400,
+        },
+    );
+}
+
+// ----- reinstating a suspended provider (#302) -----
+//
+// `Suspended → Active` re-opens a clinic to funding, so it is the most
+// sensitive move in the state machine. Only the stored admin, signing, may
+// make it, and it must always say why. Every other caller is tried below,
+// and each failure is checked to leave the clinic suspended with its
+// suspension reason intact.
+//
+// What breaks if this is wrong: a clinic suspended for fraud reinstates
+// itself (or is reinstated by an attester or a stale admin key) and funders
+// start escrowing money for it again, or it is reinstated with no recorded
+// reason and nobody can tell from the history why it was trusted again.
+
+const REASON_FRAUD: u32 = 4;
+
+/// A registered, activated, then suspended (for fraud) provider.
+fn suspended_provider(f: &Fixture) -> Address {
+    let provider = register_active_provider(f);
+    f.client.set_provider_status(
+        &f.admin,
+        &provider,
+        &ProviderStatus::Suspended,
+        &REASON_FRAUD,
+    );
+    provider
+}
+
+/// `caller` tries to reinstate `provider` with a valid reason; the typed error.
+fn try_reinstate_as(f: &Fixture, caller: &Address, provider: &Address) -> RegistryError {
+    f.client
+        .try_set_provider_status(caller, provider, &ProviderStatus::Active, &REASON_VERIFIED)
+        .err()
+        .unwrap()
+        .unwrap()
+}
+
+fn assert_still_suspended(f: &Fixture, provider: &Address) {
+    let p = f.client.get_provider(provider);
+    assert_eq!(p.status, ProviderStatus::Suspended);
+    assert_eq!(
+        p.reason_code, REASON_FRAUD,
+        "the suspension reason must survive"
+    );
+    assert!(!f.client.is_active_provider(provider));
+    assert_eq!(f.client.provider_counts(), (0, 0, 1));
+}
+
+#[test]
+fn admin_can_reinstate_a_suspended_provider_with_a_reason() {
+    let f = setup();
+    let provider = suspended_provider(&f);
+
+    f.client.set_provider_status(
+        &f.admin,
+        &provider,
+        &ProviderStatus::Active,
+        &REASON_VERIFIED,
+    );
+
+    // Exactly the admin signed for it.
+    let auths = f.env.auths();
+    assert_eq!(auths.len(), 1);
+    assert_eq!(auths[0].0, f.admin);
+
+    let p = f.client.get_provider(&provider);
+    assert_eq!(p.status, ProviderStatus::Active);
+    assert_eq!(p.reason_code, REASON_VERIFIED);
+    assert!(f.client.is_active_provider(&provider));
+}
+
+#[test]
+fn provider_cannot_reinstate_itself() {
+    let f = setup();
+    let provider = suspended_provider(&f);
+    assert_eq!(
+        try_reinstate_as(&f, &provider, &provider),
+        RegistryError::NotAuthorized
+    );
+    assert_still_suspended(&f, &provider);
+}
+
+#[test]
+fn stranger_cannot_reinstate_a_provider() {
+    let f = setup();
+    let provider = suspended_provider(&f);
+    let stranger = Address::generate(&f.env);
+    assert_eq!(
+        try_reinstate_as(&f, &stranger, &provider),
+        RegistryError::NotAuthorized
+    );
+    assert_still_suspended(&f, &provider);
+}
+
+#[test]
+fn attester_cannot_reinstate_a_provider() {
+    let f = setup();
+    let provider = suspended_provider(&f);
+    let attester = Address::generate(&f.env);
+    f.client.add_attester(&f.admin, &attester);
+    assert_eq!(
+        try_reinstate_as(&f, &attester, &provider),
+        RegistryError::NotAuthorized
+    );
+    assert_still_suspended(&f, &provider);
+}
+
+#[test]
+fn another_active_provider_cannot_reinstate_a_provider() {
+    let f = setup();
+    let provider = suspended_provider(&f);
+    let other = Address::generate(&f.env);
+    activate(&f, &other);
+    assert_eq!(
+        try_reinstate_as(&f, &other, &provider),
+        RegistryError::NotAuthorized
+    );
+    let p = f.client.get_provider(&provider);
+    assert_eq!(p.status, ProviderStatus::Suspended);
+    assert_eq!(p.reason_code, REASON_FRAUD);
+}
+
+#[test]
+fn pending_admin_cannot_reinstate_before_accepting() {
+    let f = setup();
+    let provider = suspended_provider(&f);
+    let nominee = Address::generate(&f.env);
+    f.client.propose_admin(&f.admin, &nominee);
+    assert_eq!(
+        try_reinstate_as(&f, &nominee, &provider),
+        RegistryError::NotAuthorized
+    );
+    assert_still_suspended(&f, &provider);
+}
+
+#[test]
+fn previous_admin_cannot_reinstate_after_handover() {
+    let f = setup();
+    let provider = suspended_provider(&f);
+    let new_admin = Address::generate(&f.env);
+    f.client.propose_admin(&f.admin, &new_admin);
+    f.client.accept_admin(&new_admin);
+
+    assert_eq!(
+        try_reinstate_as(&f, &f.admin, &provider),
+        RegistryError::NotAuthorized
+    );
+    assert_still_suspended(&f, &provider);
+
+    // The new admin can.
+    f.client.set_provider_status(
+        &new_admin,
+        &provider,
+        &ProviderStatus::Active,
+        &REASON_VERIFIED,
+    );
+    assert!(f.client.is_active_provider(&provider));
+}
+
+#[test]
+fn admin_address_without_its_signature_cannot_reinstate() {
+    let f = setup();
+    let provider = suspended_provider(&f);
+
+    // The right address, but nobody signed: the host refuses.
+    f.env.mock_auths(&[]);
+    assert!(
+        f.client
+            .try_set_provider_status(
+                &f.admin,
+                &provider,
+                &ProviderStatus::Active,
+                &REASON_VERIFIED
+            )
+            .is_err(),
+        "an unsigned reinstatement must not go through"
+    );
+    f.env.mock_all_auths();
+    assert_still_suspended(&f, &provider);
+}
+
+#[test]
+fn reinstating_with_reason_zero_is_rejected() {
+    let f = setup();
+    let provider = suspended_provider(&f);
+    let err = f
+        .client
+        .try_set_provider_status(&f.admin, &provider, &ProviderStatus::Active, &0u32)
+        .err()
+        .unwrap()
+        .unwrap();
+    assert_eq!(err, RegistryError::MissingReasonCode);
+    assert_still_suspended(&f, &provider);
+}
+
+#[test]
+fn every_admin_status_change_requires_a_reason() {
+    // Not only reinstatement: each allowed transition refuses code 0, which
+    // is reserved for "no status change yet".
+    for (from, to) in [
+        (ProviderStatus::Pending, ProviderStatus::Active),
+        (ProviderStatus::Pending, ProviderStatus::Suspended),
+        (ProviderStatus::Active, ProviderStatus::Suspended),
+        (ProviderStatus::Suspended, ProviderStatus::Active),
+    ] {
+        let f = setup();
+        let provider = provider_in(&f, from);
+        let before = f.client.get_provider(&provider);
+        let err = f
+            .client
+            .try_set_provider_status(&f.admin, &provider, &to, &0u32)
+            .err()
+            .unwrap()
+            .unwrap();
+        assert_eq!(err, RegistryError::MissingReasonCode, "`{from:?} → {to:?}`");
+        assert_eq!(f.client.get_provider(&provider), before);
+    }
+}
+
+#[test]
+fn non_admin_with_reason_zero_gets_not_authorized() {
+    // Authorisation is checked first, so a stranger learns nothing about
+    // the reason-code rule or the provider.
+    let f = setup();
+    let provider = suspended_provider(&f);
+    let stranger = Address::generate(&f.env);
+    let err = f
+        .client
+        .try_set_provider_status(&stranger, &provider, &ProviderStatus::Active, &0u32)
+        .err()
+        .unwrap()
+        .unwrap();
+    assert_eq!(err, RegistryError::NotAuthorized);
+    assert_still_suspended(&f, &provider);
 }

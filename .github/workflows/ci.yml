@@ -234,14 +234,15 @@ jobs:
       run:
         working-directory: examples
     steps:
-      - uses: actions/checkout@v5
-      - uses: actions/setup-node@v7
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v5
         with:
           node-version: '22'
           cache: npm
           cache-dependency-path: examples/package-lock.json
       - run: npm ci
       - run: npm run typecheck
+      - run: npm test
 
   bot:
     name: auto-merge bot tests
@@ -251,4 +252,4 @@ jobs:
       - uses: actions/setup-node@v7
         with:
           node-version: '22'
-      - run: node --test .github/scripts/automerge.test.cjs .github/scripts/security-scan.test.cjs
+      - run: node --test .github/scripts/automerge.test.cjs .github/scripts/security-scan.test.cjs .github/scripts/changelog-check.test.cjs

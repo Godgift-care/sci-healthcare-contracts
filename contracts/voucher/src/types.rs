@@ -55,6 +55,13 @@ pub struct Voucher {
     /// the protocol fee, which is why it is stored on the voucher rather than
     /// looked up later: the attester of record is the one who did the work.
     pub attester: Option<Address>,
+    /// Ledger sequence of the last write to this voucher: funding, claim,
+    /// attestation, dispute, settlement, refund, redirect or reduction.
+    ///
+    /// Indexers reconcile against ledger sequence rather than ledger time,
+    /// which is only approximate. Vouchers written before this field existed
+    /// decode with `0`, meaning the ledger is unknown.
+    pub updated_ledger: u32,
 }
 
 /// Optional terms a funder can attach to a voucher with
@@ -126,6 +133,9 @@ pub enum DataKey {
     /// Most value one clinic may hold in escrow at once. Unset or 0 means
     /// unlimited.
     EscrowCap,
+    /// Value above which a voucher must carry a presence commitment. Unset
+    /// or 0 means no protocol-level requirement.
+    PresenceThreshold,
 }
 
 /// A clinic's open vouchers: every voucher funded to it that has not yet
@@ -201,6 +211,20 @@ pub enum VoucherError {
     /// The chosen dispute window is outside the allowed bounds, or the bounds
     /// themselves are invalid.
     InvalidDisputeWindow = 31,
+    /// This voucher is above the admin-set presence threshold, so it must be
+    /// funded with a `presence_commitment`.
+    PresenceCommitmentRequired = 32,
+    /// The presence threshold cannot be negative.
+    InvalidPresenceThreshold = 33,
+    /// The settlement token moved a different amount than requested: the
+    /// escrow received less (or more) than a funder paid in, or a payout
+    /// debited the escrow or credited the recipient by something other than
+    /// the amount sent. Happens only with a token that charges transfer fees
+    /// or runs hooks; USDC on Stellar never does. The whole call reverts.
+    TokenAmountMismatch = 34,
+    /// The registry price changed between the quote the funder saw and this
+    /// call. Nothing was escrowed; re-quote before signing.
+    PriceChanged = 42,
 }
 
 /// Maps the shared helpers' failures onto this contract's error numbers, so
