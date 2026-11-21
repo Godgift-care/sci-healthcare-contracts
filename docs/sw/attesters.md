@@ -27,7 +27,7 @@ Lengo ni uhuru. Ikiwa kipato cha mthibitishaji kinategemea kliniki kulipwa, king
 2. **Hakikisha huduma ilitolewa.** Kwa njia yoyote programu yako inavyofanya — kuwepo mwenyewe, kukagua rejista, kuzungumza na mgonjwa.
 3. **Bonyeza Confirm care delivered.**
 
-Kabla ya kuthibitisha, pitia [orodha ya ushahidi na kanuni za maadili kwa wathibitishaji](../guides/attester-checklist.md) (kwa Kiingereza) kila mara.
+Kabla ya kuthibitisha, pitia [orodha ya ushahidi na kanuni za maadili kwa wathibitishaji](attester-checklist.md) kila mara.
 
 ## Kile ambacho mkataba unalazimisha
 

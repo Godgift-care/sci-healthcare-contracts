@@ -51,4 +51,4 @@ Vous recevez le montant du bon moins les 1 % de frais du protocole. Un bon de 3,
 
 ## Plus de questions
 
-Voir la [FAQ clinique](../clinics-faq.md) (en anglais) pour les délais de paiement, les litiges, les frais et d'autres questions courantes, chacune avec un lien vers la source.
+Voir la [FAQ clinique](clinics-faq.md) pour les délais de paiement, les litiges, les frais et d'autres questions courantes, chacune avec un lien vers la source.

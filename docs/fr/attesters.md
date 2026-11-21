@@ -27,6 +27,8 @@ Le but est l'indépendance. Si le revenu de l'attesteur dépend du paiement de l
 2. **Vérifiez que les soins ont eu lieu.** Comme votre programme le fait — en étant présent, en consultant le registre, en parlant au patient.
 3. **Appuyez sur « Confirmer que les soins ont été délivrés »**.
 
+Avant d'attester, consultez toujours la [liste de contrôle des preuves et le code de conduite](attester-checklist.md).
+
 ## Ce que le contrat impose
 
 - **Vous ne pouvez pas attester pour une clinique qui est la vôtre.** Si l'adresse de l'attesteur correspond à l'adresse du fournisseur, l'appel est rejeté. Toujours, sans exception.
