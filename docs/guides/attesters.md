@@ -1,11 +1,13 @@
 ---
 title: Attesting delivery
 nav_order: 8
+language: en
+translations:
+  fr: /fr/attesters.html
+  sw: /sw/attesters.html
 ---
 
 # Attesting delivery
-
-🇫🇷 [Lire ce guide en français](../fr/attesters.md) · 🇰🇪🇹🇿 [Soma mwongozo huu kwa Kiswahili](../sw/attesters.md)
 
 An attester confirms that care actually happened. This is the most important role in the protocol and the one carrying the most responsibility.
 

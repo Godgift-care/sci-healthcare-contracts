@@ -1,11 +1,13 @@
 ---
 title: Financer des soins pour quelqu'un
 nav_order: 6
+language: fr
+translations:
+  en: /guides/funders.html
+  sw: /sw/funders.html
 ---
 
 # Financer des soins pour quelqu'un
-
-🇬🇧 [Lire ce guide en anglais](../guides/funders.md)
 
 Vous payez un traitement précis dans une clinique précise, pour vous-même ou pour quelqu'un d'autre.
 

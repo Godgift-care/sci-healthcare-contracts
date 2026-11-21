@@ -1,11 +1,13 @@
 ---
 title: Économie
 nav_order: 3
+language: fr
+translations:
+  en: /protocol/economics.html
+  sw: /sw/protocol/economics.html
 ---
 
 # Économie
-
-🇬🇧 [Lire cette page en anglais](../../protocol/economics.md) · 🇰🇪🇹🇿 [Soma ukurasa huu kwa Kiswahili](../../sw/protocol/economics.md)
 
 ## Les frais
 

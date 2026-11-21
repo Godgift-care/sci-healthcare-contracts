@@ -1,11 +1,13 @@
 ---
 title: Gérer une clinique
 nav_order: 7
+language: fr
+translations:
+  en: /guides/clinics.html
+  sw: /sw/clinics.html
 ---
 
 # Gérer une clinique
-
-🇬🇧 [Lire ce guide en anglais](../guides/clinics.md)
 
 Vous êtes une clinique, une pharmacie ou un laboratoire qui souhaite être payé via le protocole.
 

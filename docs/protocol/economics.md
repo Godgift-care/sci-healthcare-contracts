@@ -1,11 +1,13 @@
 ---
 title: Economics
 nav_order: 3
+language: en
+translations:
+  fr: /fr/protocol/economics.html
+  sw: /sw/protocol/economics.html
 ---
 
 # Economics
-
-🇫🇷 [Lire cette page en français](../fr/protocol/economics.md) · 🇰🇪🇹🇿 [Soma ukurasa huu kwa Kiswahili](../sw/protocol/economics.md)
 
 ## The fee
 

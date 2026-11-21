@@ -1,11 +1,13 @@
 ---
 title: Fonctionnement d'un bon
 nav_order: 2
+language: fr
+translations:
+  en: /protocol/lifecycle.html
+  sw: /sw/protocol/lifecycle.html
 ---
 
 # Fonctionnement d'un bon
-
-🇬🇧 [Lire cette page en anglais](../../protocol/lifecycle.md) · 🇰🇪🇹🇿 [Soma ukurasa huu kwa Kiswahili](../../sw/protocol/lifecycle.md)
 
 Un bon est un engagement unique de payer une clinique pour une prestation. Il traverse un ensemble fixe d'états, et chaque transition est un appel au contrat qu'une personne précise est autorisée à effectuer.
 

@@ -1,11 +1,13 @@
 ---
 title: Confidentialité
 nav_order: 5
+language: fr
+translations:
+  en: /protocol/privacy.html
+  sw: /sw/protocol/privacy.html
 ---
 
 # Confidentialité
-
-🇬🇧 [Lire cette page en anglais](../../protocol/privacy.md) · 🇰🇪🇹🇿 [Soma ukurasa huu kwa Kiswahili](../../sw/protocol/privacy.md)
 
 La règle la plus difficile de ce projet : **aucune information de santé protégée n'atteint le registre, jamais.**
 

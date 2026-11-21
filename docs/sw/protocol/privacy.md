@@ -1,11 +1,13 @@
 ---
 title: Faragha
 nav_order: 5
+language: sw
+translations:
+  en: /protocol/privacy.html
+  fr: /fr/protocol/privacy.html
 ---
 
 # Faragha
-
-🇬🇧 [Soma ukurasa huu kwa Kiingereza](../../protocol/privacy.md) · 🇫🇷 [Lire cette page en français](../../fr/protocol/privacy.md)
 
 Kanuni ngumu zaidi katika mradi huu: **hakuna taarifa ya afya inayolindwa inayofika kwenye leja, kamwe.**
 

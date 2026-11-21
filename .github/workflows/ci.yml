@@ -252,4 +252,6 @@ jobs:
       - uses: actions/setup-node@v7
         with:
           node-version: '22'
-      - run: node --test .github/scripts/automerge.test.cjs .github/scripts/security-scan.test.cjs .github/scripts/changelog-check.test.cjs
+      - run: node --test .github/scripts/automerge.test.cjs .github/scripts/security-scan.test.cjs .github/scripts/changelog-check.test.cjs .github/scripts/i18n-check.test.cjs
+      - name: Check translation links
+        run: node .github/scripts/i18n-check.cjs docs

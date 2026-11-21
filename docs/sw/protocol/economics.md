@@ -1,11 +1,13 @@
 ---
 title: Uchumi
 nav_order: 3
+language: sw
+translations:
+  en: /protocol/economics.html
+  fr: /fr/protocol/economics.html
 ---
 
 # Uchumi
-
-🇬🇧 [Soma ukurasa huu kwa Kiingereza](../../protocol/economics.md) · 🇫🇷 [Lire cette page en français](../../fr/protocol/economics.md)
 
 ## Ada
 

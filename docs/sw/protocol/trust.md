@@ -1,11 +1,13 @@
 ---
 title: Mfumo wa uaminifu
 nav_order: 4
+language: sw
+translations:
+  en: /protocol/trust.html
+  fr: /fr/protocol/trust.html
 ---
 
 # Mfumo wa uaminifu
-
-🇬🇧 [Soma ukurasa huu kwa Kiingereza](../../protocol/trust.md) · 🇫🇷 [Lire cette page en français](../../fr/protocol/trust.md)
 
 Itifaki hii ni **iliyopunguza utegemezi wa uaminifu, si isiyo na uaminifu**. Inafaa kuwa sahihi kuhusu maana ya hilo, kwa sababu kukuzidisha kungekuwa jambo rahisi zaidi kufanya na lenye madhara zaidi.
 

@@ -214,6 +214,25 @@ python3 -m http.server 4000 --directory _site   # http://localhost:4000, /v0.2.0
 `DOCS_BASE_PATH=""` serves the site from `/` for local preview; CI sets the
 real path. `DOCS_TAGS=""` builds `main` only.
 
+### Translations
+
+The funder, clinic and attester guides and the protocol pages also exist in
+French (`docs/fr/`) and Swahili (`docs/sw/`). A translated page declares its
+counterparts in front matter, and the switcher in `docs/_includes/header_custom.html`
+renders them at the top of the page:
+
+```yaml
+language: fr
+translations:
+  en: /guides/funders.html
+  sw: /sw/funders.html
+```
+
+Link every counterpart that exists, and each one has to link back.
+`node .github/scripts/i18n-check.cjs docs` fails when a translated page has no
+front matter, points at a page that does not exist, or omits a link; CI runs
+it, and `node --test .github/scripts/i18n-check.test.cjs` covers the check.
+
 ## Adding a contract event
 
 Events are part of the public interface. When adding or changing one:

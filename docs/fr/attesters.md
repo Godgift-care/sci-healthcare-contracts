@@ -1,11 +1,13 @@
 ---
 title: Attester la prestation de soins
 nav_order: 8
+language: fr
+translations:
+  en: /guides/attesters.html
+  sw: /sw/attesters.html
 ---
 
 # Attester la prestation de soins
-
-🇬🇧 [Lire ce guide en anglais](../guides/attesters.md)
 
 Un attesteur confirme que les soins ont bien eu lieu. C'est le rôle le plus important du protocole et celui qui porte le plus de responsabilité.
 

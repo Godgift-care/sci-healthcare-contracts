@@ -55,3 +55,61 @@
   });
 </script>
 {%- endif -%}
+{%- comment -%}
+  Language switcher.
+
+  Rendered here and moved to the top of the page content by the script
+  below, so it is visible at every width. Each translated page declares its
+  counterparts in front matter:
+
+    language: fr
+    translations:
+      en: /guides/funders.html
+      sw: /sw/funders.html
+
+  A page with no translations (the English-only ADRs, for example) renders
+  nothing. .github/scripts/i18n-check.cjs keeps the declarations complete and
+  symmetric; add a language there and a block below when adding one.
+{%- endcomment -%}
+{%- if page.language and page.translations and page.translations.size > 0 -%}
+<style>
+  .language-switcher {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.25rem 1rem;
+    align-items: center;
+    margin: 0 0 1.5rem;
+    padding: 0.5rem 0.75rem;
+    font-size: 0.875rem;
+    border: 1px solid #eeebee;
+    border-radius: 4px;
+  }
+  .language-switcher__item { white-space: nowrap; }
+  .language-switcher__item--current { font-weight: 600; }
+</style>
+<nav id="language-switcher" class="language-switcher" aria-label="Language">
+  {%- if page.language == "en" -%}
+    <span class="language-switcher__item language-switcher__item--current" aria-current="true">🇬🇧 English</span>
+  {%- elsif page.translations.en -%}
+    <a class="language-switcher__item" href="{{ page.translations.en | relative_url }}" hreflang="en" lang="en">🇬🇧 English</a>
+  {%- endif -%}
+  {%- if page.language == "fr" -%}
+    <span class="language-switcher__item language-switcher__item--current" aria-current="true">🇫🇷 Français</span>
+  {%- elsif page.translations.fr -%}
+    <a class="language-switcher__item" href="{{ page.translations.fr | relative_url }}" hreflang="fr" lang="fr">🇫🇷 Français</a>
+  {%- endif -%}
+  {%- if page.language == "sw" -%}
+    <span class="language-switcher__item language-switcher__item--current" aria-current="true">🇰🇪🇹🇿 Kiswahili</span>
+  {%- elsif page.translations.sw -%}
+    <a class="language-switcher__item" href="{{ page.translations.sw | relative_url }}" hreflang="sw" lang="sw">🇰🇪🇹🇿 Kiswahili</a>
+  {%- endif -%}
+</nav>
+{%- endif -%}
+<script>
+  document.addEventListener('DOMContentLoaded', function () {
+    var switcher = document.getElementById('language-switcher');
+    var wrap = document.querySelector('.main-content-wrap');
+    if (switcher && wrap) wrap.insertBefore(switcher, wrap.firstChild);
+  });
+</script>
+

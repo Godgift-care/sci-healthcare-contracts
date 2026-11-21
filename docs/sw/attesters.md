@@ -1,11 +1,13 @@
 ---
 title: Kuthibitisha utoaji wa huduma
 nav_order: 8
+language: sw
+translations:
+  en: /guides/attesters.html
+  fr: /fr/attesters.html
 ---
 
 # Kuthibitisha utoaji wa huduma
-
-🇬🇧 [Soma mwongozo huu kwa Kiingereza](../guides/attesters.md) · 🇫🇷 [Lire ce guide en français](../fr/attesters.md)
 
 Mthibitishaji (attester) anathibitisha kuwa matibabu yalitolewa kweli. Hili ndilo jukumu muhimu zaidi katika itifaki na lenye dhamana kubwa zaidi.
 

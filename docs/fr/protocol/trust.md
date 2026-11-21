@@ -1,11 +1,13 @@
 ---
 title: Modèle de confiance
 nav_order: 4
+language: fr
+translations:
+  en: /protocol/trust.html
+  sw: /sw/protocol/trust.html
 ---
 
 # Modèle de confiance
-
-🇬🇧 [Lire cette page en anglais](../../protocol/trust.md) · 🇰🇪🇹🇿 [Soma ukurasa huu kwa Kiswahili](../../sw/protocol/trust.md)
 
 Ce protocole est **minimisant la confiance, pas sans confiance**. Il vaut la peine d'être précis sur ce que cela signifie, car le survendre serait la chose la plus facile à faire et la plus dommageable.
 

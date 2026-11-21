@@ -1,11 +1,13 @@
 ---
 title: Trust model
 nav_order: 4
+language: en
+translations:
+  fr: /fr/protocol/trust.html
+  sw: /sw/protocol/trust.html
 ---
 
 # Trust model
-
-🇫🇷 [Lire cette page en français](../fr/protocol/trust.md) · 🇰🇪🇹🇿 [Soma ukurasa huu kwa Kiswahili](../sw/protocol/trust.md)
 
 This protocol is **trust-minimised, not trustless**. It is worth being exact about what that means, because overselling it would be the easiest thing to do and the most damaging.
 
