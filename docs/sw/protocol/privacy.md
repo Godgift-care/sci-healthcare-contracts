@@ -5,6 +5,8 @@ nav_order: 5
 
 # Faragha
 
+🇬🇧 [Soma ukurasa huu kwa Kiingereza](../../protocol/privacy.md) · 🇫🇷 [Lire cette page en français](../../fr/protocol/privacy.md)
+
 Kanuni ngumu zaidi katika mradi huu: **hakuna taarifa ya afya inayolindwa inayofika kwenye leja, kamwe.**
 
 Blockchain ya umma ni ya kudumu na ya kimataifa. Kitu chochote kinachoandikwa humo kinaandikwa milele. Data ya afya haipaswi kuwa humo, na majaribio mengi ya kuiweka humo — kwa usimbaji fiche, hashing, au njia nyingine — mwishowe huvuja kupitia metadata au kupoteza funguo.

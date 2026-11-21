@@ -5,7 +5,7 @@ nav_order: 3
 
 # Uchumi
 
-🇬🇧 [Soma ukurasa huu kwa Kiingereza](../../protocol/economics.md)
+🇬🇧 [Soma ukurasa huu kwa Kiingereza](../../protocol/economics.md) · 🇫🇷 [Lire cette page en français](../../fr/protocol/economics.md)
 
 ## Ada
 

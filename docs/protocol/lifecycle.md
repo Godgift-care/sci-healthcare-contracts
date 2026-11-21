@@ -5,7 +5,7 @@ nav_order: 2
 
 # How a voucher works
 
-🇰🇪🇹🇿 [Soma ukurasa huu kwa Kiswahili](../sw/protocol/lifecycle.md)
+🇫🇷 [Lire cette page en français](../fr/protocol/lifecycle.md) · 🇰🇪🇹🇿 [Soma ukurasa huu kwa Kiswahili](../sw/protocol/lifecycle.md)
 
 A voucher is one commitment to pay one clinic for one service. It moves through a fixed set of states, and every transition is a contract call that someone specific is authorised to make.
 

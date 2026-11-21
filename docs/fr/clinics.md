@@ -5,7 +5,7 @@ nav_order: 7
 
 # Gérer une clinique
 
-🇬🇧 [Lire ce guide en anglais](../clinics.md)
+🇬🇧 [Lire ce guide en anglais](../guides/clinics.md)
 
 Vous êtes une clinique, une pharmacie ou un laboratoire qui souhaite être payé via le protocole.
 
@@ -38,6 +38,8 @@ Les prix sont un plancher. Un financeur peut payer plus, jamais moins. Mettez à
 5. **Vous êtes payé.** Après la fenêtre, n'importe qui peut déclencher le règlement, y compris vous. Appuyez sur **Libérer le paiement**.
 
 Vous recevez le montant du bon moins les 1 % de frais du protocole. Un bon de 3,00 $ vous rapporte 2,97 $.
+
+Le calcul des frais et leur répartition sont détaillés dans [Économie](protocol/economics.md), et chaque état du bon dans [Fonctionnement d'un bon](protocol/lifecycle.md). La page [Confidentialité](protocol/privacy.md) explique pourquoi les libellés et les codes restent grossiers.
 
 ## Ce qu'il vaut la peine de savoir
 

@@ -5,7 +5,7 @@ nav_order: 8
 
 # Attester la prestation de soins
 
-🇬🇧 [Lire ce guide en anglais](../attesters.md)
+🇬🇧 [Lire ce guide en anglais](../guides/attesters.md)
 
 Un attesteur confirme que les soins ont bien eu lieu. C'est le rôle le plus important du protocole et celui qui porte le plus de responsabilité.
 
@@ -37,9 +37,11 @@ Avant d'attester, consultez toujours la [liste de contrôle des preuves et le co
 
 ## Ce que le contrat n'impose pas
 
-Que vous dites la vérité. C'est l'hypothèse de confiance centrale du protocole, documentée clairement dans le [modèle de confiance](../protocol/trust.md).
+Que vous dites la vérité. C'est l'hypothèse de confiance centrale du protocole, documentée clairement dans le [modèle de confiance](protocol/trust.md).
 
 Ce qu'il fait : votre attestation est signée par votre adresse et enregistrée sur la chaîne de façon permanente. Chaque bon que vous avez jamais confirmé est public et attribuable. Il n'y a pas d'attestation anonyme.
+
+Ce que votre attestation déclenche est décrit dans [Fonctionnement d'un bon](protocol/lifecycle.md#attested), et la page [Confidentialité](protocol/privacy.md) explique pourquoi le bon ne contient aucune donnée clinique.
 
 ## Si vous avez un doute
 

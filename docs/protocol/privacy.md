@@ -5,7 +5,7 @@ nav_order: 5
 
 # Privacy
 
-🇰🇪🇹🇿 [Soma ukurasa huu kwa Kiswahili](../sw/protocol/privacy.md)
+🇫🇷 [Lire cette page en français](../fr/protocol/privacy.md) · 🇰🇪🇹🇿 [Soma ukurasa huu kwa Kiswahili](../sw/protocol/privacy.md)
 
 The single hardest rule in this project: **no protected health information reaches the ledger, ever.**
 

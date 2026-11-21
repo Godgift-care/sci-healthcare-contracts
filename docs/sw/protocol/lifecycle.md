@@ -5,7 +5,7 @@ nav_order: 2
 
 # Vocha inavyofanya kazi
 
-🇬🇧 [Soma ukurasa huu kwa Kiingereza](../../protocol/lifecycle.md)
+🇬🇧 [Soma ukurasa huu kwa Kiingereza](../../protocol/lifecycle.md) · 🇫🇷 [Lire cette page en français](../../fr/protocol/lifecycle.md)
 
 Vocha ni ahadi moja ya kumlipa kliniki moja kwa huduma moja. Inapita katika mfululizo maalum wa hali, na kila mabadiliko ni wito wa mkataba ambao mtu maalum ameidhinishwa kuufanya.
 

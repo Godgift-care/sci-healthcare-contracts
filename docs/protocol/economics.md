@@ -5,7 +5,7 @@ nav_order: 3
 
 # Economics
 
-🇰🇪🇹🇿 [Soma ukurasa huu kwa Kiswahili](../sw/protocol/economics.md)
+🇫🇷 [Lire cette page en français](../fr/protocol/economics.md) · 🇰🇪🇹🇿 [Soma ukurasa huu kwa Kiswahili](../sw/protocol/economics.md)
 
 ## The fee
 
