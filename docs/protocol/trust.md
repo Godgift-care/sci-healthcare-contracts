@@ -5,6 +5,8 @@ nav_order: 4
 
 # Trust model
 
+🇰🇪🇹🇿 [Soma ukurasa huu kwa Kiswahili](../sw/protocol/trust.md)
+
 This protocol is **trust-minimised, not trustless**. It is worth being exact about what that means, because overselling it would be the easiest thing to do and the most damaging.
 
 ## The unavoidable problem

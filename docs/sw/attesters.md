@@ -37,7 +37,7 @@ Kabla ya kuthibitisha, pitia [orodha ya ushahidi na kanuni za maadili kwa wathib
 
 ## Kile ambacho haulazimishi
 
-Kwamba unasema ukweli. Hii ndiyo dhana kuu ya uaminifu katika itifaki, imeandikwa waziwazi katika [mfumo wa uaminifu](../protocol/trust.md) (kwa Kiingereza).
+Kwamba unasema ukweli. Hii ndiyo dhana kuu ya uaminifu katika itifaki, imeandikwa waziwazi katika [mfumo wa uaminifu](protocol/trust.md).
 
 Kile unachofanya: uthibitisho wako unasainiwa na anwani yako na kurekodiwa kwenye mnyororo milele. Kila vocha uliyowahi kuthibitisha ni ya umma na inajulikana ni yako. Hakuna uthibitisho usio na jina.
 

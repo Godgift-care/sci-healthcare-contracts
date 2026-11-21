@@ -5,6 +5,8 @@ nav_order: 3
 
 # Economics
 
+🇰🇪🇹🇿 [Soma ukurasa huu kwa Kiswahili](../sw/protocol/economics.md)
+
 ## The fee
 
 The protocol takes a fee in basis points on settlement only. The production configuration is **100 basis points — 1%**. The contract caps it at 1000 bps (10%) and this ceiling is enforced at initialisation, so a misconfigured deployment cannot charge more.
