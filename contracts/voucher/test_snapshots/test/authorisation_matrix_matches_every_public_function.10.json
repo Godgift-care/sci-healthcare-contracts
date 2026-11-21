@@ -894,6 +894,36 @@
               "key": {
                 "vec": [
                   {
+                    "symbol": "Attestations"
+                  },
+                  {
+                    "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAITA4"
+                  },
+                  {
+                    "u64": "19675"
+                  }
+                ]
+              },
+              "durability": "temporary",
+              "val": {
+                "u32": 1
+              }
+            }
+          },
+          "ext": "v0"
+        },
+        "live_until": 34560
+      },
+      {
+        "entry": {
+          "last_modified_ledger_seq": 0,
+          "data": {
+            "contract_data": {
+              "ext": "v0",
+              "contract": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAATYON",
+              "key": {
+                "vec": [
+                  {
                     "symbol": "Exposure"
                   },
                   {
@@ -976,10 +1006,10 @@
                     "u64": "0"
                   },
                   {
-                    "u64": "0"
+                    "u64": "1700000000"
                   },
                   {
-                    "u64": "0"
+                    "u64": "1700259200"
                   },
                   "void",
                   {
@@ -1459,7 +1489,7 @@
                 "symbol": "voucher_refunded"
               },
               {
-                "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFCT4"
+                "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAITA4"
               }
             ],
             "data": {

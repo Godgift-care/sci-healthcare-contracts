@@ -418,7 +418,7 @@
               "contract": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHK3M",
               "key": {
                 "ledger_key_nonce": {
-                  "nonce": "6277191135259896685"
+                  "nonce": "5806905060045992000"
                 }
               },
               "durability": "temporary",
@@ -1033,7 +1033,7 @@
                     "u64": "1702592000"
                   },
                   {
-                    "u64": "1700000000"
+                    "u64": "0"
                   },
                   {
                     "u64": "0"
