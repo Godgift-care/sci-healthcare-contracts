@@ -5,6 +5,9 @@ language: fr
 translations:
   en: /guides/funders.html
   sw: /sw/funders.html
+  pt: /pt/funders.html
+  yo: /yo/funders.html
+  ig: /ig/funders.html
 ---
 
 # Financer des soins pour quelqu'un

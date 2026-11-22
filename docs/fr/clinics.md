@@ -5,6 +5,9 @@ language: fr
 translations:
   en: /guides/clinics.html
   sw: /sw/clinics.html
+  pt: /pt/clinics.html
+  yo: /yo/clinics.html
+  ig: /ig/clinics.html
 ---
 
 # Gérer une clinique

@@ -5,6 +5,9 @@ language: en
 translations:
   fr: /fr/clinics.html
   sw: /sw/clinics.html
+  pt: /pt/clinics.html
+  yo: /yo/clinics.html
+  ig: /ig/clinics.html
 ---
 
 # Running a clinic

@@ -5,6 +5,9 @@ language: sw
 translations:
   en: /guides/funders.html
   fr: /fr/funders.html
+  pt: /pt/funders.html
+  yo: /yo/funders.html
+  ig: /ig/funders.html
 ---
 
 # Kulipia matibabu ya mtu

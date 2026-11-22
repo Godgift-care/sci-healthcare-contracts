@@ -5,6 +5,8 @@ nav_order: 10
 
 # Contract reference
 
+Looking up an `Error(Contract, #N)`? Every code, with its meaning and what to do, is in the [error code reference](errors.md).
+
 Three contracts. `registry` and `receipt` hold no references and deploy first; `voucher` points at both and deploys last.
 
 All amounts are `i128` in the token's smallest unit. All timestamps are `u64` seconds since epoch.

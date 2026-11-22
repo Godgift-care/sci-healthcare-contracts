@@ -103,6 +103,21 @@
   {%- elsif page.translations.sw -%}
     <a class="language-switcher__item" href="{{ page.translations.sw | relative_url }}" hreflang="sw" lang="sw">🇰🇪🇹🇿 Kiswahili</a>
   {%- endif -%}
+  {%- if page.language == "pt" -%}
+    <span class="language-switcher__item language-switcher__item--current" aria-current="true">🇲🇿🇦🇴 Português</span>
+  {%- elsif page.translations.pt -%}
+    <a class="language-switcher__item" href="{{ page.translations.pt | relative_url }}" hreflang="pt" lang="pt">🇲🇿🇦🇴 Português</a>
+  {%- endif -%}
+  {%- if page.language == "yo" -%}
+    <span class="language-switcher__item language-switcher__item--current" aria-current="true">🇳🇬 Yorùbá</span>
+  {%- elsif page.translations.yo -%}
+    <a class="language-switcher__item" href="{{ page.translations.yo | relative_url }}" hreflang="yo" lang="yo">🇳🇬 Yorùbá</a>
+  {%- endif -%}
+  {%- if page.language == "ig" -%}
+    <span class="language-switcher__item language-switcher__item--current" aria-current="true">🇳🇬 Igbo</span>
+  {%- elsif page.translations.ig -%}
+    <a class="language-switcher__item" href="{{ page.translations.ig | relative_url }}" hreflang="ig" lang="ig">🇳🇬 Igbo</a>
+  {%- endif -%}
 </nav>
 {%- endif -%}
 <script>

@@ -5,6 +5,9 @@ language: sw
 translations:
   en: /guides/attesters.html
   fr: /fr/attesters.html
+  pt: /pt/attesters.html
+  yo: /yo/attesters.html
+  ig: /ig/attesters.html
 ---
 
 # Kuthibitisha utoaji wa huduma

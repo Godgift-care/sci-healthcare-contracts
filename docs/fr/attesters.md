@@ -5,6 +5,9 @@ language: fr
 translations:
   en: /guides/attesters.html
   sw: /sw/attesters.html
+  pt: /pt/attesters.html
+  yo: /yo/attesters.html
+  ig: /ig/attesters.html
 ---
 
 # Attester la prestation de soins

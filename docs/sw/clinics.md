@@ -5,6 +5,9 @@ language: sw
 translations:
   en: /guides/clinics.html
   fr: /fr/clinics.html
+  pt: /pt/clinics.html
+  yo: /yo/clinics.html
+  ig: /ig/clinics.html
 ---
 
 # Kuendesha kliniki

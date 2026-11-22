@@ -30,10 +30,23 @@
 * [Attester checklist and code of conduct](guides/attester-checklist.md)
 * [Attester dispute examples](guides/attester-dispute-examples.md)
 
+## Translated guides
+
+* [Português — Financiar cuidados para alguém](pt/funders.md)
+* [Português — Gerir uma clínica](pt/clinics.md)
+* [Português — Atestar a prestação de cuidados](pt/attesters.md)
+* [Yorùbá — Sísanwó ìtọ́jú fún ẹlòmíràn](yo/funders.md)
+* [Yorùbá — Ṣíṣe àkóso ilé-ìwòsàn](yo/clinics.md)
+* [Yorùbá — Jíjẹ́rìí pé a ṣe ìtọ́jú](yo/attesters.md)
+* [Igbo — Ịkwụ ụgwọ ọgwụgwọ maka mmadụ](ig/funders.md)
+* [Igbo — Ịgba ụlọ ọgwụ](ig/clinics.md)
+* [Igbo — Ịgba akaebe na e nyere ọgwụgwọ](ig/attesters.md)
+
 ## Developers
 
 * [Local setup](developers/setup.md)
 * [Contract reference](developers/contracts.md)
+* [Error code reference](developers/errors.md)
 * [Reading contract events](developers/events.md)
 * [Integrating from another app](developers/integration.md)
 * [Running a settlement keeper](developers/keepers.md)

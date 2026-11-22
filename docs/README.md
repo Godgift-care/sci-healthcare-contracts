@@ -43,6 +43,18 @@ This design needs four things that are not decorative:
 | Clinics with no crypto | Sponsored reserves let a rural clinic be onboarded holding zero XLM. |
 | Programmable escrow | Soroban carries the lifecycle, the dispute window and the settlement logic. |
 
+## Guides in other languages
+
+| Language | Funding care | Running a clinic | Attesting delivery |
+| --- | --- | --- | --- |
+| Français | [Financer des soins pour quelqu'un](fr/funders.md) | [Gérer une clinique](fr/clinics.md) | [Attester la prestation de soins](fr/attesters.md) |
+| Kiswahili | [Kulipia matibabu ya mtu](sw/funders.md) | [Kuendesha kliniki](sw/clinics.md) | [Kuthibitisha utoaji wa huduma](sw/attesters.md) |
+| Português | [Financiar cuidados para alguém](pt/funders.md) | [Gerir uma clínica](pt/clinics.md) | [Atestar a prestação de cuidados](pt/attesters.md) |
+| Yorùbá | [Sísanwó ìtọ́jú fún ẹlòmíràn](yo/funders.md) | [Ṣíṣe àkóso ilé-ìwòsàn](yo/clinics.md) | [Jíjẹ́rìí pé a ṣe ìtọ́jú](yo/attesters.md) |
+| Igbo | [Ịkwụ ụgwọ ọgwụgwọ maka mmadụ](ig/funders.md) | [Ịgba ụlọ ọgwụ](ig/clinics.md) | [Ịgba akaebe na e nyere ọgwụgwọ](ig/attesters.md) |
+
+The Portuguese, Yoruba and Igbo pages are awaiting review by a native speaker.
+
 ## Status
 
 Deployed on **Stellar testnet**. Unaudited. No real funds.

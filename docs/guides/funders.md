@@ -5,6 +5,9 @@ language: en
 translations:
   fr: /fr/funders.html
   sw: /sw/funders.html
+  pt: /pt/funders.html
+  yo: /yo/funders.html
+  ig: /ig/funders.html
 ---
 
 # Funding care for someone

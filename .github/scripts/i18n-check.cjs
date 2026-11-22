@@ -16,14 +16,15 @@
 // scripts/build-docs-site.sh passes the base path to jekyll and the include
 // runs the value through `relative_url`.
 //
-// Language roots: English pages anywhere under docs/ except docs/fr and
-// docs/sw, French under docs/fr/, Swahili under docs/sw/.
+// Language roots: English pages anywhere under docs/ except the translation
+// directories; French under docs/fr/, Swahili under docs/sw/, Portuguese under
+// docs/pt/, Yoruba under docs/yo/ and Igbo under docs/ig/.
 
 const fs = require('node:fs');
 const path = require('node:path');
 
-const LANGUAGES = ['en', 'fr', 'sw'];
-const LANGUAGE_DIRS = { en: '', fr: 'fr', sw: 'sw' };
+const LANGUAGES = ['en', 'fr', 'sw', 'pt', 'yo', 'ig'];
+const LANGUAGE_DIRS = { en: '', fr: 'fr', sw: 'sw', pt: 'pt', yo: 'yo', ig: 'ig' };
 const SKIP_DIRS = new Set(['_includes', '_data', '_layouts', '_site', 'node_modules']);
 
 function unquote(value) {
@@ -88,7 +89,7 @@ function walk(dir, files = []) {
 
 function languageOf(relativePath) {
   const root = relativePath.split('/')[0];
-  return root === 'fr' || root === 'sw' ? root : 'en';
+  return LANGUAGES.includes(root) && root !== 'en' ? root : 'en';
 }
 
 function pageUrl(relativePath, matter) {

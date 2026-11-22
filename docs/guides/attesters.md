@@ -5,6 +5,9 @@ language: en
 translations:
   fr: /fr/attesters.html
   sw: /sw/attesters.html
+  pt: /pt/attesters.html
+  yo: /yo/attesters.html
+  ig: /ig/attesters.html
 ---
 
 # Attesting delivery
