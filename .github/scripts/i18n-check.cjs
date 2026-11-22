@@ -18,13 +18,14 @@
 //
 // Language roots: English pages anywhere under docs/ except the translation
 // directories; French under docs/fr/, Swahili under docs/sw/, Portuguese under
-// docs/pt/, Yoruba under docs/yo/ and Igbo under docs/ig/.
+// docs/pt/, Yoruba under docs/yo/, Igbo under docs/ig/, Hausa under docs/ha/,
+// Arabic under docs/ar/ and Amharic under docs/am/.
 
 const fs = require('node:fs');
 const path = require('node:path');
 
-const LANGUAGES = ['en', 'fr', 'sw', 'pt', 'yo', 'ig'];
-const LANGUAGE_DIRS = { en: '', fr: 'fr', sw: 'sw', pt: 'pt', yo: 'yo', ig: 'ig' };
+const LANGUAGES = ['en', 'fr', 'sw', 'pt', 'yo', 'ig', 'ha', 'ar', 'am'];
+const LANGUAGE_DIRS = { en: '', fr: 'fr', sw: 'sw', pt: 'pt', yo: 'yo', ig: 'ig', ha: 'ha', ar: 'ar', am: 'am' };
 const SKIP_DIRS = new Set(['_includes', '_data', '_layouts', '_site', 'node_modules']);
 
 function unquote(value) {

@@ -8,6 +8,9 @@ translations:
   sw: /sw/attesters.html
   pt: /pt/attesters.html
   ig: /ig/attesters.html
+  ha: /ha/attesters.html
+  ar: /ar/attesters.html
+  am: /am/attesters.html
 ---
 
 # Jíjẹ́rìí pé a ṣe ìtọ́jú

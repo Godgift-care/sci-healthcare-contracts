@@ -117,6 +117,20 @@
     <span class="language-switcher__item language-switcher__item--current" aria-current="true">🇳🇬 Igbo</span>
   {%- elsif page.translations.ig -%}
     <a class="language-switcher__item" href="{{ page.translations.ig | relative_url }}" hreflang="ig" lang="ig">🇳🇬 Igbo</a>
+  {%- if page.language == "ha" -%}
+    <span class="language-switcher__item language-switcher__item--current" aria-current="true">🇳🇬🇳🇪 Hausa</span>
+  {%- elsif page.translations.ha -%}
+    <a class="language-switcher__item" href="{{ page.translations.ha | relative_url }}" hreflang="ha" lang="ha">🇳🇬🇳🇪 Hausa</a>
+  {%- endif -%}
+  {%- if page.language == "ar" -%}
+    <span class="language-switcher__item language-switcher__item--current" aria-current="true" dir="rtl">العربية</span>
+  {%- elsif page.translations.ar -%}
+    <a class="language-switcher__item" href="{{ page.translations.ar | relative_url }}" hreflang="ar" lang="ar" dir="rtl">العربية</a>
+  {%- endif -%}
+  {%- if page.language == "am" -%}
+    <span class="language-switcher__item language-switcher__item--current" aria-current="true">🇪🇹 አማርኛ</span>
+  {%- elsif page.translations.am -%}
+    <a class="language-switcher__item" href="{{ page.translations.am | relative_url }}" hreflang="am" lang="am">🇪🇹 አማርኛ</a>
   {%- endif -%}
 </nav>
 {%- endif -%}
@@ -128,3 +142,44 @@
   });
 </script>
 
+{%- comment -%}
+  Script and direction for translated pages.
+
+  just-the-docs renders <html lang="en"> on every page, so the page's own
+  language is applied to the content here. Arabic pages (docs/ar/) read
+  right to left; code blocks, inline code and contract addresses stay left
+  to right so commands and addresses are copied exactly. Amharic pages
+  (docs/am/) load a Ge'ez (Ethiopic) web font, because many desktop systems
+  ship without one and would otherwise render boxes.
+{%- endcomment -%}
+{%- if page.language == "ar" -%}
+<style>
+  .main-content { direction: rtl; text-align: right; }
+  .main-content pre, .main-content code, .main-content .highlight,
+  .main-content .language-switcher { direction: ltr; text-align: left; unicode-bidi: isolate; }
+  .main-content ul, .main-content ol { padding-left: 0; padding-right: 1.5em; }
+  .main-content blockquote { border-left: 0; border-right: 3px solid #eeebee; padding-left: 0; padding-right: 1rem; }
+  .main-content th, .main-content td { text-align: right; }
+</style>
+{%- elsif page.language == "am" -%}
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+Ethiopic:wght@400;600&display=swap">
+<style>
+  .main-content, .site-title, .nav-list { font-family: "Noto Sans Ethiopic", "Nyala", "Abyssinica SIL", system-ui, sans-serif; }
+  .main-content pre, .main-content code { font-family: "SFMono-Regular", Menlo, Consolas, monospace; }
+</style>
+{%- endif -%}
+{%- if page.language and page.language != "en" -%}
+<script>
+  document.addEventListener('DOMContentLoaded', function () {
+    var content = document.querySelector('.main-content');
+    if (!content) return;
+    content.setAttribute('lang', '{{ page.language }}');
+    {%- if page.language == "ar" %}
+    content.setAttribute('dir', 'rtl');
+    content.querySelectorAll('pre, code').forEach(function (el) { el.setAttribute('dir', 'ltr'); });
+    {%- endif %}
+  });
+</script>
+{%- endif -%}

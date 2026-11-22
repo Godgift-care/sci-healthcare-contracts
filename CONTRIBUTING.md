@@ -274,7 +274,10 @@ real path. `DOCS_TAGS=""` builds `main` only.
 ### Translations
 
 The funder, clinic and attester guides and the protocol pages also exist in
-French (`docs/fr/`) and Swahili (`docs/sw/`). A translated page declares its
+French (`docs/fr/`) and Swahili (`docs/sw/`). The funder, clinic and attester
+guides also exist in Hausa (`docs/ha/`), Arabic (`docs/ar/`, rendered right to
+left) and Amharic (`docs/am/`), each with a `glossary.md` that fixes how technical
+terms are translated. A translated page declares its
 counterparts in front matter, and the switcher in `docs/_includes/header_custom.html`
 renders them at the top of the page:
 

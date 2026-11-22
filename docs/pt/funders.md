@@ -8,6 +8,9 @@ translations:
   sw: /sw/funders.html
   yo: /yo/funders.html
   ig: /ig/funders.html
+  ha: /ha/funders.html
+  ar: /ar/funders.html
+  am: /am/funders.html
 ---
 
 # Financiar cuidados para alguém

@@ -8,6 +8,9 @@ translations:
   sw: /sw/funders.html
   pt: /pt/funders.html
   ig: /ig/funders.html
+  ha: /ha/funders.html
+  ar: /ar/funders.html
+  am: /am/funders.html
 ---
 
 # Sísanwó ìtọ́jú fún ẹlòmíràn

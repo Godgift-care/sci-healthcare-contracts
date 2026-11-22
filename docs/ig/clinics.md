@@ -8,6 +8,9 @@ translations:
   sw: /sw/clinics.html
   pt: /pt/clinics.html
   yo: /yo/clinics.html
+  ha: /ha/clinics.html
+  ar: /ar/clinics.html
+  am: /am/clinics.html
 ---
 
 # Ịgba ụlọ ọgwụ

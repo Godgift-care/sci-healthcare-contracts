@@ -8,6 +8,9 @@ translations:
   sw: /sw/attesters.html
   pt: /pt/attesters.html
   yo: /yo/attesters.html
+  ha: /ha/attesters.html
+  ar: /ar/attesters.html
+  am: /am/attesters.html
 ---
 
 # Ịgba akaebe na e nyere ọgwụgwọ

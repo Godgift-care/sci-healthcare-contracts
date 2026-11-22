@@ -190,3 +190,43 @@ test('the CLI exits 1 with an annotation on a missing link', () => {
     },
   );
 });
+
+test('Hausa, Arabic and Amharic pages are checked under their own directories', () => {
+  const all = { en: '/guides/funders.html', ha: '/ha/funders.html', ar: '/ar/funders.html', am: '/am/funders.html' };
+  const others = (lang) => Object.fromEntries(Object.entries(all).filter(([code]) => code !== lang));
+  const result = withDocs(
+    {
+      'guides/funders.md': page('en', others('en')),
+      'ha/funders.md': page('ha', others('ha')),
+      'ar/funders.md': page('ar', others('ar')),
+      'am/funders.md': page('am', others('am')),
+    },
+    (root) => checkDocs(root),
+  );
+  assert.equal(result.ok, true, result.errors.join('\n'));
+});
+
+test('an Amharic page missing its Arabic counterpart link fails', () => {
+  const result = withDocs(
+    {
+      'guides/funders.md': page('en', { ar: '/ar/funders.html', am: '/am/funders.html' }),
+      'ar/funders.md': page('ar', { en: '/guides/funders.html', am: '/am/funders.html' }),
+      'am/funders.md': page('am', { en: '/guides/funders.html' }),
+    },
+    (root) => checkDocs(root),
+  );
+  assert.equal(result.ok, false);
+  assert.ok(result.errors.some((e) => e.includes('am/funders.md: missing translations.ar')));
+});
+
+test('a Hausa link pointing into the Arabic tree fails', () => {
+  const result = withDocs(
+    {
+      'guides/funders.md': page('en', { ha: '/ar/funders.html' }),
+      'ar/funders.md': page('ar', { en: '/guides/funders.html' }),
+    },
+    (root) => checkDocs(root),
+  );
+  assert.equal(result.ok, false);
+  assert.ok(result.errors.some((e) => e.includes('which is not under docs/ha/')));
+});

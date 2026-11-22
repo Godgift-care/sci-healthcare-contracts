@@ -52,8 +52,11 @@ This design needs four things that are not decorative:
 | Português | [Financiar cuidados para alguém](pt/funders.md) | [Gerir uma clínica](pt/clinics.md) | [Atestar a prestação de cuidados](pt/attesters.md) |
 | Yorùbá | [Sísanwó ìtọ́jú fún ẹlòmíràn](yo/funders.md) | [Ṣíṣe àkóso ilé-ìwòsàn](yo/clinics.md) | [Jíjẹ́rìí pé a ṣe ìtọ́jú](yo/attesters.md) |
 | Igbo | [Ịkwụ ụgwọ ọgwụgwọ maka mmadụ](ig/funders.md) | [Ịgba ụlọ ọgwụ](ig/clinics.md) | [Ịgba akaebe na e nyere ọgwụgwọ](ig/attesters.md) |
+| Hausa | [Biyan kuɗin jinyar wani](ha/funders.md) | [Gudanar da asibiti](ha/clinics.md) | [Tabbatar da an ba da jinya](ha/attesters.md) |
+| العربية | [تمويل الرعاية الصحية لشخص ما](ar/funders.md) | [إدارة عيادة](ar/clinics.md) | [المصادقة على تقديم الرعاية](ar/attesters.md) |
+| አማርኛ | [ለአንድ ሰው የሕክምና ወጪ መክፈል](am/funders.md) | [ክሊኒክ ማስተዳደር](am/clinics.md) | [የሕክምና አሰጣጥን ማረጋገጥ](am/attesters.md) |
 
-The Portuguese, Yoruba and Igbo pages are awaiting review by a native speaker.
+The Portuguese, Yoruba, Igbo, Hausa, Arabic and Amharic pages are awaiting review by a native speaker. The Hausa, Arabic and Amharic guides each come with a short glossary of technical terms ([Hausa](ha/glossary.md), [العربية](ar/glossary.md), [አማርኛ](am/glossary.md)).
 
 ## Status
 

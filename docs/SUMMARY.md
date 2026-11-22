@@ -41,6 +41,18 @@
 * [Igbo — Ịkwụ ụgwọ ọgwụgwọ maka mmadụ](ig/funders.md)
 * [Igbo — Ịgba ụlọ ọgwụ](ig/clinics.md)
 * [Igbo — Ịgba akaebe na e nyere ọgwụgwọ](ig/attesters.md)
+* [Hausa — Biyan kuɗin jinyar wani](ha/funders.md)
+* [Hausa — Gudanar da asibiti](ha/clinics.md)
+* [Hausa — Tabbatar da an ba da jinya](ha/attesters.md)
+* [Hausa — Ƙamus na kalmomin fasaha](ha/glossary.md)
+* [العربية — تمويل الرعاية الصحية لشخص ما](ar/funders.md)
+* [العربية — إدارة عيادة](ar/clinics.md)
+* [العربية — المصادقة على تقديم الرعاية](ar/attesters.md)
+* [العربية — مسرد المصطلحات التقنية](ar/glossary.md)
+* [አማርኛ — ለአንድ ሰው የሕክምና ወጪ መክፈል](am/funders.md)
+* [አማርኛ — ክሊኒክ ማስተዳደር](am/clinics.md)
+* [አማርኛ — የሕክምና አሰጣጥን ማረጋገጥ](am/attesters.md)
+* [አማርኛ — የቴክኒክ ቃላት መዝገበ ቃላት](am/glossary.md)
 
 ## Developers
 

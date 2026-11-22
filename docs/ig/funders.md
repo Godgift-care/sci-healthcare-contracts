@@ -8,6 +8,9 @@ translations:
   sw: /sw/funders.html
   pt: /pt/funders.html
   yo: /yo/funders.html
+  ha: /ha/funders.html
+  ar: /ar/funders.html
+  am: /am/funders.html
 ---
 
 # Ịkwụ ụgwọ ọgwụgwọ maka mmadụ

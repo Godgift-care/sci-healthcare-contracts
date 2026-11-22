@@ -8,6 +8,9 @@ translations:
   sw: /sw/clinics.html
   pt: /pt/clinics.html
   ig: /ig/clinics.html
+  ha: /ha/clinics.html
+  ar: /ar/clinics.html
+  am: /am/clinics.html
 ---
 
 # Ṣíṣe àkóso ilé-ìwòsàn

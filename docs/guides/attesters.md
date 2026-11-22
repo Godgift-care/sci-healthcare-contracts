@@ -8,6 +8,9 @@ translations:
   pt: /pt/attesters.html
   yo: /yo/attesters.html
   ig: /ig/attesters.html
+  ha: /ha/attesters.html
+  ar: /ar/attesters.html
+  am: /am/attesters.html
 ---
 
 # Attesting delivery
