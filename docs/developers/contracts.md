@@ -1010,6 +1010,16 @@ files are excluded from the measurement: the number that matters is how much of
 the contract code the tests reach. Raise the threshold in the same pull
 request that adds the tests.
 
+`just coverage` runs the same check locally, with the same exclusions and
+thresholds (install `cargo-llvm-cov` 0.9.1 and the `llvm-tools-preview`
+component first):
+
+```bash
+rustup component add llvm-tools-preview
+cargo install --locked cargo-llvm-cov --version 0.9.1
+just coverage
+```
+
 ### Dependencies
 
 `cargo deny check` runs in CI against the policy in `deny.toml`: the RustSec

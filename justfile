@@ -2,6 +2,7 @@
 #
 #   just            list the recipes
 #   just check      what CI checks: fmt, clippy and the tests
+#   just coverage   the CI coverage job, with its thresholds
 #   just wasm       the release build, the one deploy.sh deploys
 #
 # Recipes are thin wrappers: each one runs the command the docs and CI
@@ -39,6 +40,27 @@ clippy:
 
 # Everything CI runs on a pull request before the wasm build.
 check: fmt-check clippy test
+
+# What the coverage job measures: contract sources only, test code excluded.
+coverage_ignore := '/(tests?/.*|src/test\.rs)$'
+
+# Keep the thresholds in step with the coverage job in ci.yml.
+
+# The CI coverage job's check and thresholds (needs cargo-llvm-cov 0.9.1, llvm-tools-preview).
+coverage:
+    cargo llvm-cov --all --summary-only --ignore-filename-regex '{{coverage_ignore}}' --fail-under-lines 98 --fail-under-regions 95
+
+# Build the rustdoc the CI doc job builds and publishes, into target/doc.
+doc:
+    cargo doc --no-deps --workspace --document-private-items
+
+# soroban-sdk rewrites contracts/*/test_snapshots on every test run, and the
+# CI test job fails when a rewritten snapshot is left uncommitted.
+
+# Rerun the tests to rewrite contracts/*/test_snapshots, then list the files that changed.
+snapshots:
+    cargo test --all
+    git status --short --untracked-files=all -- 'contracts/*/test_snapshots/*'
 
 # Regenerate the per-contract storage read/write tables.
 storage-counts:

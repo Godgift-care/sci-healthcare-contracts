@@ -48,6 +48,9 @@ in the dev container), then:
 | `just fmt` / `just fmt-check` | `cargo fmt --all` / with `-- --check` |
 | `just clippy` | `cargo clippy --all-targets --all-features -- -D warnings` |
 | `just check` | `fmt-check`, `clippy` and `test` — what CI runs on a pull request |
+| `just coverage` | the CI `coverage` job's check: `cargo llvm-cov --all --summary-only`, test files excluded, failing under 98% of lines or 95% of regions (needs `cargo-llvm-cov` 0.9.1 and the `llvm-tools-preview` component) |
+| `just doc` | the CI `doc` job's build: `cargo doc --no-deps --workspace --document-private-items`, into `target/doc` |
+| `just snapshots` | `cargo test --all`, which rewrites `contracts/*/test_snapshots/`, then lists the snapshot files that changed; commit them, or the CI `test` job fails |
 | `just wasm [out]` | `scripts/build-wasm.sh` (default `dist`) |
 | `just deploy [network] [flags]` | `scripts/deploy.sh`, e.g. `just deploy testnet --dry-run` |
 | `just seed [network]` | `scripts/seed.sh` |
