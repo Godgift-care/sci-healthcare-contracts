@@ -18,6 +18,16 @@
 #
 #   docker run --rm -d -p 8000:8000 --name stellar stellar/quickstart:latest --local
 #
+# Or a public network with a friendbot. The weekly futurenet job
+# (.github/workflows/e2e-futurenet.yml) runs it as:
+#
+#   NETWORK=futurenet RPC_URL=https://rpc-futurenet.stellar.org \
+#   NETWORK_PASSPHRASE="Test SDF Future Network ; October 2022" ./scripts/e2e-local.sh
+#
+# Identities are generated and friendbot-funded on every run, so no secret is
+# needed. Never point it at testnet or mainnet: it creates throwaway keys and
+# --force overwrites deployments/<network>.env.
+#
 # What breaks if this is wrong: `cargo test` runs in an in-process host, so it
 # never exercises the CLI flags, the RPC or the deploy/seed scripts. A broken
 # script is only found by a person deploying a release, on a network where the
@@ -29,6 +39,14 @@ NETWORK="${NETWORK:-local}"
 RPC_URL="${RPC_URL:-${1:-http://localhost:8000/soroban/rpc}}"
 NETWORK_PASSPHRASE="${NETWORK_PASSPHRASE:-Standalone Network ; February 2017}"
 WAIT_SECS="${WAIT_SECS:-120}"
+
+case "$NETWORK" in
+  testnet|mainnet|pubnet)
+    printf 'error: refusing to run on %s. This script --force overwrites deployments/%s.env\n' "$NETWORK" "$NETWORK" >&2
+    printf 'with a throwaway deployment; use it on a local node or futurenet only.\n' >&2
+    exit 1
+    ;;
+esac
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 ENV_FILE="$ROOT/deployments/$NETWORK.env"
