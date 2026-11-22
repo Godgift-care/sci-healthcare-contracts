@@ -242,6 +242,9 @@ Types: `feat`, `fix`, `test`, `docs`, `refactor`, `chore`, `perf`.
 - `cargo test` and `cargo build --target wasm32v1-none --release` must both pass.
 - `cargo fmt --all` and `cargo clippy --all-targets -- -D warnings` must be clean.
 - Describe **what breaks if this is wrong**, not just what you changed.
+- GitHub requests a review from the owners in
+  [`.github/CODEOWNERS`](.github/CODEOWNERS) for every contract crate,
+  `scripts/` and `.github/` path a pull request touches.
 - If anything under `contracts/` changes, add an entry under `## Unreleased` in
   `CHANGELOG.md`. The `changelog entry` check fails without one. A change no
   integrator can notice (a comment, a test-only refactor) can skip it: ask a
