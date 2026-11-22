@@ -54,8 +54,40 @@ in the dev container), then:
 | `just verify [network]` | `scripts/verify-deployments.sh` |
 | `just test-deploy` | `scripts/test-deploy.sh` |
 | `just e2e-local` | `scripts/e2e-local.sh` against a local node on port 8000 |
+| `just hooks` / `just unhooks` | turn the opt-in [git hooks](#git-hooks-optional) on or off |
 
 The network defaults to `testnet`; set `NETWORK` to change it.
+
+### Git hooks (optional)
+
+Formatting and lint failures otherwise show up in CI minutes after a push.
+Two opt-in hooks in [`.githooks/`](.githooks/) run the same checks locally:
+
+| Hook | Runs | Same as |
+| --- | --- | --- |
+| `pre-commit` | `cargo fmt --all -- --check`, only when the commit touches a `.rs` file | the CI `fmt` job |
+| `pre-push` | `cargo clippy --all-targets --all-features -- -D warnings` | the CI `clippy` job |
+
+Nothing runs until you turn them on, per clone:
+
+```bash
+just hooks      # git config core.hooksPath .githooks
+just unhooks    # back to git's default hooks directory
+```
+
+- **Windows.** Git for Windows runs these hooks with its bundled `sh`, so they
+  work from Git Bash, PowerShell, `cmd` and GUI clients, as long as `cargo` is
+  on `PATH` (rustup adds it). `just` runs its recipes with `bash`; without Git
+  Bash on `PATH`, run `git config core.hooksPath .githooks` directly instead of
+  `just hooks`.
+- **Dev container and Codespaces.** They work there as they are: the container
+  has `cargo` and `just`. The setting is per clone, so a codespace needs
+  `just hooks` once.
+- The format check reads the files on disk, not only the staged ones, so stage
+  the result of `cargo fmt --all` before committing again.
+- A hook that cannot find `cargo` prints a note and lets the commit or push
+  through. Skip a hook once with `git commit --no-verify` or
+  `git push --no-verify`.
 
 ## Non-negotiables
 

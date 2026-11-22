@@ -1,0 +1,19 @@
+#!/bin/sh
+# Opt-in git hook (enable with `just hooks`, disable with `just unhooks`).
+#
+# Runs clippy with warnings as errors before a push: the same command as the
+# CI clippy job. Bypass once with `git push --no-verify`.
+set -eu
+
+if ! command -v cargo >/dev/null 2>&1; then
+  echo "pre-push: cargo is not on PATH; skipping clippy." >&2
+  exit 0
+fi
+
+echo "pre-push: cargo clippy --all-targets --all-features -- -D warnings" >&2
+if ! cargo clippy --all-targets --all-features -- -D warnings; then
+  echo >&2
+  echo "pre-push: clippy failed, so the CI clippy job would fail." >&2
+  echo "Fix the warnings above, or push anyway with 'git push --no-verify'." >&2
+  exit 1
+fi

@@ -3,6 +3,7 @@
 #   just            list the recipes
 #   just check      what CI checks: fmt, clippy and the tests
 #   just wasm       the release build, the one deploy.sh deploys
+#   just hooks      opt in to git hooks: fmt check on commit, clippy on push
 #
 # Recipes are thin wrappers: each one runs the command the docs and CI
 # already use, so `just <recipe>` and running the command by hand never
@@ -71,3 +72,13 @@ test-deploy:
 # Deploy, seed and check against a local node already running on port 8000.
 e2e-local:
     ./scripts/e2e-local.sh
+
+# Opt in to the git hooks in .githooks: cargo fmt --check on commit, clippy on push.
+hooks:
+    git config core.hooksPath .githooks
+    @echo "git hooks on: cargo fmt --check before each commit, clippy before each push ('just unhooks' turns them off)"
+
+# Turn the git hooks from `just hooks` off again.
+unhooks:
+    @if [ "$(git config --get core.hooksPath || true)" = .githooks ]; then git config --unset core.hooksPath; fi
+    @echo "git hooks off"
