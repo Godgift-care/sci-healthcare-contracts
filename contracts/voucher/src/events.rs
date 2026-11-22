@@ -141,6 +141,16 @@ pub struct VoucherRedirected {
 
 #[contractevent]
 #[derive(Clone, Debug, Eq, PartialEq)]
+pub struct VoucherReassigned {
+    #[topic]
+    pub funder: Address,
+    pub voucher_id: u64,
+    pub old_ref: BytesN<32>,
+    pub new_ref: BytesN<32>,
+}
+
+#[contractevent]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct DisputeResolved {
     #[topic]
     pub admin: Address,

@@ -35,7 +35,7 @@ flowchart LR
     faucet["faucet<br/>testnet only"]
     token[("USDC<br/>SEP-41 token")]
 
-    funder -. "create_voucher, redirect,<br/>reduce_amount, dispute" .-> voucher
+    funder -. "create_voucher, redirect, reassign,<br/>reduce_amount, dispute" .-> voucher
     clinic -. "claim, claim_with_proof,<br/>decline" .-> voucher
     attester -. "attest" .-> voucher
     anyone -. "settle, refund" .-> voucher
@@ -307,6 +307,7 @@ pub struct Exposure {            // a clinic's open vouchers
 | `create_voucher_at_price` | `funder, beneficiary_ref, provider, service_code, amount, expires_at, expected_price` | `u64` | `funder` |
 | `reduce_amount` | `funder, voucher_id, new_amount` | `()` | `funder` |
 | `redirect` | `funder, voucher_id, new_provider` | `()` | `funder` |
+| `reassign` | `funder, voucher_id, new_ref` | `()` | `funder` |
 | `claim` | `provider, voucher_id` | `()` | `provider` |
 | `claim_with_proof` | `provider, voucher_id, secret: Bytes` | `()` | `provider` |
 | `decline` | `provider, voucher_id, reason_code` | `()` | `provider` |
@@ -355,6 +356,7 @@ Every public function, with the exact signer it demands. `AUTH_MATRIX` in `contr
 | `create_voucher_at_price` | `funder` |
 | `reduce_amount` | `funder` |
 | `redirect` | `funder` |
+| `reassign` | `funder` |
 | `claim` | `provider` |
 | `claim_with_proof` | `provider` |
 | `decline` | `provider` |
@@ -430,6 +432,8 @@ rejects the voucher's own provider even if it holds that role.
 
 **`redirect`** — caller is the funder; status is `Funded`. The replacement clinic must be active, offer the voucher's service, have it available, and list it at no more than the escrowed amount. Changes only the provider: amount, expiry and escrow are unchanged. Emits `voucher_redirected` with `funder` and `new_provider` topics and the previous provider, voucher id and service code in its data.
 
+**`reassign`** — caller is the funder (`NotAuthorized`); status is `Funded` (`InvalidStatus`). Replaces `beneficiary_ref` with `new_ref` and changes nothing else: provider, service, amount, expiry and escrow are unchanged. Both references are opaque 32-byte values. Emits `voucher_reassigned` with the `funder` topic and the voucher id, old reference and new reference in its data. Once the clinic has claimed the voucher, the reference is closed.
+
 **`propose_admin` / `accept_admin`** — two-step handover, identical in all three contracts. Proposing again replaces the nominee; nothing changes until the nominee signs `accept_admin`. On mainnet, hand admin to a 2-of-3 Stellar multisig account rather than a single key; see [Using a multisig admin](multisig-admin.md).
 
 **`resolve_dispute`** — caller is admin; status is `Disputed`. Routes to funder or provider; no third destination exists.
@@ -482,6 +486,7 @@ rejects the voucher's own provider even if it holds that role.
 | `voucher_refunded` | `funder` | `voucher_id`, `amount`, `service_code` |
 | `voucher_amount_reduced` | `funder` | `voucher_id`, `service_code`, `previous_amount`, `amount`, `refunded` |
 | `voucher_redirected` | `funder`, `new_provider` | `voucher_id`, `previous_provider`, `service_code` |
+| `voucher_reassigned` | `funder` | `voucher_id`, `old_ref`, `new_ref` |
 | `dispute_resolved` | `admin` | `voucher_id`, `refunded_funder`, `to_provider`, `fee`, `to_funder` |
 | `attestation_cap_changed` | `admin` | `cap` |
 | `dispute_window_bounds_changed` | `admin` | `min`, `max` |
