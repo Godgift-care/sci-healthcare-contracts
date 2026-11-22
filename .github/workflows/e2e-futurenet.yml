@@ -7,7 +7,8 @@ name: E2E futurenet
 # The job deploys the contracts with scripts/deploy.sh, runs one voucher
 # through fund -> claim -> attest with scripts/seed.sh (the lifecycle the
 # local e2e job runs), and asserts that voucher 1 reached Attested, through
-# the same scripts/e2e-local.sh pointed at futurenet.
+# the same scripts/e2e-local.sh pointed at futurenet through the NETWORK,
+# RPC_URL and NETWORK_PASSPHRASE variables below (the script reads all three).
 #
 # It never runs on pull requests and is not a required check, so a
 # futurenet outage or reset cannot block a merge. Instead, a failure opens
