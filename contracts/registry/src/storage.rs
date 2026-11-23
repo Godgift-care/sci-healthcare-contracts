@@ -171,16 +171,10 @@ pub(crate) fn list_attesters(env: &Env, start: u32, limit: u32) -> Vec<Address> 
     use soroban_sdk::Vec;
 
     let mut out = Vec::new(env);
-    let limit = limit.min(MAX_PROVIDERS_PAGE);
-    if limit == 0 {
-        return out;
-    }
-
     let total = read_attester_count(env);
-    if start >= total {
+    let Some((start, end)) = common::page_bounds(start, limit, total, MAX_PROVIDERS_PAGE) else {
         return out;
-    }
-    let end = start.saturating_add(limit).min(total);
+    };
 
     for index in start..end {
         if let Some(addr) = read_attester_at(env, index) {
@@ -311,16 +305,10 @@ pub(crate) fn list_providers(env: &Env, start: u32, limit: u32) -> Vec<Provider>
     use soroban_sdk::Vec;
 
     let mut out = Vec::new(env);
-    let limit = limit.min(MAX_PROVIDERS_PAGE);
-    if limit == 0 {
-        return out;
-    }
-
     let total = read_provider_count(env);
-    if start >= total {
+    let Some((start, end)) = common::page_bounds(start, limit, total, MAX_PROVIDERS_PAGE) else {
         return out;
-    }
-    let end = start.saturating_add(limit).min(total);
+    };
 
     for index in start..end {
         if let Some(addr) = read_provider_at(env, index) {
@@ -348,16 +336,10 @@ pub(crate) fn list_providers_by_country(
     use soroban_sdk::Vec;
 
     let mut out = Vec::new(env);
-    let limit = limit.min(MAX_PROVIDERS_PAGE);
-    if limit == 0 {
-        return out;
-    }
-
     let total = read_country_count(env, country);
-    if start >= total {
+    let Some((start, end)) = common::page_bounds(start, limit, total, MAX_PROVIDERS_PAGE) else {
         return out;
-    }
-    let end = start.saturating_add(limit).min(total);
+    };
 
     for index in start..end {
         if let Some(addr) = read_country_at(env, country, index) {

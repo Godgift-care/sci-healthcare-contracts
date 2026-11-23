@@ -9,6 +9,9 @@
   <a href="https://github.com/Godgift-care/sci-healthcare-contracts/actions/workflows/ci.yml?query=job%3Acoverage">
     <img src="https://github.com/Godgift-care/sci-healthcare-contracts/actions/workflows/ci.yml/badge.svg?job=coverage" alt="coverage" />
   </a>
+  <a href="https://scorecard.dev/viewer/?uri=github.com/Godgift-care/sci-healthcare-contracts">
+    <img src="https://api.scorecard.dev/projects/github.com/Godgift-care/sci-healthcare-contracts/badge" alt="OpenSSF Scorecard" />
+  </a>
   <img src="https://img.shields.io/badge/soroban--sdk-27.0.6-blue" alt="soroban-sdk 27.0.6" />
   <img src="https://img.shields.io/badge/rust-1.96-orange" alt="rust 1.96" />
   <img src="https://img.shields.io/badge/license-Apache--2.0-green" alt="Apache 2.0" />
@@ -218,6 +221,7 @@ stellar keys generate --network testnet --fund sci-issuer
 | `./scripts/test-deploy.sh` | deploy-script overwrite, `--force` and `--dry-run` regressions |
 | [`changelog.yml`](.github/workflows/changelog.yml) | a pull request that changes `contracts/` without a `CHANGELOG.md` entry (maintainers can waive it with the `skip-changelog` label) |
 | [`docs-site.yml`](.github/workflows/docs-site.yml) | a docs change that breaks the site build; on `main` and on release tags it publishes the versioned docs |
+| [`scorecard.yml`](.github/workflows/scorecard.yml) | supply-chain posture as [OpenSSF Scorecard](https://scorecard.dev/viewer/?uri=github.com/Godgift-care/sci-healthcare-contracts) scores it (branch protection, pinned actions, token permissions, dangerous workflow patterns); weekly, on pushes to `main` and on demand, with each failed check listed under **Security → Code scanning** and the score behind the badge above |
 
 **Coverage.** The `coverage` job prints the coverage table in the job output
 and fails when the contract sources drop below the threshold. Today the

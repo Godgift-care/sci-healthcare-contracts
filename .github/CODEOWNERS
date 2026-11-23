@@ -1,0 +1,20 @@
+# Code owners. GitHub requests a review from the owners of every path a pull
+# request touches. When several lines match a file, the last one wins.
+#
+# Each contract crate has its own line, so a crate can be handed to its own
+# reviewers later without changing the others. `voucher` holds the escrowed
+# funds, so a change there must always reach someone who knows the invariants
+# in docs/developers/contracts.md.
+
+/contracts/common/    @otobongdev
+/contracts/faucet/    @otobongdev
+/contracts/receipt/   @otobongdev
+/contracts/registry/  @otobongdev
+/contracts/sponsor/   @otobongdev
+/contracts/voucher/   @otobongdev
+
+# Deployment, admin rotation and seeding scripts act on live contracts.
+/scripts/             @otobongdev
+
+# CI, the auto-merge bot and the security scan decide what reaches main.
+/.github/             @otobongdev

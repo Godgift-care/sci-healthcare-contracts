@@ -237,8 +237,8 @@ A signer is not the same as a role: `admin` must be the stored admin **and** sig
 | `attester_added` | `attester` | — |
 | `capacity_changed` | `provider` | `max_outstanding` |
 | `attester_removed` | `attester` | — |
-| `admin_proposed` | `admin` | `pending_admin` |
-| `admin_changed` | — | `new_admin` |
+
+`admin_proposed` and `admin_changed` are defined once in `sci-common` and emitted by every contract that uses the two-step admin handover. See the [shared events](#shared-events-sci-common) table below.
 
 > Fields listed under **Topics** are published in the event's topic list, **not** in its data map. The table is checked against the `#[contractevent]` structs in `contracts/registry/src/events.rs` by `event_table_in_the_docs_matches_the_source`; adding, renaming or moving a field fails that test until the table is updated in the same change.
 
@@ -488,8 +488,7 @@ rejects the voucher's own provider even if it holds that role.
 | `attestation_cap_changed` | `admin` | `cap` |
 | `dispute_window_bounds_changed` | `admin` | `min`, `max` |
 | `escrow_cap_changed` | `admin` | `max` |
-| `admin_proposed` | `admin` | `pending_admin` |
-| `admin_changed` | — | `new_admin` |
+`admin_proposed` and `admin_changed` are shared from `sci-common`; see the [shared events](#shared-events-sci-common) table below.
 
 > The table is checked against the `#[contractevent]` structs in `contracts/voucher/src/events.rs` by `event_table_in_the_docs_matches_the_source`; adding, renaming or moving a field fails that test until the table is updated in the same change.
 >
@@ -598,9 +597,9 @@ Every public function, with the exact signer it demands. `AUTH_MATRIX` in `contr
 | `initialized` | — | `admin` |
 | `minter_proposed` | `admin` | `pending_minter` |
 | `minter_changed` | — | `minter` |
-| `admin_proposed` | `admin` | `pending_admin` |
-| `admin_changed` | — | `new_admin` |
 | `receipt_minted` | `beneficiary_ref`, `provider` | `voucher_id`, `service_code`, `amount`, `settled_at` |
+
+`admin_proposed` and `admin_changed` are shared from `sci-common`; see the [shared events](#shared-events-sci-common) table below.
 
 The indexer should treat `minter_proposed` as a pending state only: `get_minter()` changes on `minter_changed`, after the nominee accepts.
 
@@ -760,8 +759,8 @@ Every public function, with the exact signer it demands. `AUTH_MATRIX` in `contr
 | `match_settled` | `sponsor` | `matched_voucher_id`, `amount` |
 | `match_refunded` | `sponsor` | `matched_voucher_id`, `amount` |
 | `budget_withdrawn` | `sponsor` | `amount`, `available` |
-| `admin_proposed` | `admin` | `pending_admin` |
-| `admin_changed` | - | `new_admin` |
+
+`admin_proposed` and `admin_changed` are shared from `sci-common`; see the [shared events](#shared-events-sci-common) table below.
 
 These events are new to the indexer: `sci-healthcare-backend` decodes them
 once their topic names are added to `TOPIC_FIELDS` in `src/stellar/events.ts`.
@@ -769,6 +768,24 @@ The table is checked against the `#[contractevent]` structs in
 `contracts/sponsor/src/events.rs` by `event_table_in_the_docs_matches_the_source`;
 adding, renaming or moving a field fails that test until the table is updated in
 the same change.
+
+---
+
+## Shared events (sci-common)
+
+The two admin-handover events are defined once in `contracts/common/src/lib.rs`
+and emitted by every contract that uses the two-step handover (`registry`,
+`voucher`, `receipt`, and `sponsor`). Moving the definition to `sci-common`
+means five copies cannot drift apart, and an indexer needs only one decoder for
+both events across all contracts.
+
+| Event | Topics | Data |
+| --- | --- | --- |
+| `admin_proposed` | `admin` | `pending_admin` |
+| `admin_changed` | — | `new_admin` |
+
+The topics and data are byte-identical to the per-contract definitions they
+replaced, so existing indexers and event decoders need no change.
 
 ---
 

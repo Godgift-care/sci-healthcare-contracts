@@ -49,19 +49,8 @@ pub struct MinterChanged {
     pub minter: Address,
 }
 
-#[contractevent]
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub struct AdminProposed {
-    #[topic]
-    pub admin: Address,
-    pub pending_admin: Address,
-}
-
-#[contractevent]
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub struct AdminChanged {
-    pub new_admin: Address,
-}
+pub use sci_common::AdminChanged;
+pub use sci_common::AdminProposed;
 
 #[contractevent]
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -413,10 +402,6 @@ impl ReceiptBook {
         limit: u32,
     ) -> Vec<Receipt> {
         let mut out = Vec::new(&env);
-        let limit = limit.min(MAX_RECEIPTS_PAGE);
-        if limit == 0 {
-            return out;
-        }
 
         let count_key = DataKey::ProviderCount(provider.clone());
         let total: u32 = match env.storage().persistent().get(&count_key) {
@@ -425,10 +410,9 @@ impl ReceiptBook {
         };
         common::extend_persistent(&env, &count_key);
 
-        if start >= total {
+        let Some((start, end)) = common::page_bounds(start, limit, total, MAX_RECEIPTS_PAGE) else {
             return out;
-        }
-        let end = start.saturating_add(limit).min(total);
+        };
         for index in start..end {
             let entry_key = DataKey::ProviderReceipt(provider.clone(), index);
             if let Some(voucher_id) = env.storage().persistent().get::<_, u64>(&entry_key) {
