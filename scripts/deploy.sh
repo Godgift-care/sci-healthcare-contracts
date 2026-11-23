@@ -58,11 +58,10 @@ FEE_BPS="${FEE_BPS:-100}"                    # 1%
 ATTESTER_SHARE_BPS="${ATTESTER_SHARE_BPS:-50}" # half the fee, in bps of the amount
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+# shellcheck source=scripts/lib.sh
+source "$ROOT/scripts/lib.sh"
 WASM_DIR="$ROOT/dist"
 OUT="$ROOT/deployments/$NETWORK.env"
-
-say() { printf '\n\033[1m==> %s\033[0m\n' "$1"; }
-die() { printf 'error: %s\n' "$1" >&2; exit 1; }
 
 quote_cmd() {
   local out="" q=""

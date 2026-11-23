@@ -9,14 +9,46 @@
 
 set -euo pipefail
 
-NETWORK="${1:-testnet}"
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+# shellcheck source=scripts/lib.sh
+source "$ROOT/scripts/lib.sh"
+
+usage() {
+  cat <<'EOF'
+Usage: ./scripts/seed.sh [-h|--help] [--network <net>] [network]
+
+Seeds a deployed SCI Healthcare instance with demo data (testnet only).
+
+Options:
+  -h, --help          Show this message and exit.
+  --network <net>     Network name (default: testnet). Positional form also
+                      accepted for backwards compatibility.
+
+Environment:
+  ADMIN, ISSUER, CLINIC_ID, ATTESTER_ID, FUNDER_ID — stellar key identities.
+EOF
+}
+
+NETWORK=""
+while [ $# -gt 0 ]; do
+  case "$1" in
+    -h|--help) usage; exit 0 ;;
+    --network) NETWORK="${2:?--network requires an argument}"; shift ;;
+    -*) die "unknown option: $1" ;;
+    *)
+      if [ -z "$NETWORK" ]; then NETWORK="$1"; else die "unexpected argument: $1"; fi
+      shift; continue ;;
+  esac
+  shift
+done
+NETWORK="${NETWORK:-testnet}"
+
 ADMIN="${ADMIN:-sci-admin}"
 ISSUER="${ISSUER:-sci-issuer}"
 CLINIC_ID="${CLINIC_ID:-sci-clinic}"
 ATTESTER_ID="${ATTESTER_ID:-sci-attester}"
 FUNDER_ID="${FUNDER_ID:-sci-funder}"
 
-ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 ENV_FILE="$ROOT/deployments/$NETWORK.env"
 [ -f "$ENV_FILE" ] || { echo "No deployment found at $ENV_FILE. Run deploy.sh first."; exit 1; }
 # shellcheck disable=SC1090
@@ -29,7 +61,6 @@ CLINIC="$(stellar keys address "$CLINIC_ID")"
 ATTESTER="$(stellar keys address "$ATTESTER_ID")"
 FUNDER="$(stellar keys address "$FUNDER_ID")"
 
-say() { printf '\n\033[1m==> %s\033[0m\n' "$1"; }
 quiet() { grep -E "Event:|error" | head -2 || true; }
 
 say "Establishing USDC trustlines"

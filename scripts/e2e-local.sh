@@ -25,18 +25,51 @@
 
 set -euo pipefail
 
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+# shellcheck source=scripts/lib.sh
+source "$ROOT/scripts/lib.sh"
+
+usage() {
+  cat <<'EOF'
+Usage: ./scripts/e2e-local.sh [-h|--help] [--network <net>] [--rpc-url <url>] [rpc-url]
+
+End-to-end check against a running Stellar node.
+
+Options:
+  -h, --help          Show this message and exit.
+  --network <net>     Network name registered with the CLI (default: local).
+  --rpc-url <url>     Soroban RPC endpoint. Positional form also accepted.
+
+Environment:
+  NETWORK, RPC_URL, NETWORK_PASSPHRASE, WAIT_SECS
+EOF
+}
+
+RPC_URL_ARG=""
+while [ $# -gt 0 ]; do
+  case "$1" in
+    -h|--help) usage; exit 0 ;;
+    --network) NETWORK="${2:?--network requires an argument}"; shift ;;
+    --rpc-url) RPC_URL_ARG="${2:?--rpc-url requires an argument}"; shift ;;
+    -*) die "unknown option: $1" ;;
+    *)
+      if [ -z "$RPC_URL_ARG" ]; then RPC_URL_ARG="$1"; else die "unexpected argument: $1"; fi
+      shift; continue ;;
+  esac
+  shift
+done
+
 NETWORK="${NETWORK:-local}"
-RPC_URL="${RPC_URL:-${1:-http://localhost:8000/soroban/rpc}}"
+RPC_URL="${RPC_URL:-${RPC_URL_ARG:-http://localhost:8000/soroban/rpc}}"
 NETWORK_PASSPHRASE="${NETWORK_PASSPHRASE:-Standalone Network ; February 2017}"
 WAIT_SECS="${WAIT_SECS:-120}"
 
-ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 ENV_FILE="$ROOT/deployments/$NETWORK.env"
 STEP="startup"
 
 step() {
   STEP="$1"
-  printf '\n\033[1m==> %s\033[0m\n' "$1"
+  say "$1"
 }
 
 on_error() {

@@ -29,17 +29,42 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-OUT="${1:-$ROOT/dist}"
+# shellcheck source=scripts/lib.sh
+source "$ROOT/scripts/lib.sh"
+
 TARGET="wasm32v1-none"
 # Pinned in .github/workflows/release.yml. A different binaryen can produce
 # different bytes, so the script warns when it sees another one.
 WASM_OPT_VERSION="133"
 
-say() { printf '\n\033[1m==> %s\033[0m\n' "$1"; }
-die() { printf 'error: %s\n' "$1" >&2; exit 1; }
+usage() {
+  cat <<'EOF'
+Usage: ./scripts/build-wasm.sh [-h|--help] [output-dir]
 
-command -v cargo >/dev/null || die "cargo not found. Install Rust: https://rustup.rs"
-command -v wasm-opt >/dev/null || die "wasm-opt not found. Install binaryen ${WASM_OPT_VERSION} (https://github.com/WebAssembly/binaryen/releases) or 'cargo install wasm-opt'."
+Builds all contracts to output-dir (default: dist) using the pinned toolchain
+and wasm-opt version so the result matches the released artefact.
+
+Options:
+  -h, --help    Show this message and exit.
+  output-dir    Directory for .wasm files and SHA256SUMS (default: dist).
+EOF
+}
+
+OUT_ARG=""
+while [ $# -gt 0 ]; do
+  case "$1" in
+    -h|--help) usage; exit 0 ;;
+    -*) die "unknown option: $1" ;;
+    *)
+      if [ -z "$OUT_ARG" ]; then OUT_ARG="$1"; else die "unexpected argument: $1"; fi
+      shift; continue ;;
+  esac
+  shift
+done
+OUT="${OUT_ARG:-$ROOT/dist}"
+
+require_command cargo "Install Rust: https://rustup.rs"
+require_command wasm-opt "Install binaryen ${WASM_OPT_VERSION} (https://github.com/WebAssembly/binaryen/releases) or 'cargo install wasm-opt'."
 
 WASM_OPT_ACTUAL="$(wasm-opt --version 2>/dev/null | awk '{print $2}')"
 if [ "$WASM_OPT_ACTUAL" != "$WASM_OPT_VERSION" ]; then
