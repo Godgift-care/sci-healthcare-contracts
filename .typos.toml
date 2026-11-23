@@ -1,0 +1,27 @@
+# typos configuration for sci-healthcare-contracts.
+# https://github.com/crate-ci/typos
+
+[default.extend-words]
+# Domain-specific identifiers that typos would otherwise flag.
+# Keep this list short: add an entry only when typos produces a false positive,
+# not to suppress a real mistake.
+#
+# soroban-sdk macro-generated identifiers:
+ser = "ser"      # serde derive helper
+wasm = "wasm"    # WebAssembly target / file extension
+
+[files]
+# Non-English documentation is excluded: French (fr), Swahili (sw), Amharic
+# (am), Arabic (ar), Hausa (ha), Igbo (ig), Portuguese (pt), Yoruba (yo).
+# These directories contain intentional foreign-language text that the English
+# spell-checker would incorrectly flag.
+extend-exclude = [
+  "docs/fr/**",
+  "docs/sw/**",
+  "docs/am/**",
+  "docs/ar/**",
+  "docs/ha/**",
+  "docs/ig/**",
+  "docs/pt/**",
+  "docs/yo/**",
+]
