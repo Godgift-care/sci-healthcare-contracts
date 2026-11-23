@@ -1,0 +1,62 @@
+name: Scorecard
+
+# OpenSSF Scorecard: scores the repository's supply-chain practices (branch
+# protection, pinned dependencies, token permissions, dangerous workflow
+# patterns, and so on).
+#
+# Results go to two places:
+#   - code scanning (Security → Code scanning), one alert per failed check;
+#   - the public Scorecard API, which serves the README badge and
+#     https://scorecard.dev/viewer/?uri=github.com/Godgift-care/sci-healthcare-contracts
+#
+# publish_results requires that this workflow only use the actions below and
+# declare no top-level env or defaults; the Scorecard API rejects results
+# from a workflow that does.
+
+on:
+  # The Branch-Protection check reads these rules, so re-score when they change.
+  branch_protection_rule:
+  # Weekly, and on demand. Merges made by the auto-merge bot use GITHUB_TOKEN,
+  # which does not trigger the push event below, so the schedule keeps the
+  # score current regardless.
+  schedule:
+    - cron: '17 5 * * 1'
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions: read-all
+
+jobs:
+  analysis:
+    name: Scorecard analysis
+    runs-on: ubuntu-latest
+    permissions:
+      # Upload the SARIF results to code scanning.
+      security-events: write
+      # Sign the published results so the Scorecard API can tell they came
+      # from this workflow.
+      id-token: write
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Run Scorecard
+        uses: ossf/scorecard-action@v2.6.0
+        with:
+          results_file: results.sarif
+          results_format: sarif
+          publish_results: true
+
+      - name: Keep the SARIF file
+        uses: actions/upload-artifact@v7
+        with:
+          name: scorecard-sarif
+          path: results.sarif
+          retention-days: 5
+
+      - name: Upload to code scanning
+        uses: github/codeql-action/upload-sarif@v4
+        with:
+          sarif_file: results.sarif

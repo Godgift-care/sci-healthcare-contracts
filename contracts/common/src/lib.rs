@@ -15,7 +15,34 @@
 //! contract documents is archived early, and a handover that skips the
 //! acceptance step strands a role on an address nobody controls.
 
-use soroban_sdk::{Address, Env, IntoVal, Val};
+use soroban_sdk::{contractevent, Address, Env, IntoVal, Val};
+
+// ----- shared events -----
+
+/// Emitted when an admin nominates a successor. The nominee must call
+/// `accept_admin` to complete the handover.
+///
+/// The `#[topic]` annotation on `admin` is part of the ABI: every indexer
+/// that watches for this event by the current admin's address depends on it.
+/// Field names are part of the protocol's public interface; renaming them is
+/// a breaking change.
+#[contractevent]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct AdminProposed {
+    #[topic]
+    pub admin: Address,
+    pub pending_admin: Address,
+}
+
+/// Emitted when the nominee accepts and becomes the new admin.
+///
+/// Field names are part of the protocol's public interface; renaming them is
+/// a breaking change.
+#[contractevent]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct AdminChanged {
+    pub new_admin: Address,
+}
 
 /// Roughly one day of ledgers, assuming ~5 second close times.
 pub const DAY_IN_LEDGERS: u32 = 17_280;

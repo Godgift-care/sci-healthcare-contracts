@@ -1,0 +1,27 @@
+#!/bin/sh
+# Opt-in git hook (enable with `just hooks`, disable with `just unhooks`).
+#
+# Fails the commit when the workspace is not formatted: the same check as the
+# CI fmt job, minutes earlier. Commits that touch no Rust file skip it.
+# Bypass once with `git commit --no-verify`.
+#
+# cargo fmt checks the files on disk, not only what is staged, so stage the
+# result of `cargo fmt --all` before committing.
+set -eu
+
+if [ -z "$(git diff --cached --name-only --diff-filter=ACMR -- '*.rs')" ]; then
+  exit 0
+fi
+
+if ! command -v cargo >/dev/null 2>&1; then
+  echo "pre-commit: cargo is not on PATH; skipping the format check." >&2
+  exit 0
+fi
+
+if ! cargo fmt --all -- --check; then
+  echo >&2
+  echo "pre-commit: the code is not formatted, so the CI fmt job would fail." >&2
+  echo "Run 'cargo fmt --all' (or 'just fmt'), stage the changes and commit again," >&2
+  echo "or commit anyway with 'git commit --no-verify'." >&2
+  exit 1
+fi
