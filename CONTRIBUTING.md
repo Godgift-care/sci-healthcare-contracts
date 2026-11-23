@@ -48,6 +48,9 @@ in the dev container), then:
 | `just fmt` / `just fmt-check` | `cargo fmt --all` / with `-- --check` |
 | `just clippy` | `cargo clippy --all-targets --all-features -- -D warnings` |
 | `just check` | `fmt-check`, `clippy` and `test` — what CI runs on a pull request |
+| `just coverage` | the CI `coverage` job's check: `cargo llvm-cov --all --summary-only`, test files excluded, failing under 98% of lines or 95% of regions (needs `cargo-llvm-cov` 0.9.1 and the `llvm-tools-preview` component) |
+| `just doc` | the CI `doc` job's build: `cargo doc --no-deps --workspace --document-private-items`, into `target/doc` |
+| `just snapshots` | `cargo test --all`, which rewrites `contracts/*/test_snapshots/`, then lists the snapshot files that changed; commit them, or the CI `test` job fails |
 | `just wasm [out]` | `scripts/build-wasm.sh` (default `dist`) |
 | `just deploy [network] [flags]` | `scripts/deploy.sh`, e.g. `just deploy testnet --dry-run` |
 | `just seed [network]` | `scripts/seed.sh` |
@@ -242,9 +245,56 @@ Types: `feat`, `fix`, `test`, `docs`, `refactor`, `chore`, `perf`.
 - `cargo test` and `cargo build --target wasm32v1-none --release` must both pass.
 - `cargo fmt --all` and `cargo clippy --all-targets -- -D warnings` must be clean.
 - Describe **what breaks if this is wrong**, not just what you changed.
+- If anything under `contracts/` changes, add an entry under `## Unreleased` in
+  `CHANGELOG.md`. The `changelog entry` check fails without one. A change no
+  integrator can notice (a comment, a test-only refactor) can skip it: ask a
+  maintainer to add the `skip-changelog` label, and the check re-runs.
 - If you changed an event's fields, say so explicitly — the indexer in
   `sci-healthcare-backend` decodes events by name, and moving a field between
   topic and data is a breaking change that needs a matching PR there.
+
+## Documentation site
+
+The [docs site](https://godgift-care.github.io/sci-healthcare-contracts/) is
+built from `docs/` by `.github/workflows/docs-site.yml`. The root shows `main`,
+and every release tag gets a frozen copy under `/<tag>/` with a banner saying
+which version it is, so a page you change on `main` does not rewrite the docs of
+a release that is already deployed. Pull requests that touch `docs/` build the
+whole site, so a broken page fails before merge.
+
+To build it locally (Ruby 3.1 or newer):
+
+```bash
+git fetch --tags upstream          # the snapshots are read from the tags
+BUNDLE_GEMFILE=scripts/docs-site/Gemfile bundle install
+DOCS_BASE_PATH="" ./scripts/build-docs-site.sh _site
+python3 -m http.server 4000 --directory _site   # http://localhost:4000, /v0.2.0/, /latest/
+```
+
+`DOCS_BASE_PATH=""` serves the site from `/` for local preview; CI sets the
+real path. `DOCS_TAGS=""` builds `main` only.
+
+### Translations
+
+The funder, clinic and attester guides and the protocol pages also exist in
+French (`docs/fr/`) and Swahili (`docs/sw/`). The funder, clinic and attester
+guides also exist in Hausa (`docs/ha/`), Arabic (`docs/ar/`, rendered right to
+left) and Amharic (`docs/am/`), each with a `glossary.md` that fixes how technical
+terms are translated. A translated page declares its
+counterparts in front matter, and the switcher in `docs/_includes/header_custom.html`
+renders them at the top of the page:
+
+```yaml
+language: fr
+translations:
+  en: /guides/funders.html
+  sw: /sw/funders.html
+```
+
+Link every counterpart that exists, and each one has to link back.
+`node .github/scripts/i18n-check.cjs docs` fails when a translated page has no
+front matter, points at a page that does not exist, or omits a link; CI runs
+it, and `node --test .github/scripts/i18n-check.test.cjs` covers the check.
 
 ## Adding a contract event
 

@@ -1,13 +1,26 @@
 ---
 title: Funding care for someone
 nav_order: 6
+language: en
+translations:
+  fr: /fr/funders.html
+  sw: /sw/funders.html
+  pt: /pt/funders.html
+  yo: /yo/funders.html
+  ig: /ig/funders.html
+  ha: /ha/funders.html
+  ar: /ar/funders.html
+  am: /am/funders.html
 ---
 
 # Funding care for someone
 
-🇫🇷 [Lire ce guide en français](../fr/funders.md) · 🇰🇪🇹🇿 [Soma mwongozo huu kwa Kiswahili](../sw/funders.md)
-
 You are paying for a specific treatment at a specific clinic, for yourself or for someone else.
+
+If you are funding many vouchers from an organisation's shared wallet or a
+multisig account, read [Funding from an organisation wallet](organisation-funders.md)
+instead: it covers approvals, refunds back to the shared account and record
+keeping.
 
 ## What you need
 

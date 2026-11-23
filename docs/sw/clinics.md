@@ -1,11 +1,19 @@
 ---
 title: Kuendesha kliniki
 nav_order: 7
+language: sw
+translations:
+  en: /guides/clinics.html
+  fr: /fr/clinics.html
+  pt: /pt/clinics.html
+  yo: /yo/clinics.html
+  ig: /ig/clinics.html
+  ha: /ha/clinics.html
+  ar: /ar/clinics.html
+  am: /am/clinics.html
 ---
 
 # Kuendesha kliniki
-
-🇬🇧 [Soma mwongozo huu kwa Kiingereza](../guides/clinics.md) · 🇫🇷 [Lire ce guide en français](../fr/clinics.md)
 
 Wewe ni kliniki, duka la dawa au maabara inayotaka kulipwa kupitia itifaki hii.
 
@@ -51,4 +59,4 @@ Unapokea kiasi cha vocha ukiondoa ada ya itifaki ya 1%. Vocha ya $3.00 inakulipa
 
 ## Maswali zaidi
 
-Tazama [Maswali ya kliniki](../guides/clinics-faq.md) (kwa Kiingereza) kuhusu muda wa malipo, mapingamizi, ada na maswali mengine ya kawaida, kila moja likiwa na viungo vya chanzo.
+Tazama [Maswali ya kliniki](clinics-faq.md) kuhusu muda wa malipo, mapingamizi, ada na maswali mengine ya kawaida, kila moja likiwa na viungo vya chanzo.

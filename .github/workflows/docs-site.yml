@@ -1,0 +1,102 @@
+name: Docs site
+
+# Publishes the documentation site with one copy per release, so someone
+# integrating the deployed release reads about the functions that release
+# has, not the ones on main.
+#
+#   https://<owner>.github.io/<repo>/          docs/ on main
+#   https://<owner>.github.io/<repo>/v0.2.0/   docs/ as tagged in v0.2.0
+#   https://<owner>.github.io/<repo>/latest/   redirects to the newest release
+#
+# Pushing a v* tag (which also runs release.yml) republishes the site with
+# that tag's snapshot added. Pull requests that touch the docs build the
+# whole site without publishing it, so a broken page fails before merge.
+#
+# One-time setup: Settings -> Pages -> Build and deployment -> Source:
+# "GitHub Actions". Until then the deploy job fails and GitHub's legacy
+# builder keeps serving docs/ from main unchanged. The same works on a fork:
+# enable Pages with the Actions source there, push a v* tag to the fork and
+# run this workflow.
+#
+# scripts/build-docs-site.sh does the build and can be run locally.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'docs/**'
+      - 'scripts/build-docs-site.sh'
+      - 'scripts/docs-site/**'
+      - '.github/workflows/docs-site.yml'
+    # Path filters are not applied to tag pushes: every release tag runs.
+    tags:
+      - 'v*'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'docs/**'
+      - 'scripts/build-docs-site.sh'
+      - 'scripts/docs-site/**'
+      - '.github/workflows/docs-site.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# One publish at a time, and never cancel one halfway through.
+concurrency:
+  group: docs-site-${{ github.event_name == 'pull_request' && github.ref || 'publish' }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: build docs site
+    runs-on: ubuntu-latest
+    env:
+      BUNDLE_GEMFILE: ${{ github.workspace }}/scripts/docs-site/Gemfile
+    steps:
+      # The whole history and every tag: each release snapshot is read from
+      # its tag. The site root is always built from main, even when a tag
+      # push triggered the run, so a tag never replaces the main docs.
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event_name == 'pull_request' && github.sha || github.event.repository.default_branch }}
+      - name: Fetch tags
+        run: git fetch --tags --force origin
+      # No lockfile is committed: the Gemfile constrains each gem to a
+      # compatible range, resolved on the runner's own platform.
+      - uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: '3.3'
+      - name: Install Jekyll and the plugins
+        run: bundle install --jobs 4
+      # The path Pages serves the site under: /<repo> on github.io (forks
+      # included), empty on a custom domain.
+      - name: Read the Pages base path
+        id: pages
+        if: github.event_name != 'pull_request'
+        uses: actions/configure-pages@v5
+      - name: Build main and every release
+        env:
+          DOCS_BASE_PATH: ${{ github.event_name == 'pull_request' && format('/{0}', github.event.repository.name) || steps.pages.outputs.base_path }}
+        run: ./scripts/build-docs-site.sh _site
+      - uses: actions/upload-pages-artifact@v3
+        if: github.event_name != 'pull_request'
+        with:
+          path: _site
+
+  deploy:
+    name: publish docs site
+    needs: build
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

@@ -44,6 +44,17 @@ pub struct VoucherClaimed {
 
 #[contractevent]
 #[derive(Clone, Debug, Eq, PartialEq)]
+pub struct VoucherDeclined {
+    #[topic]
+    pub provider: Address,
+    pub voucher_id: u64,
+    pub reason_code: u32,
+    pub service_code: u32,
+    pub amount: i128,
+}
+
+#[contractevent]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct VoucherAttested {
     #[topic]
     pub attester: Address,
@@ -173,6 +184,16 @@ pub struct EscrowCapChanged {
     #[topic]
     pub admin: Address,
     pub max: i128,
+}
+
+/// The admin changed the value above which a voucher must carry a presence
+/// commitment. `threshold` is 0 when no protocol-level requirement applies.
+#[contractevent]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct PresenceThresholdChanged {
+    #[topic]
+    pub admin: Address,
+    pub threshold: i128,
 }
 
 #[contractevent]

@@ -9,3 +9,7 @@ lcov.info
 deployments/local.env
 .stellar/
 .DS_Store
+# Output and lockfile of scripts/build-docs-site.sh (the Gemfile constrains
+# versions; CI resolves them on its own platform).
+_site/
+scripts/docs-site/Gemfile.lock

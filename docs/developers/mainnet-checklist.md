@@ -78,6 +78,7 @@ mainnet and do not use real funds. See [SECURITY.md](../../SECURITY.md).
 | 3.8 | The receipt book's minter is the voucher contract, and only that contract can mint. | Contracts maintainer | `get_minter` output and a negative test showing another address cannot mint. | [ ] |
 | 3.9 | All three contracts are initialized exactly once with the intended admin and no pending admin is left over. | Release manager | Initialization transaction hashes, `get_pending_admin` returning `None`, and `get_admin` output. | [ ] |
 | 3.10 | `attester_share_bps` is the approved attester compensation, is no greater than `fee_bps`, and the resulting clinic net and attester payment are documented in the fee disclosure. | Communications lead | `get_config` output, the share/fee approval, and a worked settlement example from `quote` and `voucher_settled`. | [ ] |
+| 3.11 | The settlement token transfers **exactly the requested amount**: no transfer fees, burn-on-transfer or balance-changing hooks. The escrow invariant assumes this. The contract fails closed with `TokenAmountMismatch` (#34) if it is broken, but such a token would make every voucher unusable, not just unsafe. | Security reviewer | Confirmation that `token` is a Stellar Asset Contract (SACs never charge transfer fees), a testnet fund → settle → refund run against that exact token showing `escrow_summary` equal before and after, and a link to the `nonstandard_token` tests. | [ ] |
 
 ## 4. Monitoring
 

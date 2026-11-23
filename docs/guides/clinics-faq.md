@@ -1,6 +1,10 @@
 ---
 title: Clinic FAQ
 nav_order: 9
+language: en
+translations:
+  fr: /fr/clinics-faq.html
+  sw: /sw/clinics-faq.html
 ---
 
 # Clinic FAQ

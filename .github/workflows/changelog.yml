@@ -1,0 +1,54 @@
+name: Changelog
+
+# Fails a pull request that changes anything under contracts/ without
+# touching CHANGELOG.md. Pull requests that do not touch contracts/ (docs,
+# CI, scripts, examples) always pass.
+#
+# Escape hatch: a maintainer adds the `skip-changelog` label to a change no
+# integrator can notice (a comment, a test-only refactor). The check re-runs
+# when a label is added or removed, and the auto-merge bot reads only the
+# latest run.
+#
+# This is its own workflow rather than a job in ci.yml so that adding a
+# label re-runs this one check, not the whole CI suite. The rule itself is
+# in .github/scripts/changelog-check.cjs, tested by the `bot` job in ci.yml.
+
+on:
+  pull_request:
+    branches: [main]
+    types: [opened, synchronize, reopened, labeled, unlabeled]
+
+permissions:
+  contents: read
+  pull-requests: read
+
+concurrency:
+  group: changelog-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  changelog:
+    name: changelog entry
+    runs-on: ubuntu-latest
+    steps:
+      # pull_request (not pull_request_target): the token is read-only, as in
+      # ci.yml. Only the script is checked out; the list of changed files
+      # comes from the API, so no git history is needed.
+      - uses: actions/checkout@v7
+        with:
+          sparse-checkout: .github/scripts
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '22'
+      - name: List the files this pull request changes
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          gh api --paginate "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}/files" \
+            --jq '.[].filename' > "$RUNNER_TEMP/changed-files.txt"
+          echo "$(wc -l < "$RUNNER_TEMP/changed-files.txt") files changed"
+      - name: Check for a CHANGELOG.md entry
+        env:
+          PR_LABELS: ${{ toJSON(github.event.pull_request.labels.*.name) }}
+        run: node .github/scripts/changelog-check.cjs "$RUNNER_TEMP/changed-files.txt"
