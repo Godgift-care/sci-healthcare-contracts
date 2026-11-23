@@ -1,0 +1,95 @@
+name: scheduled deployment verification
+
+# Daily read-only check that the testnet deployment is wired the way
+# deployments/testnet.env says. The stellar CLI calls are simulations
+# (--send=no), so no secret is needed for the check itself. The workflow only
+# needs GITHUB_TOKEN to open and close the tracking issue.
+#
+# A failing run opens exactly one issue (or leaves the existing one open).
+# A passing run closes any open tracking issue, so the issue is a live signal
+# about the deployment's health.
+
+on:
+  schedule:
+    # 06:00 UTC every day.
+    - cron: '0 6 * * *'
+  workflow_dispatch:
+
+concurrency:
+  group: scheduled-verify
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  issues: write
+
+env:
+  STELLAR_CLI_VERSION: '27.1.0'
+  TRACKING_TITLE: 'ops: scheduled testnet deployment verification is failing'
+
+jobs:
+  verify:
+    name: verify testnet deployment
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Install Stellar CLI
+        run: |
+          curl -sSL "https://github.com/stellar/stellar-cli/releases/download/v${STELLAR_CLI_VERSION}/stellar-cli-${STELLAR_CLI_VERSION}-x86_64-unknown-linux-gnu.tar.gz" \
+            | tar xz
+          sudo install -m755 stellar /usr/local/bin/stellar
+          stellar --version
+
+      - name: Install jq
+        run: sudo apt-get install -y jq
+
+      - name: Run verification
+        id: verify
+        # continue-on-error so the issue-management steps always run.
+        continue-on-error: true
+        run: ./scripts/verify-deployment.sh testnet
+
+      - name: Open tracking issue on failure
+        if: steps.verify.outcome == 'failure'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          body="$(printf 'The scheduled testnet deployment verification failed on %s.\n\nRun: %s\nCommit: %s\n\nCheck the run log to see which wiring check failed. The most common cause is a testnet reset that expired the contract ids in `deployments/testnet.env`. Close this issue once a passing run confirms the deployment is healthy again.\n' \
+            "$(date -u +%Y-%m-%d)" "$RUN_URL" "$GITHUB_SHA")"
+          number="$(gh issue list \
+            --repo "$GITHUB_REPOSITORY" \
+            --state open \
+            --search "\"$TRACKING_TITLE\" in:title" \
+            --json number,title \
+            --jq "map(select(.title == env.TRACKING_TITLE)) | .[0].number // empty")"
+          if [ -n "$number" ]; then
+            echo "Tracking issue #$number is already open — leaving it open."
+          else
+            gh issue create \
+              --repo "$GITHUB_REPOSITORY" \
+              --title "$TRACKING_TITLE" \
+              --label "deployment-alert" \
+              --body "$body"
+          fi
+
+      - name: Close tracking issue on recovery
+        if: steps.verify.outcome == 'success'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          number="$(gh issue list \
+            --repo "$GITHUB_REPOSITORY" \
+            --state open \
+            --search "\"$TRACKING_TITLE\" in:title" \
+            --json number,title \
+            --jq "map(select(.title == env.TRACKING_TITLE)) | .[0].number // empty")"
+          if [ -n "$number" ]; then
+            gh issue close "$number" \
+              --repo "$GITHUB_REPOSITORY" \
+              --comment "Deployment verification passed on $(date -u +%Y-%m-%d). Run: $RUN_URL"
+            echo "Closed #$number"
+          fi
