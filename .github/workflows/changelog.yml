@@ -34,10 +34,10 @@ jobs:
       # pull_request (not pull_request_target): the token is read-only, as in
       # ci.yml. Only the script is checked out; the list of changed files
       # comes from the API, so no git history is needed.
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           sparse-checkout: .github/scripts
-      - uses: actions/setup-node@v5
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
         with:
           node-version: '22'
       - name: List the files this pull request changes

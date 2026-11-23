@@ -43,7 +43,7 @@ jobs:
     steps:
       - name: Resolve the pull request
         id: pr
-        uses: actions/github-script@v9
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
         env:
           PR_INPUT: ${{ inputs.pr }}
         with:
@@ -63,7 +63,7 @@ jobs:
             });
 
       - name: Check out the default branch (trusted scanner)
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           ref: ${{ github.event.repository.default_branch }}
           fetch-depth: 0
@@ -84,7 +84,7 @@ jobs:
           chmod +x "$RUNNER_TEMP/osv-scanner"
 
       - name: Scan
-        uses: actions/github-script@v9
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
         env:
           TRUSTED_DIR: ${{ github.workspace }}/trusted
           OSV_SCANNER: ${{ runner.temp }}/osv-scanner
@@ -99,7 +99,7 @@ jobs:
       # or missing status behind.
       - name: Report a scan error
         if: (failure() || cancelled()) && steps.pr.outputs.sha
-        uses: actions/github-script@v9
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
         env:
           SHA: ${{ steps.pr.outputs.sha }}
         with:

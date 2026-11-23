@@ -58,7 +58,7 @@ jobs:
       # The whole history and every tag: each release snapshot is read from
       # its tag. The site root is always built from main, even when a tag
       # push triggered the run, so a tag never replaces the main docs.
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           fetch-depth: 0
           ref: ${{ github.event_name == 'pull_request' && github.sha || github.event.repository.default_branch }}
@@ -66,7 +66,7 @@ jobs:
         run: git fetch --tags --force origin
       # No lockfile is committed: the Gemfile constrains each gem to a
       # compatible range, resolved on the runner's own platform.
-      - uses: ruby/setup-ruby@v1
+      - uses: ruby/setup-ruby@be3c7df29b3349ec6bcfc6b4792f1cf9f5237d18 # v1
         with:
           ruby-version: '3.3'
       - name: Install Jekyll and the plugins
@@ -76,12 +76,12 @@ jobs:
       - name: Read the Pages base path
         id: pages
         if: github.event_name != 'pull_request'
-        uses: actions/configure-pages@v5
+        uses: actions/configure-pages@983d7736d9b0ae728b81ab479565c72886d7745b # v5
       - name: Build main and every release
         env:
           DOCS_BASE_PATH: ${{ github.event_name == 'pull_request' && format('/{0}', github.event.repository.name) || steps.pages.outputs.base_path }}
         run: ./scripts/build-docs-site.sh _site
-      - uses: actions/upload-pages-artifact@v3
+      - uses: actions/upload-pages-artifact@56afc609e74202658d3ffba0e8f6dda462b719fa # v3
         if: github.event_name != 'pull_request'
         with:
           path: _site
@@ -99,4 +99,4 @@ jobs:
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - id: deployment
-        uses: actions/deploy-pages@v4
+        uses: actions/deploy-pages@d6db90164ac5ed86f2b6aed7e0febac5b3c0c03e # v4

@@ -22,9 +22,10 @@ default:
 build:
     cargo build --all
 
-# Run every contract's tests.
+# Run every contract's tests (nextest for speed; cargo test --doc for doctests).
 test:
-    cargo test --all
+    cargo nextest run --all
+    cargo test --doc --all
 
 # Format the workspace.
 fmt:
@@ -59,7 +60,7 @@ doc:
 
 # Rerun the tests to rewrite contracts/*/test_snapshots, then list the files that changed.
 snapshots:
-    cargo test --all
+    cargo nextest run --all
     git status --short --untracked-files=all -- 'contracts/*/test_snapshots/*'
 
 # Regenerate the per-contract storage read/write tables.

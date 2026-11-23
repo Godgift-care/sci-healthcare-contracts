@@ -1,0 +1,59 @@
+name: Links
+
+# Checks hyperlinks in the documentation.
+#
+# Two passes, both powered by lychee:
+#
+#   relative — runs on every PR that touches a Markdown file and on every push
+#              to main.  Checks file-relative links only (--offline).  Broken
+#              relative links fail the job and block the PR.
+#
+#   external — runs weekly on main.  Checks external URLs.  Failures are
+#              reported as a job summary but do NOT block the PR, because a
+#              link rot introduced by an upstream change is not the author's
+#              fault.
+
+on:
+  pull_request:
+    paths:
+      - '**/*.md'
+  push:
+    branches: [main]
+    paths:
+      - '**/*.md'
+  schedule:
+    - cron: '0 6 * * 1'   # weekly on Monday at 06:00 UTC
+  workflow_dispatch:
+
+jobs:
+  relative:
+    name: relative links
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: lycheeverse/lychee-action@e7477775783ea5526144ba13e8db5eec57747ce8 # v2
+        with:
+          # --offline: resolve relative links against the checkout; skip http/https.
+          # --include-fragments: catch broken anchor targets too.
+          args: >-
+            --offline
+            --include-fragments
+            --verbose
+            **/*.md
+          fail: true
+
+  external:
+    name: external links
+    runs-on: ubuntu-latest
+    # Only run the external check on main (scheduled or manual) — not on PRs.
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: lycheeverse/lychee-action@e7477775783ea5526144ba13e8db5eec57747ce8 # v2
+        with:
+          args: >-
+            --verbose
+            --no-progress
+            **/*.md
+          # External link rot is not the PR author's fault; report without blocking.
+          fail: false
