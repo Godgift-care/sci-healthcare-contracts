@@ -1,5 +1,7 @@
 #![cfg(test)]
 
+use std::string::ToString;
+
 use soroban_sdk::{
     testutils::{Address as _, IssuerFlags, Ledger as _, StellarAssetContract},
     token, Address, Bytes, BytesN, Env, String,
@@ -7,10 +9,12 @@ use soroban_sdk::{
 
 use crate::{
     Exposure, VoucherError, VoucherEscrow, VoucherEscrowClient, VoucherOptions, VoucherStatus,
-    DEFAULT_DISPUTE_WINDOW_BOUNDS, DEFAULT_MAX_ATTESTATIONS_PER_DAY,
+    DEFAULT_DISPUTE_WINDOW_BOUNDS, DEFAULT_MAX_ATTESTATIONS_PER_DAY, MAX_STATUSES_PER_CALL,
 };
 use sci_receipt::{ReceiptBook, ReceiptBookClient};
-use sci_registry::{ProviderStatus, Registry, RegistryClient, MIN_PRICE_NOTICE_SECS};
+use sci_registry::{
+    ProviderCategory, ProviderStatus, Registry, RegistryClient, MIN_PRICE_NOTICE_SECS,
+};
 
 const DISPUTE_WINDOW: u64 = 72 * 60 * 60; // 72 hours
 const FEE_BPS: u32 = 100; // 1%
@@ -94,6 +98,7 @@ fn setup_with(fee_bps: u32, attester_share_bps: u32) -> Fixture {
         &provider,
         &String::from_str(&env, "Ikeja General Clinic"),
         &String::from_str(&env, "NG"),
+        &ProviderCategory::Clinic,
     );
     registry.set_provider_status(&admin, &provider, &ProviderStatus::Active, &REASON_VERIFIED);
     registry.upsert_service(
@@ -300,6 +305,100 @@ fn voucher_ids_increment() {
 }
 
 #[test]
+fn create_voucher_at_price_funds_at_the_agreed_price() {
+    let f = setup();
+    let before = f.token.balance(&f.funder);
+
+    let id = f.voucher.create_voucher_at_price(
+        &f.funder,
+        &patient(&f.env),
+        &f.provider,
+        &CONSULT,
+        &CONSULT_PRICE,
+        &(START_TIME + 30 * 24 * 60 * 60),
+        &CONSULT_PRICE,
+    );
+
+    let voucher = f.voucher.get_voucher(&id);
+    assert_eq!(voucher.status, VoucherStatus::Funded);
+    assert_eq!(voucher.amount, CONSULT_PRICE);
+    assert_eq!(f.token.balance(&f.funder), before - CONSULT_PRICE);
+    assert_escrow(&f, CONSULT_PRICE);
+}
+
+#[test]
+fn create_voucher_at_price_rejects_a_raised_price() {
+    let f = setup();
+    let before = f.token.balance(&f.funder);
+    let effective_at = START_TIME + MIN_PRICE_NOTICE_SECS;
+
+    f.registry.schedule_service_price(
+        &f.provider,
+        &CONSULT,
+        &(CONSULT_PRICE * 2),
+        &effective_at,
+        &false,
+    );
+    advance(&f.env, MIN_PRICE_NOTICE_SECS);
+
+    let err = f
+        .voucher
+        .try_create_voucher_at_price(
+            &f.funder,
+            &patient(&f.env),
+            &f.provider,
+            &CONSULT,
+            &CONSULT_PRICE,
+            &(START_TIME + 30 * 24 * 60 * 60),
+            &CONSULT_PRICE,
+        )
+        .err()
+        .unwrap()
+        .unwrap();
+    assert_eq!(err, VoucherError::PriceChanged);
+
+    // Nothing moved and no voucher was written.
+    assert_eq!(f.token.balance(&f.funder), before);
+    assert_escrow(&f, 0);
+    assert_eq!(f.voucher.next_voucher_id(), 1);
+}
+
+#[test]
+fn create_voucher_at_price_rejects_a_lowered_price() {
+    let f = setup();
+    // The clinic lowers the price between the quote and the signing call. The
+    // funder did not agree to the new terms, so the call is rejected even
+    // though the amount would still cover it.
+    f.registry.upsert_service(
+        &f.provider,
+        &CONSULT,
+        &String::from_str(&f.env, "Outpatient consult"),
+        &(CONSULT_PRICE / 2),
+    );
+
+    let err = f
+        .voucher
+        .try_create_voucher_at_price(
+            &f.funder,
+            &patient(&f.env),
+            &f.provider,
+            &CONSULT,
+            &CONSULT_PRICE,
+            &(START_TIME + 30 * 24 * 60 * 60),
+            &CONSULT_PRICE,
+        )
+        .err()
+        .unwrap()
+        .unwrap();
+    assert_eq!(err, VoucherError::PriceChanged);
+
+    // The old entry point is unchanged: it funds at the current price.
+    let id = fund(&f);
+    assert_eq!(f.voucher.get_voucher(&id).amount, CONSULT_PRICE);
+    assert!(f.token.balance(&f.funder) > 0);
+}
+
+#[test]
 fn funder_need_not_be_beneficiary() {
     // A relative abroad funds care for someone at home. Same code path.
     let f = setup();
@@ -455,6 +554,7 @@ fn register_redirect_provider(f: &Fixture) -> Address {
         &provider,
         &String::from_str(&f.env, "New Clinic"),
         &String::from_str(&f.env, "NG"),
+        &ProviderCategory::Clinic,
     );
     f.registry.set_provider_status(
         &f.admin,
@@ -497,6 +597,28 @@ fn redirect_moves_a_funded_voucher_and_emits_event() {
 }
 
 #[test]
+fn only_funder_can_redirect() {
+    let f = setup();
+    let id = fund(&f);
+    let new_provider = register_redirect_provider(&f);
+    f.registry.upsert_service(
+        &new_provider,
+        &CONSULT,
+        &String::from_str(&f.env, "Outpatient consult"),
+        &CONSULT_PRICE,
+    );
+    let stranger = Address::generate(&f.env);
+
+    let err = f
+        .voucher
+        .try_redirect(&stranger, &id, &new_provider)
+        .err()
+        .unwrap()
+        .unwrap();
+    assert_eq!(err, VoucherError::NotAuthorized);
+}
+
+#[test]
 fn cannot_redirect_to_an_inactive_provider() {
     let f = setup();
     let id = fund(&f);
@@ -530,6 +652,29 @@ fn cannot_redirect_to_a_provider_without_the_service() {
         .unwrap()
         .unwrap();
     assert_eq!(err, VoucherError::ServiceNotOffered);
+}
+
+#[test]
+fn cannot_redirect_to_a_paused_service() {
+    let f = setup();
+    let id = fund(&f);
+    let new_provider = register_redirect_provider(&f);
+    f.registry.upsert_service(
+        &new_provider,
+        &CONSULT,
+        &String::from_str(&f.env, "Outpatient consult"),
+        &CONSULT_PRICE,
+    );
+    f.registry
+        .set_service_available(&new_provider, &CONSULT, &false);
+
+    let err = f
+        .voucher
+        .try_redirect(&f.funder, &id, &new_provider)
+        .err()
+        .unwrap()
+        .unwrap();
+    assert_eq!(err, VoucherError::ServiceUnavailable);
 }
 
 #[test]
@@ -594,8 +739,13 @@ fn pausing_a_service_does_not_affect_funded_vouchers() {
 fn scheduled_price_rise_applies_to_funding_at_the_effective_time() {
     let f = setup();
     let effective_at = START_TIME + MIN_PRICE_NOTICE_SECS;
-    f.registry
-        .schedule_service_price(&f.provider, &CONSULT, &(CONSULT_PRICE * 2), &effective_at);
+    f.registry.schedule_service_price(
+        &f.provider,
+        &CONSULT,
+        &(CONSULT_PRICE * 2),
+        &effective_at,
+        &false,
+    );
 
     // Before the effective time the listed price still funds.
     assert_eq!(fund(&f), 1);
@@ -886,8 +1036,13 @@ fn cannot_reduce_below_a_price_the_clinic_has_raised() {
     let overpaid = CONSULT_PRICE * 2;
     let id = fund_overpaid(&f, overpaid);
     let effective_at = START_TIME + MIN_PRICE_NOTICE_SECS;
-    f.registry
-        .schedule_service_price(&f.provider, &CONSULT, &(CONSULT_PRICE * 3), &effective_at);
+    f.registry.schedule_service_price(
+        &f.provider,
+        &CONSULT,
+        &(CONSULT_PRICE * 3),
+        &effective_at,
+        &false,
+    );
     f.env.ledger().with_mut(|li| li.timestamp = effective_at);
 
     let err = f
@@ -1651,6 +1806,20 @@ fn cannot_dispute_after_window_closes() {
         .unwrap()
         .unwrap();
     assert_eq!(err, VoucherError::DisputeWindowClosed);
+}
+
+#[test]
+fn cannot_dispute_an_unclaimed_voucher() {
+    let f = setup();
+    let id = fund(&f);
+
+    let err = f
+        .voucher
+        .try_dispute(&f.funder, &id, &1u32)
+        .err()
+        .unwrap()
+        .unwrap();
+    assert_eq!(err, VoucherError::InvalidStatus);
 }
 
 #[test]
@@ -2657,6 +2826,10 @@ const AUTH_MATRIX: &[AuthCase] = &[
         auth: signer("`funder`", funder_addr),
     },
     AuthCase {
+        function: "create_voucher_at_price",
+        auth: signer("`funder`", funder_addr),
+    },
+    AuthCase {
         function: "reduce_amount",
         auth: signer("`funder`", funder_addr),
     },
@@ -2717,6 +2890,10 @@ const AUTH_MATRIX: &[AuthCase] = &[
         auth: signer("`admin`", admin_addr),
     },
     AuthCase {
+        function: "set_presence_threshold",
+        auth: signer("`admin`", admin_addr),
+    },
+    AuthCase {
         function: "propose_admin",
         auth: signer("`admin`", admin_addr),
     },
@@ -2734,6 +2911,10 @@ const AUTH_MATRIX: &[AuthCase] = &[
     },
     AuthCase {
         function: "get_max_escrow_per_provider",
+        auth: Auth::Free("none (view)"),
+    },
+    AuthCase {
+        function: "get_presence_threshold",
         auth: Auth::Free("none (view)"),
     },
     AuthCase {
@@ -2758,6 +2939,10 @@ const AUTH_MATRIX: &[AuthCase] = &[
     },
     AuthCase {
         function: "get_voucher",
+        auth: Auth::Free("none (view)"),
+    },
+    AuthCase {
+        function: "statuses",
         auth: Auth::Free("none (view)"),
     },
     AuthCase {
@@ -2790,10 +2975,29 @@ fn recorded_auths(env: &Env) -> std::vec::Vec<Address> {
         .collect()
 }
 
+/// What one successful call demanded and touched.
+struct CaseRun {
+    auths: std::vec::Vec<Address>,
+    /// In-memory ledger entries read by the last top-level invocation.
+    reads: u32,
+    /// Ledger entries written by the last top-level invocation.
+    writes: u32,
+}
+
+fn case_run(env: &Env) -> CaseRun {
+    let resources = env.cost_estimate().resources();
+    CaseRun {
+        auths: recorded_auths(env),
+        reads: resources.memory_read_entries,
+        writes: resources.write_entries,
+    }
+}
+
 /// Runs `function` in the state that makes it a valid call, so the only thing
 /// under test is who it demands. Every arm leaves the function under test as
-/// the last invocation, which is what `env.auths()` reports.
-fn run_case(f: &AuthFixture, function: &str) -> std::vec::Vec<Address> {
+/// the last invocation, which is what `env.auths()` and the resource meter
+/// report.
+fn run_case(f: &AuthFixture, function: &str) -> CaseRun {
     let voucher = &f.f.voucher;
     let env = &f.f.env;
 
@@ -2815,13 +3019,24 @@ fn run_case(f: &AuthFixture, function: &str) -> std::vec::Vec<Address> {
                 &ATTESTER_SHARE_BPS,
                 &a,
             );
-            return recorded_auths(&env);
+            return case_run(&env);
         }
         "create_voucher" => {
             fund(&f.f);
         }
         "create_voucher_with_options" => {
             fund_with(&f.f, &VoucherOptions::default());
+        }
+        "create_voucher_at_price" => {
+            voucher.create_voucher_at_price(
+                &f.f.funder,
+                &patient(env),
+                &f.f.provider,
+                &CONSULT,
+                &CONSULT_PRICE,
+                &(START_TIME + 30 * 24 * 60 * 60),
+                &CONSULT_PRICE,
+            );
         }
         "reduce_amount" => {
             let id = fund_overpaid(&f.f, CONSULT_PRICE * 2);
@@ -2834,6 +3049,7 @@ fn run_case(f: &AuthFixture, function: &str) -> std::vec::Vec<Address> {
                 &provider,
                 &String::from_str(env, "New Clinic"),
                 &String::from_str(env, "NG"),
+                &ProviderCategory::Clinic,
             );
             f.f.registry.set_provider_status(
                 &f.f.admin,
@@ -2924,8 +3140,14 @@ fn run_case(f: &AuthFixture, function: &str) -> std::vec::Vec<Address> {
         "set_max_escrow_per_provider" => {
             voucher.set_max_escrow_per_provider(&f.f.admin, &CONSULT_PRICE);
         }
+        "set_presence_threshold" => {
+            voucher.set_presence_threshold(&f.f.admin, &CONSULT_PRICE);
+        }
         "get_max_escrow_per_provider" => {
             voucher.get_max_escrow_per_provider();
+        }
+        "get_presence_threshold" => {
+            voucher.get_presence_threshold();
         }
         "get_exposure" => {
             voucher.get_exposure(&f.f.provider);
@@ -2954,6 +3176,10 @@ fn run_case(f: &AuthFixture, function: &str) -> std::vec::Vec<Address> {
             let id = fund(&f.f);
             voucher.get_voucher(&id);
         }
+        "statuses" => {
+            let id = fund(&f.f);
+            voucher.statuses(&soroban_sdk::Vec::from_array(env, [id]));
+        }
         "get_config" => {
             voucher.get_config();
         }
@@ -2974,7 +3200,7 @@ fn run_case(f: &AuthFixture, function: &str) -> std::vec::Vec<Address> {
         }
     }
 
-    recorded_auths(env)
+    case_run(env)
 }
 
 fn assert_demands(f: &AuthFixture, case: &AuthCase, got: &[Address]) {
@@ -3013,15 +3239,19 @@ fn assert_demands(f: &AuthFixture, case: &AuthCase, got: &[Address]) {
 fn authorisation_matrix_matches_every_public_function() {
     for case in AUTH_MATRIX {
         let f = AuthFixture::new();
-        let got = run_case(&f, case.function);
-        assert_demands(&f, case, &got);
+        let run = run_case(&f, case.function);
+        assert_demands(&f, case, &run.auths);
     }
 }
 
 /// The rows of the authorisation table in `docs/developers/contracts.md` for
 /// one contract, as written.
 fn doc_rows<'a>(docs: &'a str, contract: &str) -> std::vec::Vec<&'a str> {
-    let heading = std::format!("## {contract}\n");
+    let heading = if contract == "faucet" {
+        "## faucet (testnet only)\n".to_string()
+    } else {
+        std::format!("## {contract}\n")
+    };
     let start = docs
         .find(&heading)
         .unwrap_or_else(|| panic!("contracts.md has no `{contract}` section"));
@@ -3030,16 +3260,25 @@ fn doc_rows<'a>(docs: &'a str, contract: &str) -> std::vec::Vec<&'a str> {
         .find("### Authorisation matrix")
         .unwrap_or_else(|| panic!("the `{contract}` section has no authorisation matrix"));
     let section = &section[start..];
-    // The matrix is its own subsection: stop at the next heading so the
-    // errors and events tables further down are not counted as rows.
-    let end = section
-        .find("\n### ")
-        .or_else(|| section.find("\n## "))
-        .unwrap_or(section.len());
+    let end = find_section_end(section);
     section[..end]
         .lines()
         .filter(|line| line.starts_with("| `"))
         .collect()
+}
+
+fn find_section_end(section: &str) -> usize {
+    let mut end = section.len();
+    if let Some(pos) = section.find("\n### ") {
+        end = end.min(pos);
+    }
+    if let Some(pos) = section.find("\n## ") {
+        end = end.min(pos);
+    }
+    if let Some(pos) = section.find("\n---") {
+        end = end.min(pos);
+    }
+    end
 }
 
 #[test]
@@ -3063,6 +3302,69 @@ fn authorisation_table_in_the_docs_matches_the_matrix() {
              one the tests prove",
         );
     }
+}
+
+// ----- storage read and write counts -----
+//
+// Entry counts drive fees and the resource limits a transaction can hit. This
+// table is generated by running every row of `AUTH_MATRIX` once in the state
+// that makes the call valid, and recording the host's metered ledger entries.
+//
+// The test fails when a count changes: an increase is a cost regression, and a
+// decrease still means the committed table is stale. Regenerate intentionally
+// with `just storage-counts` (or `./scripts/refresh-storage-counts.sh`) and
+// explain the change in the pull request.
+//
+// What breaks if this is wrong: a new storage read or write in a hot path is
+// invisible until a real transaction hits the network's entry limit.
+
+const STORAGE_COUNTS_FILE: &str = "storage-counts.md";
+
+fn storage_counts_table() -> std::string::String {
+    let mut table = std::string::String::from(
+        "# Storage reads and writes per public entry point\n\
+         \n\
+         Generated by `just storage-counts` from `AUTH_MATRIX` in this crate. \
+         Reads are `memory_read_entries` and writes are `write_entries` from \
+         `Env::cost_estimate().resources()` after one successful call. Update \
+         the table in the same pull request as an intentional change.\n\
+         \n\
+         | Function | Reads | Writes |\n\
+         | --- | --- | --- |\n",
+    );
+    for case in AUTH_MATRIX {
+        let f = AuthFixture::new();
+        let run = run_case(&f, case.function);
+        table.push_str(&std::format!(
+            "| `{}` | {} | {} |\n",
+            case.function,
+            run.reads,
+            run.writes,
+        ));
+    }
+    table
+}
+
+#[test]
+fn storage_counts_match_the_committed_table() {
+    let table = storage_counts_table();
+    let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join(STORAGE_COUNTS_FILE);
+    if std::env::var_os("UPDATE_STORAGE_COUNTS").is_some() {
+        std::fs::write(&path, &table).unwrap();
+        return;
+    }
+    let committed = std::fs::read_to_string(&path).unwrap_or_else(|_| {
+        panic!(
+            "{} is missing; regenerate it with `just storage-counts`",
+            path.display()
+        )
+    });
+    assert_eq!(
+        committed, table,
+        "storage reads or writes changed for a voucher entry point. If the change is \
+         intentional, run `just storage-counts` and explain the new cost in the pull \
+         request; if it is not, the call is doing more ledger work than it used to",
+    );
 }
 
 // ----- storage lifetime (TTL) -----
@@ -3672,6 +3974,112 @@ fn plain_voucher_writes_no_options_entry() {
     );
 }
 
+// ----- presence threshold for high-value vouchers -----
+
+#[test]
+fn presence_threshold_defaults_to_zero_and_does_not_affect_vouchers() {
+    let f = setup();
+    assert_eq!(f.voucher.get_presence_threshold(), 0);
+
+    // With no threshold configured, an expensive voucher needs no proof.
+    let id = fund_overpaid(&f, CONSULT_PRICE * 10);
+    assert_eq!(f.voucher.get_voucher(&id).status, VoucherStatus::Funded);
+}
+
+#[test]
+fn presence_threshold_requires_a_commitment_above_it() {
+    let f = setup();
+    let threshold = 2 * CONSULT_PRICE;
+    f.voucher.set_presence_threshold(&f.admin, &threshold);
+    assert_eq!(f.voucher.get_presence_threshold(), threshold);
+
+    // Below and at the threshold: still ordinary.
+    let below_threshold = try_fund(&f, threshold - 1).expect("below the threshold is unaffected");
+    assert_eq!(
+        f.voucher.get_voucher(&below_threshold).status,
+        VoucherStatus::Funded
+    );
+    let at_threshold = try_fund(&f, threshold).expect("at the threshold is unaffected");
+    assert_eq!(
+        f.voucher.get_voucher(&at_threshold).status,
+        VoucherStatus::Funded
+    );
+
+    // Above it, a plain voucher is refused.
+    assert_eq!(
+        try_fund(&f, threshold + 1),
+        Err(VoucherError::PresenceCommitmentRequired)
+    );
+
+    // `create_voucher_with_options` without a commitment is refused too.
+    let options = VoucherOptions::default();
+    assert_eq!(
+        f.voucher.try_create_voucher_with_options(
+            &f.funder,
+            &patient(&f.env),
+            &f.provider,
+            &CONSULT,
+            &(threshold + 1),
+            &(START_TIME + 30 * 24 * 60 * 60),
+            &options,
+        ),
+        Err(Ok(VoucherError::PresenceCommitmentRequired))
+    );
+
+    // With a commitment it succeeds, and claims the same way as any other
+    // committed voucher.
+    let secret = Bytes::from_slice(&f.env, b"high-value-patient");
+    let options = VoucherOptions {
+        presence_commitment: Some(commit(&f.env, &secret)),
+        dispute_window: None,
+    };
+    let id = f.voucher.create_voucher_with_options(
+        &f.funder,
+        &patient(&f.env),
+        &f.provider,
+        &CONSULT,
+        &(threshold + 1),
+        &(START_TIME + 30 * 24 * 60 * 60),
+        &options,
+    );
+    f.voucher.claim_with_proof(&f.provider, &id, &secret);
+    assert_eq!(f.voucher.get_voucher(&id).status, VoucherStatus::Claimed);
+}
+
+#[test]
+fn presence_threshold_is_admin_only_and_not_negative() {
+    let f = setup();
+    let stranger = Address::generate(&f.env);
+
+    assert_eq!(
+        f.voucher
+            .try_set_presence_threshold(&stranger, &CONSULT_PRICE),
+        Err(Ok(VoucherError::NotAuthorized))
+    );
+    assert_eq!(
+        f.voucher.try_set_presence_threshold(&f.admin, &-1),
+        Err(Ok(VoucherError::InvalidPresenceThreshold))
+    );
+    assert_eq!(f.voucher.get_presence_threshold(), 0);
+}
+
+#[test]
+fn presence_threshold_changed_event_snapshot() {
+    let f = setup();
+
+    f.voucher
+        .set_presence_threshold(&f.admin, &(5 * CONSULT_PRICE));
+
+    let e = one_event(&f);
+    assert_layout(
+        &e,
+        "presence_threshold_changed",
+        &[ScVal::from(&f.admin)],
+        &["threshold"],
+    );
+    assert_eq!(field_i128(&e, "threshold"), 5 * CONSULT_PRICE);
+}
+
 #[test]
 fn default_dispute_window_is_unchanged() {
     let f = setup();
@@ -3869,6 +4277,236 @@ fn stored_voucher_round_trips_every_field() {
     assert_eq!(v.claimed_at, START_TIME + 10);
     assert_eq!(v.attested_at, START_TIME + 20);
     assert_eq!(v.dispute_deadline, START_TIME + 20 + DISPUTE_WINDOW);
+    assert_eq!(v.updated_ledger, f.env.ledger().sequence());
+}
+
+fn set_ledger(env: &Env, sequence: u32) {
+    env.ledger().with_mut(|li| li.sequence_number = sequence);
+}
+
+fn assert_updated(f: &Fixture, id: u64, sequence: u32) {
+    assert_eq!(
+        f.voucher.get_voucher(&id).updated_ledger,
+        sequence,
+        "voucher {id} was not stamped with ledger {sequence}",
+    );
+}
+
+#[test]
+fn updated_ledger_is_stamped_by_every_transition() {
+    let f = setup();
+    let mut sequence = f.env.ledger().sequence();
+
+    set_ledger(&f.env, sequence);
+    let id = fund_overpaid(&f, 2 * CONSULT_PRICE);
+    assert_updated(&f, id, sequence);
+
+    sequence += 1;
+    set_ledger(&f.env, sequence);
+    f.voucher.reduce_amount(&f.funder, &id, &CONSULT_PRICE);
+    assert_updated(&f, id, sequence);
+
+    let new_provider = Address::generate(&f.env);
+    f.registry.register_provider(
+        &new_provider,
+        &String::from_str(&f.env, "Second Clinic"),
+        &String::from_str(&f.env, "NG"),
+        &ProviderCategory::Clinic,
+    );
+    f.registry.set_provider_status(
+        &f.admin,
+        &new_provider,
+        &ProviderStatus::Active,
+        &REASON_VERIFIED,
+    );
+    f.registry.upsert_service(
+        &new_provider,
+        &CONSULT,
+        &String::from_str(&f.env, "Outpatient consult"),
+        &CONSULT_PRICE,
+    );
+
+    sequence += 1;
+    set_ledger(&f.env, sequence);
+    f.voucher.redirect(&f.funder, &id, &new_provider);
+    assert_updated(&f, id, sequence);
+
+    sequence += 1;
+    set_ledger(&f.env, sequence);
+    f.voucher.claim(&new_provider, &id);
+    assert_updated(&f, id, sequence);
+
+    sequence += 1;
+    set_ledger(&f.env, sequence);
+    f.voucher.attest(&f.attester, &id);
+    assert_updated(&f, id, sequence);
+
+    sequence += 1;
+    set_ledger(&f.env, sequence);
+    f.voucher.dispute(&f.funder, &id, &1u32);
+    assert_updated(&f, id, sequence);
+
+    sequence += 1;
+    set_ledger(&f.env, sequence);
+    f.voucher.resolve_split(&f.admin, &id, &(CONSULT_PRICE / 2));
+    assert_updated(&f, id, sequence);
+
+    sequence += 1;
+    set_ledger(&f.env, sequence);
+    let declined = fund(&f);
+    assert_updated(&f, declined, sequence);
+    sequence += 1;
+    set_ledger(&f.env, sequence);
+    f.voucher.decline(&f.provider, &declined, &7u32);
+    assert_updated(&f, declined, sequence);
+
+    sequence += 1;
+    set_ledger(&f.env, sequence);
+    let refunded = fund(&f);
+    assert_updated(&f, refunded, sequence);
+    advance(&f.env, 31 * 24 * 60 * 60);
+    sequence += 1;
+    set_ledger(&f.env, sequence);
+    f.voucher.refund(&refunded);
+    assert_updated(&f, refunded, sequence);
+
+    sequence += 1;
+    set_ledger(&f.env, sequence);
+    let settled = f.voucher.create_voucher(
+        &f.funder,
+        &patient(&f.env),
+        &f.provider,
+        &CONSULT,
+        &CONSULT_PRICE,
+        &(f.env.ledger().timestamp() + 30 * 24 * 60 * 60),
+    );
+    assert_updated(&f, settled, sequence);
+    sequence += 1;
+    set_ledger(&f.env, sequence);
+    f.voucher.claim(&f.provider, &settled);
+    assert_updated(&f, settled, sequence);
+    sequence += 1;
+    set_ledger(&f.env, sequence);
+    f.voucher.attest(&f.attester, &settled);
+    assert_updated(&f, settled, sequence);
+    advance(&f.env, DISPUTE_WINDOW + 1);
+    sequence += 1;
+    set_ledger(&f.env, sequence);
+    f.voucher.settle(&settled);
+    assert_updated(&f, settled, sequence);
+}
+
+#[test]
+fn old_voucher_layout_still_decodes() {
+    let f = setup();
+    let id = 77u64;
+    let old = crate::storage::StoredVoucherV1(
+        f.funder.clone(),
+        patient(&f.env),
+        f.provider.clone(),
+        CONSULT,
+        CONSULT_PRICE,
+        VoucherStatus::Attested,
+        START_TIME,
+        START_TIME + 30 * 24 * 60 * 60,
+        START_TIME + 10,
+        START_TIME + 20,
+        START_TIME + 20 + DISPUTE_WINDOW,
+        Some(f.attester.clone()),
+    );
+    f.env.as_contract(&f.voucher.address, || {
+        f.env
+            .storage()
+            .persistent()
+            .set(&crate::DataKey::Voucher(id), &old);
+    });
+
+    let v = f.voucher.get_voucher(&id);
+    assert_eq!(v.id, id);
+    assert_eq!(v.funder, f.funder);
+    assert_eq!(v.beneficiary_ref, patient(&f.env));
+    assert_eq!(v.provider, f.provider);
+    assert_eq!(v.status, VoucherStatus::Attested);
+    assert_eq!(v.amount, CONSULT_PRICE);
+    assert_eq!(v.attester, Some(f.attester.clone()));
+    assert_eq!(v.updated_ledger, 0, "an old voucher has no recorded ledger");
+}
+
+#[test]
+fn voucher_with_an_unexpected_layout_is_not_found() {
+    let f = setup();
+    let id = 1u64;
+    f.env.as_contract(&f.voucher.address, || {
+        let bad = soroban_sdk::Vec::<soroban_sdk::Val>::from_array(
+            &f.env,
+            [soroban_sdk::Val::from(1u32)],
+        );
+        f.env
+            .storage()
+            .persistent()
+            .set(&crate::DataKey::Voucher(id), &bad);
+    });
+
+    assert_eq!(
+        f.voucher.try_get_voucher(&id),
+        Err(Ok(VoucherError::VoucherNotFound))
+    );
+}
+
+#[test]
+fn statuses_returns_known_ids_in_order_and_omits_unknown() {
+    let f = setup();
+    let first = fund(&f);
+    let second = fund(&f);
+    f.voucher.claim(&f.provider, &second);
+
+    let ids = soroban_sdk::Vec::from_array(&f.env, [second, 999u64, first]);
+    let statuses = f.voucher.statuses(&ids);
+
+    assert_eq!(statuses.len(), 2);
+    assert_eq!(statuses.get(0), Some((second, VoucherStatus::Claimed)));
+    assert_eq!(statuses.get(1), Some((first, VoucherStatus::Funded)));
+}
+
+#[test]
+fn statuses_reads_at_most_the_cap_and_keeps_going() {
+    let f = setup();
+    let id = fund(&f);
+    let mut ids = soroban_sdk::Vec::new(&f.env);
+    for _ in 0..(MAX_STATUSES_PER_CALL + 5) {
+        ids.push_back(id);
+    }
+
+    let statuses = f.voucher.statuses(&ids);
+
+    assert_eq!(statuses.len(), MAX_STATUSES_PER_CALL);
+    assert_eq!(statuses.get(0), Some((id, VoucherStatus::Funded)));
+}
+
+#[test]
+fn statuses_does_not_extend_ttl() {
+    let f = setup();
+    let id = fund(&f);
+
+    // Sixty-five days later the entry is below the 30-day extension
+    // threshold; a normal read would push it back out to 90 days.
+    advance_days(&f, 65);
+    let before = voucher_ttl(&f, id);
+    let ids = soroban_sdk::Vec::from_array(&f.env, [id]);
+
+    let _ = f.voucher.statuses(&ids);
+    assert_eq!(
+        voucher_ttl(&f, id),
+        before,
+        "statuses must not bump the voucher's TTL",
+    );
+
+    f.voucher.get_voucher(&id);
+    assert_eq!(
+        voucher_ttl(&f, id),
+        NINETY_DAYS,
+        "get_voucher still extends the entry it reads",
+    );
 }
 
 // ----- clawback and frozen settlement token -----
@@ -4104,6 +4742,7 @@ fn math_overflow_in_fee_calculation() {
         &provider,
         &String::from_str(&env, "Clinic"),
         &String::from_str(&env, "NG"),
+        &ProviderCategory::Clinic,
     );
     registry.set_provider_status(&admin, &provider, &ProviderStatus::Active, &REASON_VERIFIED);
     registry.upsert_service(
@@ -4401,3 +5040,7 @@ fn reducing_a_voucher_lowers_the_clinics_exposure() {
     let (open_escrow, _) = f.voucher.escrow_summary();
     assert_eq!(open_escrow, 3 * CONSULT_PRICE);
 }
+#[cfg(test)]
+mod costs;
+#[cfg(test)]
+mod nonstandard_token;

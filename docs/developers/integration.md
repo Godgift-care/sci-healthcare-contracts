@@ -20,6 +20,9 @@ The flow is:
 The examples run against **testnet**. Mainnet is not open: the contracts are
 unaudited. See the [mainnet launch checklist](mainnet-checklist.md).
 
+To make the same calls by hand in a browser before writing code, see
+[Trying it by hand in Stellar Lab](stellar-lab.md).
+
 ## Prerequisites
 
 - Node.js 22 or newer.
@@ -477,7 +480,8 @@ What to show users:
 
 For a refund, `refundable_at(voucher_id)` returns the ledger time at which
 `refund` will succeed. `refund` and `settle` are permissionless, so either party
-can submit them when eligible.
+can submit them when eligible, and so can a keeper bot. See
+[Running a settlement keeper](keepers.md).
 
 ## 5. Read receipts and care history
 

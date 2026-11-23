@@ -121,6 +121,103 @@ pub(crate) fn write_attester(env: &Env, addr: &Address, enabled: bool) {
     common::extend_persistent(env, &key);
 }
 
+/// Total number of active attesters in the index.
+pub(crate) fn read_attester_count(env: &Env) -> u32 {
+    match env
+        .storage()
+        .persistent()
+        .get::<_, u32>(&DataKey::AttesterCount)
+    {
+        Some(count) => {
+            common::extend_persistent(env, &DataKey::AttesterCount);
+            count
+        }
+        None => 0,
+    }
+}
+
+pub(crate) fn write_attester_count(env: &Env, count: &u32) {
+    env.storage()
+        .persistent()
+        .set(&DataKey::AttesterCount, count);
+    common::extend_persistent(env, &DataKey::AttesterCount);
+}
+
+pub(crate) fn read_attester_at(env: &Env, index: u32) -> Option<Address> {
+    let key = DataKey::AttesterAt(index);
+    match env.storage().persistent().get::<_, Address>(&key) {
+        Some(addr) => {
+            common::extend_persistent(env, &key);
+            Some(addr)
+        }
+        None => None,
+    }
+}
+
+pub(crate) fn write_attester_at(env: &Env, index: u32, addr: &Address) {
+    let key = DataKey::AttesterAt(index);
+    env.storage().persistent().set(&key, addr);
+    common::extend_persistent(env, &key);
+}
+
+pub(crate) fn remove_attester_at(env: &Env, index: u32) {
+    env.storage()
+        .persistent()
+        .remove(&DataKey::AttesterAt(index));
+}
+
+/// Attesters in addition order, paged by `start` and `limit`.
+pub(crate) fn list_attesters(env: &Env, start: u32, limit: u32) -> Vec<Address> {
+    use soroban_sdk::Vec;
+
+    let mut out = Vec::new(env);
+    let limit = limit.min(MAX_PROVIDERS_PAGE);
+    if limit == 0 {
+        return out;
+    }
+
+    let total = read_attester_count(env);
+    if start >= total {
+        return out;
+    }
+    let end = start.saturating_add(limit).min(total);
+
+    for index in start..end {
+        if let Some(addr) = read_attester_at(env, index) {
+            out.push_back(addr);
+        }
+    }
+    out
+}
+
+/// Number of providers in a given lifecycle status.
+pub(crate) fn read_status_count(env: &Env, status: ProviderStatus) -> u32 {
+    let key = DataKey::StatusCount(status);
+    match env.storage().persistent().get::<_, u32>(&key) {
+        Some(count) => {
+            common::extend_persistent(env, &key);
+            count
+        }
+        None => 0,
+    }
+}
+
+pub(crate) fn write_status_count(env: &Env, status: ProviderStatus, count: &u32) {
+    let key = DataKey::StatusCount(status);
+    env.storage().persistent().set(&key, count);
+    common::extend_persistent(env, &key);
+}
+
+pub(crate) fn increment_status_count(env: &Env, status: ProviderStatus) {
+    let count = read_status_count(env, status);
+    write_status_count(env, status, &(count.saturating_add(1)));
+}
+
+pub(crate) fn decrement_status_count(env: &Env, status: ProviderStatus) {
+    let count = read_status_count(env, status);
+    write_status_count(env, status, &(count.saturating_sub(1)));
+}
+
 /// Total number of registered providers.
 pub(crate) fn read_provider_count(env: &Env) -> u32 {
     match env

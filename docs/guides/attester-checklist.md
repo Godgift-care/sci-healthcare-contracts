@@ -1,6 +1,10 @@
 ---
 title: Attester checklist and code of conduct
 nav_order: 9
+language: en
+translations:
+  fr: /fr/attester-checklist.html
+  sw: /sw/attester-checklist.html
 ---
 
 # Attester evidence checklist and code of conduct

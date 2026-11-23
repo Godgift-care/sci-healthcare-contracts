@@ -1,0 +1,186 @@
+{%- comment -%}
+  Version banner for the versioned docs site.
+
+  scripts/build-docs-site.sh sets docs_version ("main" or a release tag),
+  docs_latest (the newest release tag) and docs_root (the site root) for
+  every build, and copies this file into each release snapshot. Without
+  those values (GitHub's legacy Pages build, or `jekyll serve` on docs/)
+  nothing is rendered.
+
+  just-the-docs offers this include in its header bar, which it hides on
+  small screens. The banner is rendered here, so it shows on a desktop
+  without JavaScript, and the script below moves it to the top of the page
+  content, where it shows at every width. The header's own layout (search,
+  links) is left untouched.
+{%- endcomment -%}
+{%- if site.docs_version and site.docs_version != "" -%}
+{%- assign root = site.docs_root | default: "" -%}
+{%- assign latest = site.docs_latest -%}
+<style>
+  .docs-version-banner {
+    align-self: center;
+    padding: 0.5rem 0.75rem;
+    font-size: 0.875rem;
+    line-height: 1.4;
+    border: 1px solid #eeebee;
+    border-radius: 4px;
+  }
+  .main-content-wrap > .docs-version-banner { margin-top: 1rem; }
+  .docs-version-banner--main { background: #f5f6fa; }
+  .docs-version-banner--latest { background: #e6f4ea; }
+  .docs-version-banner--old { background: #fff4e5; border-color: #f0c36d; font-weight: 600; }
+  .docs-version-banner a { text-decoration: underline; }
+</style>
+{%- if site.docs_version == "main" -%}
+<div id="docs-version-banner" class="docs-version-banner docs-version-banner--main" role="note">
+  You are reading the docs for <code>main</code>, which can describe functions that are not deployed yet.
+  {%- if latest and latest != "" %} Integrating the deployed contracts? Read the <a href="{{ root }}/{{ latest }}/">{{ latest }} docs</a> (latest release).{%- endif %}
+</div>
+{%- elsif site.docs_version == latest -%}
+<div id="docs-version-banner" class="docs-version-banner docs-version-banner--latest" role="note">
+  Docs for <strong>{{ site.docs_version }}</strong>, the latest release.
+  Unreleased changes are documented on <a href="{{ root }}/">main</a>.
+</div>
+{%- else -%}
+<div id="docs-version-banner" class="docs-version-banner docs-version-banner--old" role="note">
+  These docs are for <strong>{{ site.docs_version }}</strong>, an older release.
+  Read the <a href="{{ root }}/{{ latest }}/">latest release ({{ latest }})</a> or <a href="{{ root }}/">main</a>.
+</div>
+{%- endif %}
+<script>
+  document.addEventListener('DOMContentLoaded', function () {
+    var banner = document.getElementById('docs-version-banner');
+    var wrap = document.querySelector('.main-content-wrap');
+    if (banner && wrap) wrap.insertBefore(banner, wrap.firstChild);
+  });
+</script>
+{%- endif -%}
+{%- comment -%}
+  Language switcher.
+
+  Rendered here and moved to the top of the page content by the script
+  below, so it is visible at every width. Each translated page declares its
+  counterparts in front matter:
+
+    language: fr
+    translations:
+      en: /guides/funders.html
+      sw: /sw/funders.html
+
+  A page with no translations (the English-only ADRs, for example) renders
+  nothing. .github/scripts/i18n-check.cjs keeps the declarations complete and
+  symmetric; add a language there and a block below when adding one.
+{%- endcomment -%}
+{%- if page.language and page.translations and page.translations.size > 0 -%}
+<style>
+  .language-switcher {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.25rem 1rem;
+    align-items: center;
+    margin: 0 0 1.5rem;
+    padding: 0.5rem 0.75rem;
+    font-size: 0.875rem;
+    border: 1px solid #eeebee;
+    border-radius: 4px;
+  }
+  .language-switcher__item { white-space: nowrap; }
+  .language-switcher__item--current { font-weight: 600; }
+</style>
+<nav id="language-switcher" class="language-switcher" aria-label="Language">
+  {%- if page.language == "en" -%}
+    <span class="language-switcher__item language-switcher__item--current" aria-current="true">🇬🇧 English</span>
+  {%- elsif page.translations.en -%}
+    <a class="language-switcher__item" href="{{ page.translations.en | relative_url }}" hreflang="en" lang="en">🇬🇧 English</a>
+  {%- endif -%}
+  {%- if page.language == "fr" -%}
+    <span class="language-switcher__item language-switcher__item--current" aria-current="true">🇫🇷 Français</span>
+  {%- elsif page.translations.fr -%}
+    <a class="language-switcher__item" href="{{ page.translations.fr | relative_url }}" hreflang="fr" lang="fr">🇫🇷 Français</a>
+  {%- endif -%}
+  {%- if page.language == "sw" -%}
+    <span class="language-switcher__item language-switcher__item--current" aria-current="true">🇰🇪🇹🇿 Kiswahili</span>
+  {%- elsif page.translations.sw -%}
+    <a class="language-switcher__item" href="{{ page.translations.sw | relative_url }}" hreflang="sw" lang="sw">🇰🇪🇹🇿 Kiswahili</a>
+  {%- endif -%}
+  {%- if page.language == "pt" -%}
+    <span class="language-switcher__item language-switcher__item--current" aria-current="true">🇲🇿🇦🇴 Português</span>
+  {%- elsif page.translations.pt -%}
+    <a class="language-switcher__item" href="{{ page.translations.pt | relative_url }}" hreflang="pt" lang="pt">🇲🇿🇦🇴 Português</a>
+  {%- endif -%}
+  {%- if page.language == "yo" -%}
+    <span class="language-switcher__item language-switcher__item--current" aria-current="true">🇳🇬 Yorùbá</span>
+  {%- elsif page.translations.yo -%}
+    <a class="language-switcher__item" href="{{ page.translations.yo | relative_url }}" hreflang="yo" lang="yo">🇳🇬 Yorùbá</a>
+  {%- endif -%}
+  {%- if page.language == "ig" -%}
+    <span class="language-switcher__item language-switcher__item--current" aria-current="true">🇳🇬 Igbo</span>
+  {%- elsif page.translations.ig -%}
+    <a class="language-switcher__item" href="{{ page.translations.ig | relative_url }}" hreflang="ig" lang="ig">🇳🇬 Igbo</a>
+  {%- endif -%}
+  {%- if page.language == "ha" -%}
+    <span class="language-switcher__item language-switcher__item--current" aria-current="true">🇳🇬🇳🇪 Hausa</span>
+  {%- elsif page.translations.ha -%}
+    <a class="language-switcher__item" href="{{ page.translations.ha | relative_url }}" hreflang="ha" lang="ha">🇳🇬🇳🇪 Hausa</a>
+  {%- endif -%}
+  {%- if page.language == "ar" -%}
+    <span class="language-switcher__item language-switcher__item--current" aria-current="true" dir="rtl">العربية</span>
+  {%- elsif page.translations.ar -%}
+    <a class="language-switcher__item" href="{{ page.translations.ar | relative_url }}" hreflang="ar" lang="ar" dir="rtl">العربية</a>
+  {%- endif -%}
+  {%- if page.language == "am" -%}
+    <span class="language-switcher__item language-switcher__item--current" aria-current="true">🇪🇹 አማርኛ</span>
+  {%- elsif page.translations.am -%}
+    <a class="language-switcher__item" href="{{ page.translations.am | relative_url }}" hreflang="am" lang="am">🇪🇹 አማርኛ</a>
+  {%- endif -%}
+</nav>
+{%- endif -%}
+<script>
+  document.addEventListener('DOMContentLoaded', function () {
+    var switcher = document.getElementById('language-switcher');
+    var wrap = document.querySelector('.main-content-wrap');
+    if (switcher && wrap) wrap.insertBefore(switcher, wrap.firstChild);
+  });
+</script>
+
+{%- comment -%}
+  Script and direction for translated pages.
+
+  just-the-docs renders <html lang="en"> on every page, so the page's own
+  language is applied to the content here. Arabic pages (docs/ar/) read
+  right to left; code blocks, inline code and contract addresses stay left
+  to right so commands and addresses are copied exactly. Amharic pages
+  (docs/am/) load a Ge'ez (Ethiopic) web font, because many desktop systems
+  ship without one and would otherwise render boxes.
+{%- endcomment -%}
+{%- if page.language == "ar" -%}
+<style>
+  .main-content { direction: rtl; text-align: right; }
+  .main-content pre, .main-content code, .main-content .highlight,
+  .main-content .language-switcher { direction: ltr; text-align: left; unicode-bidi: isolate; }
+  .main-content ul, .main-content ol { padding-left: 0; padding-right: 1.5em; }
+  .main-content blockquote { border-left: 0; border-right: 3px solid #eeebee; padding-left: 0; padding-right: 1rem; }
+  .main-content th, .main-content td { text-align: right; }
+</style>
+{%- elsif page.language == "am" -%}
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+Ethiopic:wght@400;600&display=swap">
+<style>
+  .main-content, .site-title, .nav-list { font-family: "Noto Sans Ethiopic", "Nyala", "Abyssinica SIL", system-ui, sans-serif; }
+  .main-content pre, .main-content code { font-family: "SFMono-Regular", Menlo, Consolas, monospace; }
+</style>
+{%- endif -%}
+{%- if page.language and page.language != "en" -%}
+<script>
+  document.addEventListener('DOMContentLoaded', function () {
+    var content = document.querySelector('.main-content');
+    if (!content) return;
+    content.setAttribute('lang', '{{ page.language }}');
+    {%- if page.language == "ar" %}
+    content.setAttribute('dir', 'rtl');
+    content.querySelectorAll('pre, code').forEach(function (el) { el.setAttribute('dir', 'ltr'); });
+    {%- endif %}
+  });
+</script>
+{%- endif -%}

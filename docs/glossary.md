@@ -1,6 +1,11 @@
 ---
 title: Glossary of protocol terms
 nav_order: 1
+language: en
+translations:
+  ha: /ha/glossary.html
+  ar: /ar/glossary.html
+  am: /am/glossary.html
 ---
 
 # Glossary of protocol terms

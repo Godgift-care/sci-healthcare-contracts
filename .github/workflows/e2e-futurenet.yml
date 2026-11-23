@@ -1,0 +1,110 @@
+name: E2E futurenet
+
+# Weekly, non-blocking end-to-end run on futurenet.
+#
+# Protocol upgrades reach futurenet before testnet and mainnet, so this is
+# where a breaking change to the host, the RPC or the CLI shows up first.
+# The job deploys the contracts with scripts/deploy.sh, runs one voucher
+# through fund -> claim -> attest with scripts/seed.sh (the lifecycle the
+# local e2e job runs), and asserts that voucher 1 reached Attested, through
+# the same scripts/e2e-local.sh pointed at futurenet through the NETWORK,
+# RPC_URL and NETWORK_PASSPHRASE variables below (the script reads all three).
+#
+# It never runs on pull requests and is not a required check, so a
+# futurenet outage or reset cannot block a merge. Instead, a failure opens
+# one tracking issue, or comments on it if it is already open, so the
+# breakage is visible without anyone watching the Actions tab.
+#
+# Secrets: none. The five identities are generated on the runner and funded
+# by futurenet's friendbot, and they are thrown away with the runner. The
+# issue is written with the workflow's own GITHUB_TOKEN.
+
+on:
+  schedule:
+    # Mondays 06:00 UTC.
+    - cron: '0 6 * * 1'
+  workflow_dispatch:
+    inputs:
+      stellar_cli_version:
+        description: Stellar CLI version (futurenet can need a newer one than the local job)
+        required: false
+        default: 27.1.0
+
+concurrency:
+  group: e2e-futurenet
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  issues: write
+
+env:
+  CARGO_TERM_COLOR: always
+  STELLAR_CLI_VERSION: ${{ inputs.stellar_cli_version || '27.1.0' }}
+  NETWORK: futurenet
+  RPC_URL: https://rpc-futurenet.stellar.org
+  NETWORK_PASSPHRASE: Test SDF Future Network ; October 2022
+  TRACKING_TITLE: 'ci: end-to-end run on futurenet is failing'
+
+jobs:
+  futurenet:
+    name: deploy and seed on futurenet
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: dtolnay/rust-toolchain@1.96.0
+        with:
+          targets: wasm32v1-none
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Install wasm-opt
+        run: |
+          curl -sSL "https://github.com/WebAssembly/binaryen/releases/download/version_133/binaryen-version_133-x86_64-linux.tar.gz" \
+            | tar xz
+          sudo install -m755 binaryen-version_133/bin/wasm-opt /usr/local/bin/wasm-opt
+          wasm-opt --version
+
+      - name: Install Stellar CLI
+        run: |
+          curl -sSL "https://github.com/stellar/stellar-cli/releases/download/v$STELLAR_CLI_VERSION/stellar-cli-$STELLAR_CLI_VERSION-x86_64-unknown-linux-gnu.tar.gz" \
+            | tar xz
+          sudo install -m755 stellar /usr/local/bin/stellar
+          stellar --version
+
+      - name: Show the futurenet protocol version
+        run: |
+          curl -sf -X POST "$RPC_URL" -H 'Content-Type: application/json' \
+            -d '{"jsonrpc":"2.0","id":1,"method":"getLatestLedger"}' | jq .
+
+      - name: Deploy, seed and check voucher 1 on futurenet
+        id: e2e
+        run: ./scripts/e2e-local.sh
+
+      - name: Keep the deployment addresses
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: deployment-futurenet-env
+          path: deployments/futurenet.env
+          if-no-files-found: ignore
+
+      # One issue, not one per failure: reuse the open issue with the same
+      # title and comment on it, otherwise open it.
+      - name: Open or update the tracking issue
+        if: failure()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          body="$(printf 'The weekly futurenet end-to-end run failed on %s.\n\nRun: %s\nCommit: %s\n\nFuturenet gets protocol upgrades first, so check the run log for a host, RPC or CLI change before assuming a regression in the contracts. Close this issue once a run passes again.\n' \
+            "$(date -u +%Y-%m-%d)" "$RUN_URL" "$GITHUB_SHA")"
+          number="$(gh issue list --repo "$GITHUB_REPOSITORY" --state open --search "\"$TRACKING_TITLE\" in:title" \
+            --json number,title --jq "map(select(.title == env.TRACKING_TITLE)) | .[0].number // empty")"
+          if [ -n "$number" ]; then
+            gh issue comment "$number" --repo "$GITHUB_REPOSITORY" --body "$body"
+            echo "Commented on #$number"
+          else
+            gh issue create --repo "$GITHUB_REPOSITORY" --title "$TRACKING_TITLE" --body "$body"
+          fi

@@ -1,11 +1,19 @@
 ---
 title: Kuthibitisha utoaji wa huduma
 nav_order: 8
+language: sw
+translations:
+  en: /guides/attesters.html
+  fr: /fr/attesters.html
+  pt: /pt/attesters.html
+  yo: /yo/attesters.html
+  ig: /ig/attesters.html
+  ha: /ha/attesters.html
+  ar: /ar/attesters.html
+  am: /am/attesters.html
 ---
 
 # Kuthibitisha utoaji wa huduma
-
-🇬🇧 [Soma mwongozo huu kwa Kiingereza](../guides/attesters.md) · 🇫🇷 [Lire ce guide en français](../fr/attesters.md)
 
 Mthibitishaji (attester) anathibitisha kuwa matibabu yalitolewa kweli. Hili ndilo jukumu muhimu zaidi katika itifaki na lenye dhamana kubwa zaidi.
 
@@ -27,7 +35,7 @@ Lengo ni uhuru. Ikiwa kipato cha mthibitishaji kinategemea kliniki kulipwa, king
 2. **Hakikisha huduma ilitolewa.** Kwa njia yoyote programu yako inavyofanya — kuwepo mwenyewe, kukagua rejista, kuzungumza na mgonjwa.
 3. **Bonyeza Confirm care delivered.**
 
-Kabla ya kuthibitisha, pitia [orodha ya ushahidi na kanuni za maadili kwa wathibitishaji](../guides/attester-checklist.md) (kwa Kiingereza) kila mara.
+Kabla ya kuthibitisha, pitia [orodha ya ushahidi na kanuni za maadili kwa wathibitishaji](attester-checklist.md) kila mara.
 
 ## Kile ambacho mkataba unalazimisha
 
@@ -37,7 +45,7 @@ Kabla ya kuthibitisha, pitia [orodha ya ushahidi na kanuni za maadili kwa wathib
 
 ## Kile ambacho haulazimishi
 
-Kwamba unasema ukweli. Hii ndiyo dhana kuu ya uaminifu katika itifaki, imeandikwa waziwazi katika [mfumo wa uaminifu](../protocol/trust.md) (kwa Kiingereza).
+Kwamba unasema ukweli. Hii ndiyo dhana kuu ya uaminifu katika itifaki, imeandikwa waziwazi katika [mfumo wa uaminifu](protocol/trust.md).
 
 Kile unachofanya: uthibitisho wako unasainiwa na anwani yako na kurekodiwa kwenye mnyororo milele. Kila vocha uliyowahi kuthibitisha ni ya umma na inajulikana ni yako. Hakuna uthibitisho usio na jina.
 
