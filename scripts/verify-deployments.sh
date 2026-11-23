@@ -141,7 +141,45 @@ printf 'byte for byte: %s of %s contracts match\n' "$hash_matches" "$checked"
 printf 'interface:     %s of %s contracts match\n' "$interface_matches" "$checked"
 if [ "$failures" -eq 0 ]; then
   printf 'Every deployed contract is the one this source builds.\n'
-  exit 0
+else
+  printf '\nThe deployed contracts are not the ones this source builds.\n'
+  exit 1
 fi
-printf '\nThe deployed contracts are not the ones this source builds.\n'
-exit 1
+
+# Issue #247: if a deployments/<network>.json exists, also verify that the hash
+# recorded at deploy time still matches what is on chain. A mismatch means the
+# wasm was replaced after the recorded deployment.
+JSON_FILE="$ROOT/deployments/$NETWORK.json"
+if [ -f "$JSON_FILE" ] && command -v jq >/dev/null 2>&1; then
+  say "Cross-checking against $JSON_FILE"
+  json_failures=0
+  for entry in "${CONTRACTS[@]}"; do
+    var="${entry%%:*}"
+    file="${entry##*:}"
+    id="${!var:-}"
+    [ -n "$id" ] || continue
+
+    name="${file#sci_}"; name="${name%.wasm}"
+    recorded_hash="$(jq -r ".contracts.${name}.wasm_hash // empty" "$JSON_FILE" 2>/dev/null || printf '')"
+    [ -n "$recorded_hash" ] || continue
+
+    fetched="$TMP/json_check_$file"
+    if ! stellar contract fetch --id "$id" --network "$NETWORK" --out-file "$fetched" >/dev/null 2>&1; then
+      printf 'SKIP  %-10s  could not fetch to compare with recorded hash\n' "$name"
+      continue
+    fi
+    deployed_hash="$(sha256sum "$fetched" | cut -d' ' -f1)"
+    if [ "$deployed_hash" = "$recorded_hash" ]; then
+      printf 'PASS  %-10s  deployed hash matches the record in %s\n' "$name" "$(basename "$JSON_FILE")"
+    else
+      printf 'FAIL  %-10s  deployed hash %s… differs from recorded %s…\n' \
+        "$name" "${deployed_hash:0:12}" "${recorded_hash:0:12}"
+      json_failures=$((json_failures + 1))
+    fi
+  done
+  if [ "$json_failures" -gt 0 ]; then
+    printf '\n%s contract(s) have changed since the recorded deployment in %s.\n' \
+      "$json_failures" "$JSON_FILE"
+    exit 1
+  fi
+fi

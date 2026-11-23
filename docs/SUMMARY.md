@@ -67,5 +67,6 @@
 * [Mainnet launch checklist](developers/mainnet-checklist.md)
 * [Security audit scope](developers/audit-scope.md)
 * [Incident response runbook](developers/incident-response.md)
+* [TTL policy](developers/ttl.md)
 * [API reference](developers/api.md)
 * [Contributing](developers/contributing.md)

@@ -221,6 +221,29 @@ USDC_ISSUER=$ISSUER_ADDR
 ADMIN_ADDRESS=$ADMIN_ADDR
 ENVEOF
 
+# Issue #247: also write a JSON record with wasm hashes, so verify-deployments.sh
+# can do a quick hash check without rebuilding, and so the repo has a durable
+# record of exactly what is deployed.
+OUT_JSON="${OUT%.env}.json"
+DEPLOYED_AT="$(date -u '+%Y-%m-%dT%H:%M:%SZ')"
+RELEASE_TAG="$(git -C "$ROOT" describe --tags --exact-match 2>/dev/null || printf 'dev')"
+registry_hash="$(grep 'sci_registry\.wasm' "$WASM_DIR/SHA256SUMS" 2>/dev/null | awk '{print $1}' || printf '')"
+voucher_hash="$(grep 'sci_voucher\.wasm'   "$WASM_DIR/SHA256SUMS" 2>/dev/null | awk '{print $1}' || printf '')"
+receipt_hash="$(grep 'sci_receipt\.wasm'   "$WASM_DIR/SHA256SUMS" 2>/dev/null | awk '{print $1}' || printf '')"
+cat > "$OUT_JSON" <<JSONEOF
+{
+  "network": "$NETWORK",
+  "deployed_at": "$DEPLOYED_AT",
+  "release_tag": "$RELEASE_TAG",
+  "contracts": {
+    "registry": { "id": "$REGISTRY_ID", "wasm_hash": "$registry_hash" },
+    "voucher":  { "id": "$VOUCHER_ID",  "wasm_hash": "$voucher_hash" },
+    "receipt":  { "id": "$RECEIPT_ID",  "wasm_hash": "$receipt_hash" },
+    "usdc":     { "id": "$USDC_ID",     "wasm_hash": "" }
+  }
+}
+JSONEOF
+
 say "Deployed — copy into your backend and frontend .env files"
 cat <<BLOCK
 

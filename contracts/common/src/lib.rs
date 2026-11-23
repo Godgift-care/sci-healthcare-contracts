@@ -119,3 +119,20 @@ pub fn require_admin(stored: &Address, admin: &Address) -> Result<(), CommonErro
     admin.require_auth();
     Ok(())
 }
+
+#[cfg(test)]
+mod ttl_doc_tests {
+    use super::*;
+
+    /// Verifies that the day figures in docs/developers/ttl.md are derived
+    /// from the constants, not independently written. If you change a constant,
+    /// this test will fail and remind you to update the docs.
+    #[test]
+    fn ttl_doc_figures_match_constants() {
+        assert_eq!(INSTANCE_TTL_THRESHOLD / DAY_IN_LEDGERS, 7);
+        assert_eq!(INSTANCE_TTL_EXTEND / DAY_IN_LEDGERS, 30);
+        assert_eq!(PERSISTENT_TTL_THRESHOLD / DAY_IN_LEDGERS, 30);
+        assert_eq!(PERSISTENT_TTL_EXTEND / DAY_IN_LEDGERS, 90);
+        assert_eq!(ATTESTATIONS_TTL / DAY_IN_LEDGERS, 2);
+    }
+}

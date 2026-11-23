@@ -1,0 +1,44 @@
+name: Extend contract TTLs
+
+# Extends the instance and code TTLs for every contract in
+# deployments/testnet.env weekly, so idle testnet deployments do not archive.
+#
+# Requires a GitHub secret named EXTEND_SECRET holding the secret key of a
+# funded Stellar account on testnet. Without the secret (forks, dependabot)
+# the job passes with a notice instead of failing.
+
+on:
+  schedule:
+    # Every Sunday at 00:00 UTC.
+    - cron: '0 0 * * 0'
+  # Lets a maintainer trigger a manual run, for example after a testnet reset.
+  workflow_dispatch:
+
+concurrency:
+  group: extend-ttl
+  cancel-in-progress: true
+
+env:
+  STELLAR_CLI_VERSION: 27.1.0
+
+jobs:
+  extend-ttl:
+    name: extend instance and code TTLs on testnet
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Install Stellar CLI
+        run: |
+          curl -sSL "https://github.com/stellar/stellar-cli/releases/download/v$STELLAR_CLI_VERSION/stellar-cli-$STELLAR_CLI_VERSION-x86_64-unknown-linux-gnu.tar.gz" \
+            | tar xz
+          sudo install -m755 stellar /usr/local/bin/stellar
+          stellar --version
+
+      - name: Extend TTLs
+        env:
+          EXTEND_SECRET: ${{ secrets.EXTEND_SECRET }}
+        run: |
+          chmod +x scripts/extend-ttl.sh
+          ./scripts/extend-ttl.sh testnet
