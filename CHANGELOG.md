@@ -3,6 +3,9 @@
 ## Unreleased
 
 ### Added
+- **contracts:** added documented contract upgrade and migration path across `registry`, `voucher`, and `receipt` contracts (`upgrade(admin, new_wasm_hash)`, `migrate(admin)`, `get_storage_version()`), emitting `Upgraded { new_wasm_hash }` event and storing `StorageVersion` in instance storage. Created comprehensive guide in [`docs/UPGRADES.md`](docs/UPGRADES.md). Closes #8.
+- **registry:** let a clinic update its name and country via `update_provider(owner, name, country)` with owner authorization, validation on name and ISO 3166-1 alpha-2 country, maintaining status and updating the active per-country index when country changes, emitting `ProviderUpdated`. Closes #20.
+- **registry:** capped clinic names to `MAX_NAME_LEN` (64 chars) and service labels to `MAX_LABEL_LEN` (48 chars), rejecting longer values with `RegistryError::ValueTooLong` (#17). Closes #22.
 - **ci:** daily scheduled verification of the testnet deployment via [`.github/workflows/scheduled-verify.yml`](.github/workflows/scheduled-verify.yml). Runs `scripts/verify-deployment.sh testnet` read-only (no secret needed) at 06:00 UTC every day and on demand. A failing run opens exactly one tracking issue labelled `deployment-alert`; a passing run closes it. Closes #245.
 - **common:** shared `AdminProposed` and `AdminChanged` event structs in `sci-common` (`contracts/common/src/lib.rs`). All five contracts that emit these events re-export them from the shared crate; the ABI (topics and data fields) is byte-identical to the per-contract definitions they replaced. The indexer needs no decoder change. Closes #241.
 - **common:** `page_bounds(start, limit, total, max) -> Option<(u32, u32)>` pagination helper in `sci-common`. Every paginated view in `registry` (`list_providers`, `providers_in`, `list_attesters`) and `receipt` (`receipts_of_provider`) now delegates clamping and overflow handling to this one function. Closes #242.

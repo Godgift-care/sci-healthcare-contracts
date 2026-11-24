@@ -5,6 +5,7 @@
 
 pub use sci_common::AdminChanged;
 pub use sci_common::AdminProposed;
+pub use sci_common::Upgraded;
 use soroban_sdk::{contractevent, Address, BytesN, String};
 
 use crate::types::{ProviderCategory, ProviderStatus};
@@ -24,6 +25,15 @@ pub struct ProviderRegistered {
     pub country: String,
     pub registered_at: u64,
     pub category: ProviderCategory,
+}
+
+#[contractevent]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ProviderUpdated {
+    #[topic]
+    pub owner: Address,
+    pub name: String,
+    pub country: String,
 }
 
 #[contractevent]

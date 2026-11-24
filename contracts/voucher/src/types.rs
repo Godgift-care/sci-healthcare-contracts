@@ -136,6 +136,8 @@ pub enum DataKey {
     /// Value above which a voucher must carry a presence commitment. Unset
     /// or 0 means no protocol-level requirement.
     PresenceThreshold,
+    /// Contract code / schema version for migrations.
+    StorageVersion,
 }
 
 /// A clinic's open vouchers: every voucher funded to it that has not yet

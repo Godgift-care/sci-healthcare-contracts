@@ -220,6 +220,7 @@ A signer is not the same as a role: `admin` must be the stored admin **and** sig
 | 14 | `InvalidTransition` |
 | 15 | `LargePriceJumpNeedsConfirmation` |
 | 16 | `MissingReasonCode` |
+| 17 | `ValueTooLong` |
 
 ### Events
 
@@ -227,6 +228,7 @@ A signer is not the same as a role: `admin` must be the stored admin **and** sig
 | --- | --- | --- |
 | `initialized` | — | `admin` |
 | `provider_registered` | `provider` | `name`, `country`, `registered_at`, `category` |
+| `provider_updated` | `owner` | `name`, `country` |
 | `provider_category_changed` | `provider` | `category` |
 | `provider_status_changed` | `provider` | `status`, `reason_code` |
 | `verification_evidence_set` | `provider` | `evidence_hash` |

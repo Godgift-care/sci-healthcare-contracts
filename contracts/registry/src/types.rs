@@ -144,6 +144,8 @@ pub enum DataKey {
     CountryAt(String, u32),
     /// Number of providers in a given status.
     StatusCount(ProviderStatus),
+    /// Contract code / schema version for migrations.
+    StorageVersion,
 }
 
 #[contracterror]
@@ -177,6 +179,8 @@ pub enum RegistryError {
     /// "no status change yet" and is only ever written by registration, so a
     /// real change — above all reinstating a suspended clinic — must say why.
     MissingReasonCode = 16,
+    /// A string value exceeded the maximum allowed length.
+    ValueTooLong = 17,
 }
 
 /// Maps the shared helpers' failures onto this contract's error numbers, so

@@ -3419,3 +3419,186 @@ fn non_admin_with_reason_zero_gets_not_authorized() {
     assert_eq!(err, RegistryError::NotAuthorized);
     assert_still_suspended(&f, &provider);
 }
+
+#[test]
+fn name_and_label_length_caps() {
+    let f = setup();
+    let owner = Address::generate(&f.env);
+    f.env.mock_all_auths();
+
+    // 64 chars name is allowed
+    let name_64 = String::from_str(
+        &f.env,
+        "1234567890123456789012345678901234567890123456789012345678901234",
+    );
+    assert_eq!(name_64.len(), 64);
+    f.client.register_provider(
+        &owner,
+        &name_64,
+        &String::from_str(&f.env, "NG"),
+        &ProviderCategory::Clinic,
+    );
+
+    // 65 chars name is rejected
+    let owner2 = Address::generate(&f.env);
+    let name_65 = String::from_str(
+        &f.env,
+        "12345678901234567890123456789012345678901234567890123456789012345",
+    );
+    assert_eq!(name_65.len(), 65);
+    let err = f
+        .client
+        .try_register_provider(
+            &owner2,
+            &name_65,
+            &String::from_str(&f.env, "NG"),
+            &ProviderCategory::Clinic,
+        )
+        .err()
+        .unwrap()
+        .unwrap();
+    assert_eq!(err, RegistryError::ValueTooLong);
+
+    // Activate provider to test service label lengths
+    f.client
+        .set_provider_status(&f.admin, &owner, &ProviderStatus::Active, &1u32);
+
+    // 48 chars label is allowed
+    let label_48 = String::from_str(&f.env, "123456789012345678901234567890123456789012345678");
+    assert_eq!(label_48.len(), 48);
+    f.client.upsert_service(&owner, &100, &label_48, &1000);
+
+    // 49 chars label is rejected
+    let label_49 = String::from_str(&f.env, "1234567890123456789012345678901234567890123456789");
+    assert_eq!(label_49.len(), 49);
+    let err = f
+        .client
+        .try_upsert_service(&owner, &101, &label_49, &1000)
+        .err()
+        .unwrap()
+        .unwrap();
+    assert_eq!(err, RegistryError::ValueTooLong);
+}
+
+#[test]
+fn update_provider_updates_name_and_country_and_indexes() {
+    let f = setup();
+    let owner = Address::generate(&f.env);
+    f.env.mock_all_auths();
+
+    f.client.register_provider(
+        &owner,
+        &String::from_str(&f.env, "Old Name"),
+        &String::from_str(&f.env, "NG"),
+        &ProviderCategory::Clinic,
+    );
+    f.client
+        .set_provider_status(&f.admin, &owner, &ProviderStatus::Active, &1u32);
+
+    // Check in country NG
+    assert_eq!(
+        f.client
+            .providers_in(&String::from_str(&f.env, "NG"), &0, &10)
+            .len(),
+        1
+    );
+    assert_eq!(
+        f.client
+            .providers_in(&String::from_str(&f.env, "GH"), &0, &10)
+            .len(),
+        0
+    );
+
+    // Update to GH
+    f.client.update_provider(
+        &owner,
+        &String::from_str(&f.env, "New Name"),
+        &String::from_str(&f.env, "GH"),
+    );
+
+    let p = f.client.get_provider(&owner);
+    assert_eq!(p.name, String::from_str(&f.env, "New Name"));
+    assert_eq!(p.country, String::from_str(&f.env, "GH"));
+    assert_eq!(p.status, ProviderStatus::Active);
+
+    // Country index moved
+    assert_eq!(
+        f.client
+            .providers_in(&String::from_str(&f.env, "NG"), &0, &10)
+            .len(),
+        0
+    );
+    assert_eq!(
+        f.client
+            .providers_in(&String::from_str(&f.env, "GH"), &0, &10)
+            .len(),
+        1
+    );
+
+    // Update validation checks
+    let err = f
+        .client
+        .try_update_provider(
+            &owner,
+            &String::from_str(&f.env, ""),
+            &String::from_str(&f.env, "GH"),
+        )
+        .err()
+        .unwrap()
+        .unwrap();
+    assert_eq!(err, RegistryError::EmptyName);
+
+    let err = f
+        .client
+        .try_update_provider(
+            &owner,
+            &String::from_str(&f.env, "New Name"),
+            &String::from_str(&f.env, "invalid"),
+        )
+        .err()
+        .unwrap()
+        .unwrap();
+    assert_eq!(err, RegistryError::InvalidCountry);
+
+    // Non-existent clinic
+    let stranger = Address::generate(&f.env);
+    let err = f
+        .client
+        .try_update_provider(
+            &stranger,
+            &String::from_str(&f.env, "Name"),
+            &String::from_str(&f.env, "GH"),
+        )
+        .err()
+        .unwrap()
+        .unwrap();
+    assert_eq!(err, RegistryError::ProviderNotFound);
+}
+
+#[test]
+fn upgrade_and_migrate_registry() {
+    let f = setup();
+    f.env.mock_all_auths();
+
+    assert_eq!(f.client.get_storage_version(), 0);
+
+    let stranger = Address::generate(&f.env);
+    let dummy_hash = BytesN::from_array(&f.env, &[1u8; 32]);
+
+    // Stranger cannot upgrade or migrate
+    let err = f
+        .client
+        .try_upgrade(&stranger, &dummy_hash)
+        .err()
+        .unwrap()
+        .unwrap();
+    assert_eq!(err, RegistryError::NotAuthorized);
+    let err = f.client.try_migrate(&stranger).err().unwrap().unwrap();
+    assert_eq!(err, RegistryError::NotAuthorized);
+
+    // Admin can migrate
+    f.client.migrate(&f.admin);
+    assert_eq!(f.client.get_storage_version(), 1);
+    f.client.migrate(&f.admin);
+    assert_eq!(f.client.get_storage_version(), 2);
+}

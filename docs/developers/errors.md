@@ -43,6 +43,7 @@ Source: `RegistryError` in `contracts/registry/src/types.rs`.
 | 14 | `InvalidTransition` | The status change is not an allowed transition, or would leave `Retired`. | Check the allowed transitions in the contract reference. |
 | 15 | `LargePriceJumpNeedsConfirmation` | The scheduled price is `MAX_PRICE_JUMP` times the current one or more. | Fix the typo, or pass `confirm_large_change = true` if it is intended. |
 | 16 | `MissingReasonCode` | `set_provider_status` was called with `reason_code` 0. | Pass a non-zero reason code from the trust model. |
+| 17 | `ValueTooLong` | A string value exceeded the maximum allowed length (`MAX_NAME_LEN` or `MAX_LABEL_LEN`). | Shorten the provider name or service label. |
 
 ## voucher
 
