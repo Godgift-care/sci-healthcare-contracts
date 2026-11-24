@@ -5,7 +5,7 @@ name: Release
 # they can check against the contract that is deployed.
 #
 # Tagging is the trigger: push a v* tag and the release appears with the
-# wasm, SHA256SUMS and the notes below.
+# wasm, a JSON interface spec per contract, SHA256SUMS and the notes below.
 #
 # The build is the one scripts/build-wasm.sh performs, so the artefacts here
 # are the ones scripts/deploy.sh deploys and
@@ -43,6 +43,9 @@ env:
   # Pinned so the optimised bytes do not change under us. binaryen is the
   # optimiser the Stellar toolchain uses.
   BINARYEN_VERSION: '133'
+  # Only used to export the interface specs from the built wasm. Keep it in
+  # step with .devcontainer/Dockerfile.
+  STELLAR_CLI_VERSION: '27.1.0'
 
 jobs:
   release:
@@ -71,6 +74,19 @@ jobs:
           wasm-opt --version
       - name: Build the contracts
         run: ./scripts/build-wasm.sh dist
+      - name: Install the Stellar CLI
+        # Only for `stellar contract info interface`: the specs are exported from
+        # the wasm just built, so they describe the released bytes.
+        run: |
+          mkdir -p "$HOME/.local/bin"
+          curl -fsSL "https://github.com/stellar/stellar-cli/releases/download/v${STELLAR_CLI_VERSION}/stellar-cli-${STELLAR_CLI_VERSION}-x86_64-unknown-linux-gnu.tar.gz" \
+            | tar xz stellar
+          install -m755 stellar "$HOME/.local/bin/stellar"
+          rm -f stellar
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+          "$HOME/.local/bin/stellar" --version
+      - name: Export the interface specs
+        run: ./scripts/export-specs.sh dist
       - name: Show what is being released
         run: |
           ls -lh dist
@@ -80,6 +96,7 @@ jobs:
         with:
           subject-path: |
             dist/*.wasm
+            dist/*.json
             dist/SHA256SUMS
       - name: Attach the wasm to the release
         env:
@@ -98,6 +115,19 @@ jobs:
             echo "Built from \`${RELEASE_TAG}\` by \`.github/workflows/release.yml\` with the pinned"
             echo "toolchain (rustc $(rustc --version | cut -d' ' -f2)) and the flags documented in"
             echo "\`docs/developers/contracts.md\`. \`SHA256SUMS\` holds the SHA-256 of every file."
+            echo
+            echo "## Interfaces in this release"
+            echo
+            echo "Each contract also ships its interface spec as \`sci_<contract>.json\`,"
+            echo "exported from the released wasm with \`stellar contract info interface\`"
+            echo "(Stellar CLI ${STELLAR_CLI_VERSION}). Generate client bindings from it without"
+            echo "building, and check a deployment against it:"
+            echo
+            echo '```bash'
+            echo "stellar contract info interface --contract-id <CONTRACT_ID> \\"
+            echo "  --network testnet --output json > deployed.json"
+            echo "diff deployed.json sci_voucher.json"
+            echo '```'
             echo
             echo "## Verifying build provenance"
             echo
@@ -130,8 +160,8 @@ jobs:
             echo "release does not have. \`.github/workflows/docs-site.yml\` publishes the snapshot"
             echo "when this tag is pushed."
           } > "$notes"
-          gh release create "$RELEASE_TAG" dist/*.wasm dist/SHA256SUMS \
+          gh release create "$RELEASE_TAG" dist/*.wasm dist/*.json dist/SHA256SUMS \
             --title "$RELEASE_TAG" \
             --notes-file "$notes" \
             --generate-notes \
-            || gh release upload "$RELEASE_TAG" dist/*.wasm dist/SHA256SUMS --clobber
+            || gh release upload "$RELEASE_TAG" dist/*.wasm dist/*.json dist/SHA256SUMS --clobber

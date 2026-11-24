@@ -31,6 +31,73 @@ cargo install --locked stellar-cli
 cargo install --locked wasm-opt   # or download binaryen 133 from GitHub releases
 ```
 
+## Windows
+
+CI runs on Linux and every script here is Bash, so the supported way to build
+on Windows is **WSL2** or the **dev container**. Install the prerequisites above
+inside that Linux environment, not in a native Windows shell.
+
+### WSL2 (recommended)
+
+1. In an elevated PowerShell, run `wsl --install -d Ubuntu` and reboot when it
+   asks. Everything below happens in the Ubuntu shell, not in PowerShell.
+2. Install the tools inside Ubuntu: the `rustup` line from
+   [Prerequisites](#prerequisites), then
+   `sudo apt-get install -y build-essential pkg-config libssl-dev` for the
+   native libraries the build links. A Rust toolchain installed on Windows is a
+   different toolchain and does not satisfy `rust-toolchain.toml` here.
+3. Clone into the Linux filesystem, for example
+   `~/src/sci-healthcare-contracts`. A clone under `/mnt/c/...` is slow and
+   keeps the Windows line endings it was checked out with.
+4. From there [section 1](#1-contracts) works unchanged.
+
+```bash
+cargo test        # every contract's tests
+just wasm         # the release build: dist/*.wasm and dist/SHA256SUMS
+```
+
+### Dev container
+
+`.devcontainer/` pins Rust 1.96.0 with `wasm32v1-none`, Stellar CLI 27.1.0,
+`wasm-opt` from binaryen 133 and `just`. Open the folder in VS Code with the Dev
+Containers extension and choose **Reopen in Container** (Docker Desktop with the
+WSL2 backend), or open a GitHub Codespace on the repository. `cargo test` and
+`just wasm` then work with no further setup, and a build there is the build CI
+checks.
+
+### Line endings
+
+`.gitattributes` checks every file out with LF. If a clone made before it, or
+made with `core.autocrlf=true`, reports every file as modified, or a script
+fails with `bash\r: No such file or directory`, renormalise it once:
+
+```bash
+git config core.autocrlf input
+git rm --cached -r . && git reset --hard
+```
+
+### What does not work from a native Windows shell
+
+`cargo test` works from PowerShell, `cmd` or Git Bash with the MSVC toolchain,
+but the rest of the tooling assumes Linux:
+
+- **`just` recipes.** The `justfile` sets `set shell := ["bash", ...]`, so `just`
+  needs `bash` on `PATH`. It works in Git Bash and fails in PowerShell and `cmd`
+  with a shell-not-found error. `just wasm` also needs `wasm-opt` (binaryen
+  133) on `PATH`; the Windows archive is
+  `binaryen-version_133-x86_64-windows.tar.gz`, and `cargo install wasm-opt`
+  only works where a C toolchain is available.
+- **Reproducible bytes.** A native Windows build compiles a few dependencies
+  differently from Linux, so its wasm does not match the bytes in a release. Do
+  not compare checksums from a Windows build — `scripts/verify-deployments.sh`
+  included — and run the verification in WSL2 or the container instead. See
+  [Contract reference](contracts.md#building-releasing-and-verifying-the-contracts).
+- **The end-to-end check.** `scripts/e2e-local.sh` needs Docker and a node on
+  `localhost:8000`; run it inside WSL2 with Docker Desktop's WSL2 backend, not
+  from a native shell.
+- **CRLF checkouts.** As above: line endings rewritten to CRLF break every
+  `#!/usr/bin/env bash` script.
+
 ## 1. Contracts
 
 ```bash
