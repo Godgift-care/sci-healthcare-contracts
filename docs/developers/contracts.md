@@ -984,17 +984,29 @@ Pushing a `v*` tag runs `.github/workflows/release.yml`, which tests, builds
 and attaches to the GitHub release:
 
 - `sci_registry.wasm`, `sci_voucher.wasm`, `sci_receipt.wasm`, `sci_faucet.wasm` — the optimised contracts,
-- `SHA256SUMS` — the SHA-256 of every file,
+- `sci_registry.json`, `sci_voucher.json`, `sci_receipt.json`, `sci_faucet.json` — each contract's interface spec, exported from the released wasm with `stellar contract info interface --wasm <file> --output json`. It is the same interface the host exposes, so bindings can be generated and a deployment checked without building or downloading the wasm. `scripts/export-specs.sh` does the export and rewrites `SHA256SUMS` to cover the specs,
+- `SHA256SUMS` — the SHA-256 of every file, wasm and specs,
 - release notes that explain how to compare the hash with a deployed contract.
 
 Comparing a deployed contract with a release is one command:
 
 ```bash
 stellar contract info hash --contract-id <CONTRACT_ID> --network testnet
-grep sci_voucher SHA256SUMS
+grep sci_voucher.wasm SHA256SUMS
 ```
 
-The two hashes must be identical.
+The two hashes must be identical. The released interface spec compares the
+same way, without a local build:
+
+```bash
+stellar contract info interface --contract-id <CONTRACT_ID> \
+  --network testnet --output json > deployed.json
+diff deployed.json sci_voucher.json
+```
+
+To rebuild the specs from a local build, run `./scripts/export-specs.sh` after
+`./scripts/build-wasm.sh`; it needs the Stellar CLI and writes
+`dist/sci_<contract>.json` next to each wasm.
 
 ### The check
 
