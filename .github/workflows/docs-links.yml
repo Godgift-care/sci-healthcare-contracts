@@ -24,11 +24,11 @@ jobs:
     name: documentation links
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 
       # Offline mode makes relative links a deterministic pull-request gate.
       - name: Check relative links
-        uses: lycheeverse/lychee-action@v2.4.0
+        uses: lycheeverse/lychee-action@1d97d84f0bc547f7b25f4c2170d87d810dc2fb2c # v2.4.0
         with:
           args: --offline --no-progress './README.md' './docs/**/*.md' './docs/**/*.mdx'
           fail: true
@@ -36,7 +36,7 @@ jobs:
       # Network links are retried and remain informational: a transient outage
       # should be visible in the summary without blocking a documentation PR.
       - name: Check external links
-        uses: lycheeverse/lychee-action@v2.4.0
+        uses: lycheeverse/lychee-action@1d97d84f0bc547f7b25f4c2170d87d810dc2fb2c # v2.4.0
         continue-on-error: true
         with:
           args: --no-progress --verbose --max-retries 3 --retry-wait-time 2 './README.md' './docs/**/*.md' './docs/**/*.mdx'
