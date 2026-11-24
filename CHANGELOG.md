@@ -3,6 +3,7 @@
 ## Unreleased
 
 ### Added
+- **docs:** a Windows section in the [local setup guide](docs/developers/setup.md#windows): WSL2 and the dev container as the supported paths to a passing `cargo test` and `just wasm`, the line-ending settings, and what does not work from a native shell (the `just` recipes' Bash shell, reproducible bytes, the end-to-end check). Closes #252.
 - **ci:** daily scheduled verification of the testnet deployment via [`.github/workflows/scheduled-verify.yml`](.github/workflows/scheduled-verify.yml). Runs `scripts/verify-deployment.sh testnet` read-only (no secret needed) at 06:00 UTC every day and on demand. A failing run opens exactly one tracking issue labelled `deployment-alert`; a passing run closes it. Closes #245.
 - **common:** shared `AdminProposed` and `AdminChanged` event structs in `sci-common` (`contracts/common/src/lib.rs`). All five contracts that emit these events re-export them from the shared crate; the ABI (topics and data fields) is byte-identical to the per-contract definitions they replaced. The indexer needs no decoder change. Closes #241.
 - **common:** `page_bounds(start, limit, total, max) -> Option<(u32, u32)>` pagination helper in `sci-common`. Every paginated view in `registry` (`list_providers`, `providers_in`, `list_attesters`) and `receipt` (`receipts_of_provider`) now delegates clamping and overflow handling to this one function. Closes #242.
