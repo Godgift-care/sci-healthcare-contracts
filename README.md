@@ -236,9 +236,9 @@ The policy lives in [`deny.toml`](deny.toml); there are no exceptions in it
 today, and any future one has to carry a reason.
 
 **Releases.** Pushing a `v*` tag builds the contracts, optimises them with
-`wasm-opt -Oz` and attaches them to the GitHub release together with a
-`SHA256SUMS` file and notes that explain how to compare the hash with a
-deployed contract.
+`wasm-opt -Oz` and attaches them to the GitHub release together with each
+contract's JSON interface spec, a `SHA256SUMS` file and notes that explain how
+to compare the hash with a deployed contract.
 
 **Versioned docs.** The [docs site](https://godgift-care.github.io/sci-healthcare-contracts/) serves `main` at its root and a frozen copy for every release under `/<tag>/`, for example [`/v0.2.0/`](https://godgift-care.github.io/sci-healthcare-contracts/v0.2.0/), with [`/latest/`](https://godgift-care.github.io/sci-healthcare-contracts/latest/) pointing at the newest release. Each page carries a banner that says which version it describes, so someone integrating the deployed release does not read about functions that are only on `main`. Pushing a tag publishes its snapshot, and the release notes link to it. [`scripts/build-docs-site.sh`](scripts/build-docs-site.sh) builds the same site locally.
 

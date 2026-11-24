@@ -12,6 +12,11 @@ members = [
 [workspace.package]
 version = "0.2.0"
 edition = "2021"
+# The minimum supported Rust version, inherited by every contract so downstream
+# crates can read it from `cargo metadata`. Keep it in step with
+# rust-toolchain.toml, the dev container and the CI `msrv` job; CONTRIBUTING.md
+# has the policy for raising it.
+rust-version = "1.96"
 license = "Apache-2.0"
 repository = "https://github.com/Godgift-care/sci-healthcare-contracts"
 
