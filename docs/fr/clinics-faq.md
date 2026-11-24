@@ -33,13 +33,13 @@ Le financeur peut appuyer sur **Contester** tant que le bon est `Claimed` ou `At
 
 Les frais du protocole sont de 1 % (100 points de base), prélevés une fois au règlement. Ils sont plafonnés à 1000 points de base (10 %) à l'initialisation, donc un déploiement ne peut jamais être reconfiguré pour facturer davantage. Les remboursements sont gratuits et le financement est gratuit ; vous payez aussi les frais de réseau Stellar uniquement pour les transactions que vous soumettez (réclamation, et règlement si vous le déclenchez vous-même), soit une fraction de centime en XLM.
 
-*Sources : [Économie — les frais](../protocol/economics.md#the-fee), [Économie — qui paie quoi](../protocol/economics.md#who-pays-what), [Référence du contrat — initialize](../developers/contracts.md#initialize)*
+*Sources : [Économie — les frais](../protocol/economics.md#the-fee), [Économie — qui paie quoi](../protocol/economics.md#who-pays-what), [Référence du contrat — initialize](../developers/contracts.md#voucher)*
 
 ## Puis-je réclamer après l'expiration du bon ?
 
 Non. Un bon ne peut pas être réclamé après son `expires_at`, et une clinique suspendue après le financement du bon ne peut pas le réclamer du tout. Si le patient se présente après l'expiration, le financeur récupère l'argent. Si la clinique est suspendue avant que le bon soit réclamé, le financeur peut être remboursé immédiatement.
 
-*Sources : [Fonctionnement d'un bon — Claimed](../protocol/lifecycle.md#claimed), [Référence du contrat — claim](../developers/contracts.md#claim)*
+*Sources : [Fonctionnement d'un bon — Claimed](../protocol/lifecycle.md#claimed), [Référence du contrat — claim](../developers/contracts.md#voucher)*
 
 ## Puis-je attester mon propre bon ?
 
@@ -63,7 +63,7 @@ Celui qui soumet la transaction : vous payez `claim`, l'attesteur paie `attest`,
 
 Oui. `settle` ne demande aucune autorisation : une fois la fenêtre de litige fermée, n'importe quel appelant peut déclencher le règlement de votre bon attesté — vous n'avez jamais à relancer le financeur ou un opérateur pour être payé.
 
-*Sources : [Économie — qui paie quoi](../protocol/economics.md#who-pays-what), [Référence du contrat — settle](../developers/contracts.md#settle)*
+*Sources : [Économie — qui paie quoi](../protocol/economics.md#who-pays-what), [Référence du contrat — settle](../developers/contracts.md#voucher)*
 
 ## Dans quelle monnaie suis-je payé, et comment obtenir des espèces locales ?
 
@@ -75,7 +75,7 @@ Le règlement se fait en USDC. La conversion en naira, shillings ou espèces pas
 
 Oui. Les frais sont plafonnés à 1000 points de base (10 %) et ce plafond est appliqué à l'initialisation du contrat de bons, avant tout mouvement d'argent. La production est à 100 points de base (1 %).
 
-*Sources : [Économie — les frais](../protocol/economics.md#the-fee), [Référence du contrat — initialize](../developers/contracts.md#initialize)*
+*Sources : [Économie — les frais](../protocol/economics.md#the-fee), [Référence du contrat — initialize](../developers/contracts.md#voucher)*
 
 ## Combien de temps un financeur a-t-il pour contester un bon ?
 
