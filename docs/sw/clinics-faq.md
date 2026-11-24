@@ -33,13 +33,13 @@ Mfadhili anaweza kubonyeza **Dispute** wakati vocha iko `Claimed` au `Attested`,
 
 Ada ya itifaki ni 1% (basis points 100), inachukuliwa mara moja wakati wa malipo. Ina kikomo cha 1000 bps (10%) wakati wa uanzishaji, kwa hiyo usambazaji hauwezi kusanidiwa upya kutoza zaidi. Marejesho hayana malipo na ufadhili ni bure; pia unalipa ada ya mtandao wa Stellar kwa miamala unayowasilisha pekee (claim, na settle ikiwa unaianzisha mwenyewe), ambayo ni sehemu ya senti kwa XLM.
 
-*Vyanzo: [Uchumi — ada](protocol/economics.md#ada), [Uchumi — nani analipa nini](protocol/economics.md#nani-analipa-nini), [Marejeo ya mkataba — initialize](../developers/contracts.md#initialize)*
+*Vyanzo: [Uchumi — ada](protocol/economics.md#ada), [Uchumi — nani analipa nini](protocol/economics.md#nani-analipa-nini), [Marejeo ya mkataba — initialize](../developers/contracts.md#voucher)*
 
 ## Naweza kudai baada ya vocha kuisha muda?
 
 Hapana. Vocha haiwezi kudaiwa baada ya `expires_at` yake, na kliniki iliyosimamishwa baada ya vocha kufadhiliwa haiwezi kuidai kabisa. Mgonjwa akifika baada ya muda kuisha, mfadhili anarudishiwa pesa. Kliniki ikisimamishwa kabla vocha haijadaiwa, mfadhili anaweza kurejeshewa mara moja.
 
-*Vyanzo: [Vocha inavyofanya kazi — Claimed](protocol/lifecycle.md#claimed), [Marejeo ya mkataba — claim](../developers/contracts.md#claim)*
+*Vyanzo: [Vocha inavyofanya kazi — Claimed](protocol/lifecycle.md#claimed), [Marejeo ya mkataba — claim](../developers/contracts.md#voucher)*
 
 ## Naweza kuthibitisha vocha yangu mwenyewe?
 
@@ -63,7 +63,7 @@ Anayewasilisha muamala: wewe unalipa `claim`, mthibitishaji analipa `attest`, mf
 
 Ndiyo. `settle` haihitaji idhini, kwa hiyo kipindi cha mgogoro kikishafungwa mpigaji yeyote anaweza kuanzisha malipo ya vocha yako iliyothibitishwa — huna budi kumfuata mfadhili au mwendeshaji ili ulipwe.
 
-*Vyanzo: [Uchumi — nani analipa nini](protocol/economics.md#nani-analipa-nini), [Marejeo ya mkataba — settle](../developers/contracts.md#settle)*
+*Vyanzo: [Uchumi — nani analipa nini](protocol/economics.md#nani-analipa-nini), [Marejeo ya mkataba — settle](../developers/contracts.md#voucher)*
 
 ## Ninalipwa kwa sarafu gani, na nitapataje pesa taslimu ya ndani?
 
@@ -75,7 +75,7 @@ Malipo ni kwa USDC. Kubadilisha kuwa naira, shilingi au pesa taslimu kunapitia a
 
 Ndiyo. Ada ina kikomo cha basis points 1000 (10%) na kikomo hiki kinasimamiwa wakati wa uanzishaji wa mkataba wa vocha, kabla pesa yoyote kuhamishwa. Uzalishaji ni 100 bps (1%).
 
-*Vyanzo: [Uchumi — ada](protocol/economics.md#ada), [Marejeo ya mkataba — initialize](../developers/contracts.md#initialize)*
+*Vyanzo: [Uchumi — ada](protocol/economics.md#ada), [Marejeo ya mkataba — initialize](../developers/contracts.md#voucher)*
 
 ## Mfadhili ana muda gani wa kupinga vocha?
 
