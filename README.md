@@ -1,8 +1,4 @@
 <p align="center">
-  <img src="docs/banner.png" alt="SCI Healthcare" width="640" />
-</p>
-
-<p align="center">
   <a href="https://github.com/Godgift-care/sci-healthcare-contracts/actions/workflows/ci.yml">
     <img src="https://github.com/Godgift-care/sci-healthcare-contracts/actions/workflows/ci.yml/badge.svg" alt="CI" />
   </a>
