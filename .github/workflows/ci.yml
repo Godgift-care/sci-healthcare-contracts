@@ -62,6 +62,36 @@ jobs:
       - name: Run doctests
         run: cargo test --doc --all
 
+  msrv:
+    name: msrv
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      # Builds with exactly the `rust-version` the workspace declares, so a
+      # dependency or a language feature that needs a newer compiler fails here
+      # instead of in a downstream crate. Keep the toolchain in step with
+      # `rust-version` in Cargo.toml and rust-toolchain.toml; the step below
+      # fails if the two have drifted apart.
+      - uses: dtolnay/rust-toolchain@3cfd829add0beb9cf7406e52147d74ad3db19d01 # 1.96.0
+        with:
+          toolchain: '1.96.0'
+          targets: wasm32v1-none
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2
+      - name: Check the declared MSRV matches this toolchain
+        run: |
+          declared="$(cargo metadata --no-deps --format-version 1 | jq -r '.packages[0].rust_version')"
+          actual="$(rustc --version | cut -d' ' -f2)"
+          echo "Cargo.toml declares rust-version $declared; this job runs $actual"
+          case "$actual" in
+            "$declared".*) ;;
+            *)
+              echo "::error::the msrv job runs $actual but Cargo.toml declares rust-version $declared; update the job with the workspace version"
+              exit 1
+              ;;
+          esac
+      - name: Build with the minimum supported Rust version
+        run: cargo build --workspace --all-targets --locked
+
   coverage:
     name: coverage
     runs-on: ubuntu-latest

@@ -24,6 +24,29 @@ cargo test
 The toolchain is pinned in `rust-toolchain.toml`. Please do not change it in a
 feature PR.
 
+### Minimum supported Rust version
+
+The workspace declares `rust-version = "1.96"` in the `[workspace.package]`
+section of [`Cargo.toml`](Cargo.toml), and every contract inherits it. That is
+the same version `rust-toolchain.toml` pins and the version the CI `msrv` job
+builds with, so downstream crates that depend on the contract types can read
+the requirement from `cargo metadata` instead of finding it out from a build
+failure.
+
+Raising it is a deliberate change, never a side effect of a feature:
+
+- Open its own pull request, say in the description what needs the newer
+  compiler (a dependency or a language feature), and add a `CHANGELOG.md` entry.
+- Bump `rust-version` and the `rust-toolchain.toml` channel in the same change,
+  plus the dev container's `RUST_VERSION` and the toolchain in the CI `msrv`
+  job. The release build has to keep working, so the pins move together.
+- The `msrv` job must pass on the new version, and its first step fails if the
+  declared version and the toolchain it runs have drifted apart.
+
+The version is only lowered when the workspace really does compile there; the
+`msrv` job is the proof, so a lower number without that job passing is not a
+supported claim.
+
 ### Dev container
 
 The repository ships a [dev container](.devcontainer/) with everything pinned

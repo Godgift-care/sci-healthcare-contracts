@@ -3,6 +3,7 @@
 ## Unreleased
 
 ### Added
+- **build:** `rust-version = "1.96"` in the workspace `Cargo.toml`, inherited by every contract, so downstream crates can read the minimum supported Rust version from `cargo metadata`. A new CI `msrv` job builds with exactly that toolchain and fails if the declared version and the toolchain it runs drift apart; the policy for raising it is in [`CONTRIBUTING.md`](CONTRIBUTING.md#minimum-supported-rust-version). Closes #260.
 - **ci:** daily scheduled verification of the testnet deployment via [`.github/workflows/scheduled-verify.yml`](.github/workflows/scheduled-verify.yml). Runs `scripts/verify-deployment.sh testnet` read-only (no secret needed) at 06:00 UTC every day and on demand. A failing run opens exactly one tracking issue labelled `deployment-alert`; a passing run closes it. Closes #245.
 - **common:** shared `AdminProposed` and `AdminChanged` event structs in `sci-common` (`contracts/common/src/lib.rs`). All five contracts that emit these events re-export them from the shared crate; the ABI (topics and data fields) is byte-identical to the per-contract definitions they replaced. The indexer needs no decoder change. Closes #241.
 - **common:** `page_bounds(start, limit, total, max) -> Option<(u32, u32)>` pagination helper in `sci-common`. Every paginated view in `registry` (`list_providers`, `providers_in`, `list_attesters`) and `receipt` (`receipts_of_provider`) now delegates clamping and overflow handling to this one function. Closes #242.
