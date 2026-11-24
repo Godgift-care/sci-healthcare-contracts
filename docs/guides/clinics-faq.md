@@ -33,13 +33,13 @@ The funder can press **Dispute** while the voucher is `Claimed` or `Attested`, b
 
 The protocol fee is 1% (100 basis points), taken once at settlement. It is capped at 1000 bps (10%) at initialisation, so a deployment can never be reconfigured to charge more. Refunds are free and funding is free; you also pay the Stellar network fee only for transactions you submit (claim, and settle if you trigger it yourself), which are a fraction of a cent in XLM.
 
-*Sources: [Economics — the fee](../protocol/economics.md#the-fee), [Economics — who pays what](../protocol/economics.md#who-pays-what), [Contract reference — fee cap](../developers/contracts.md#initialize)*
+*Sources: [Economics — the fee](../protocol/economics.md#the-fee), [Economics — who pays what](../protocol/economics.md#who-pays-what), [Contract reference — fee cap](../developers/contracts.md#voucher)*
 
 ## Can I claim after the voucher expires?
 
 No. A voucher cannot be claimed after its `expires_at`, and a clinic that was suspended after the voucher was funded cannot claim it at all. If the patient turns up after expiry, the funder refunds the money instead. If the clinic is suspended before the voucher is claimed, the funder can refund immediately.
 
-*Sources: [How a voucher works — Claimed](../protocol/lifecycle.md#claimed), [Contract reference — claim](../developers/contracts.md#claim)*
+*Sources: [How a voucher works — Claimed](../protocol/lifecycle.md#claimed), [Contract reference — claim](../developers/contracts.md#voucher)*
 
 ## Can I attest my own voucher?
 
@@ -51,7 +51,7 @@ No. The contract rejects `attest` when the caller is the clinic being paid, even
 
 A suspended clinic cannot receive new vouchers or change prices, but vouchers already funded still settle normally. You can keep delivering on existing vouchers and be paid once they are attested and the dispute window closes.
 
-*Sources: [Running a clinic — suspension](clinics.md#suspension)*
+*Sources: [Running a clinic — suspension](clinics.md#things-worth-knowing)*
 
 ## Who pays the Stellar network fee?
 
@@ -63,19 +63,19 @@ Whoever submits the transaction pays it: you pay for `claim`, the attester pays 
 
 Yes. `settle` needs no authorisation, so once the dispute window has closed any caller can trigger settlement of your attested voucher — you never have to chase the funder or an operator to be paid.
 
-*Sources: [Economics — who pays what](../protocol/economics.md#who-pays-what), [Contract reference — settle](../developers/contracts.md#settle)*
+*Sources: [Economics — who pays what](../protocol/economics.md#who-pays-what), [Contract reference — settle](../developers/contracts.md#voucher)*
 
 ## What currency am I paid in, and how do I get local cash?
 
 Settlement is in USDC. Converting to naira, shillings or cash goes through a Stellar anchor — Yellowcard, Cowrie, HoneyCoin or MoneyGram — which is a separate, regulated step with its own identity checks.
 
-*Sources: [Running a clinic — getting local currency](clinics.md#getting-local-currency)*
+*Sources: [Running a clinic — getting local currency](clinics.md#things-worth-knowing)*
 
 ## Is there a maximum fee the protocol could charge?
 
 Yes. The fee is capped at 1000 basis points (10%) and this ceiling is enforced at voucher contract initialisation, before any money moves. Production is 100 bps (1%).
 
-*Sources: [Economics — the fee](../protocol/economics.md#the-fee), [Contract reference — initialize](../developers/contracts.md#initialize)*
+*Sources: [Economics — the fee](../protocol/economics.md#the-fee), [Contract reference — initialize](../developers/contracts.md#voucher)*
 
 ## How long do I have to dispute a voucher as a funder?
 

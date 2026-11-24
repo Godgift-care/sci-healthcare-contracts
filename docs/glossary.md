@@ -27,7 +27,7 @@ Used in: [How a voucher works — Attested](protocol/lifecycle.md#attested), [Tr
 ### Attester share (`attester_share_bps`)
 The part of the voucher amount paid to the attester who confirmed delivery, in basis points and set at initialisation. It is carved out of the protocol fee and can never exceed `fee_bps`; the clinic's net is unchanged. Zero means the fee account receives the whole fee.
 
-Used in: [Economics — the attester share](protocol/economics.md#the-attester-share), [Contract reference — initialize](developers/contracts.md#initialize).
+Used in: [Economics — the attester share](protocol/economics.md#the-attester-share), [Contract reference — initialize](developers/contracts.md#voucher).
 
 ## B
 
@@ -51,7 +51,7 @@ Used in: [How a voucher works — Claimed](protocol/lifecycle.md#claimed).
 ### Claim grace (period)
 Seven days after a voucher's expiry during which a `Claimed` but never-attested voucher can still be refunded to the funder. It exists so a claim alone can never hold the funder's money hostage. Defined in the contract as `CLAIM_GRACE_SECS` (7 × 24 × 60 × 60 seconds).
 
-Used in: [How a voucher works — Claimed](protocol/lifecycle.md#claimed), [Contract reference — refund](developers/contracts.md#refund).
+Used in: [How a voucher works — Claimed](protocol/lifecycle.md#claimed), [Contract reference — refund](developers/contracts.md#voucher).
 
 ### Clinic (provider)
 A verified health business — clinic, pharmacy or lab — that lists services and receives settlement. In the registry it is a `Provider` with status `Pending`, `Active`, `Suspended` or `Retired`; only `Active` clinics can receive vouchers or claim them, and `Retired` is the terminal status a clinic gives itself when it closes (see [status lifecycle](developers/contracts.md#status-lifecycle)).
@@ -80,14 +80,14 @@ Used in: [How a voucher works — Funded](protocol/lifecycle.md#funded), [Trust 
 ### Expiry (`expires_at`)
 The deadline after which a voucher can no longer be claimed. An unclaimed expired voucher can be refunded in full by anyone; if the clinic is no longer active, it can be refunded before expiry. A claimed but unattested one becomes refundable seven days after expiry (the claim grace).
 
-Used in: [How a voucher works — Claimed](protocol/lifecycle.md#claimed), [Contract reference — create_voucher](developers/contracts.md#create_voucher).
+Used in: [How a voucher works — Claimed](protocol/lifecycle.md#claimed), [Contract reference — create_voucher](developers/contracts.md#voucher).
 
 ## F
 
 ### Fee (protocol fee)
 The percentage the protocol takes at settlement, expressed in basis points and capped at 1000 bps (10%) at initialisation. Production is 100 bps (1%). Part of the fee is routed to the attester through `attester_share_bps`; the rest goes to the fee account. Refunds and funding carry no fee.
 
-Used in: [Economics](protocol/economics.md), [Contract reference — settle](developers/contracts.md#settle).
+Used in: [Economics](protocol/economics.md), [Contract reference — settle](developers/contracts.md#voucher).
 
 ### Funder
 The person or wallet that pays USDC into the contract to create a voucher, bound to a specific clinic, service and expiry. The funder can dispute a claim and receives the money back if the voucher is refunded.
@@ -131,7 +131,7 @@ Used in: [Privacy — service codes](protocol/privacy.md#service-codes-stay-coar
 ### Settle / Settlement
 The call that releases escrow to the clinic once the dispute window has closed, splits the protocol fee between the attester and the fee account, and mints a care receipt. It is permissionless and irreversible; a settled voucher cannot be settled or refunded again.
 
-Used in: [How a voucher works — Settled](protocol/lifecycle.md#settled), [Contract reference — settle](developers/contracts.md#settle).
+Used in: [How a voucher works — Settled](protocol/lifecycle.md#settled), [Contract reference — settle](developers/contracts.md#voucher).
 
 ### State machine
 The fixed sequence a voucher moves through: `Funded` → `Claimed` → `Attested` → `Settled`, with exits to `Disputed` and `Refunded`. `Settled` and `Refunded` are terminal.
@@ -158,7 +158,7 @@ Used in: [Trust model](protocol/trust.md).
 ### Two-step admin handover
 Admin rotation happens in two calls: `propose_admin` by the current admin, then `accept_admin` signed by the nominee. Nothing changes until the nominee signs, so a mistyped address cannot strand dispute resolution.
 
-Used in: [Contract reference — propose_admin / accept_admin](developers/contracts.md#propose_admin-accept_admin).
+Used in: [Contract reference — propose_admin / accept_admin](developers/contracts.md#registry).
 
 ## U
 
