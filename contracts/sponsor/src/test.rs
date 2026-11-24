@@ -150,6 +150,9 @@ fn rules(env: &Env, match_bps: u32, cap: i128) -> Rules {
         min_voucher_age_secs: 0,
         eligible_countries: Vec::new(env),
         eligible_service_codes: Vec::new(env),
+        starts_at: 0,
+        ends_at: 0,
+        cap_per_provider: 0,
     }
 }
 
@@ -216,6 +219,9 @@ fn rules_are_stored_and_read_back() {
         min_voucher_age_secs: 60,
         eligible_countries: vec![&f.env, String::from_str(&f.env, "NG")],
         eligible_service_codes: vec![&f.env, CONSULT],
+        starts_at: 0,
+        ends_at: 0,
+        cap_per_provider: 0,
     };
     f.desk.set_rules(&f.sponsor, &rules);
 
@@ -756,7 +762,7 @@ fn a_refunded_match_gives_the_budget_back() {
 
     // The books are only up to date once they are reconciled.
     f.desk.reconcile_sponsor(&f.sponsor);
-    assert_eq!(f.desk.available_budget(&f.sponsor), BUDGET);
+    assert_eq!(f.desk.available_budget(&f.sponsor), BUDGET + CONSULT_PRICE);
     let account = f.desk.get_sponsor(&f.sponsor);
     assert_eq!(account.refunded, CONSULT_PRICE);
     assert!(account.open_matches.is_empty());
@@ -1513,6 +1519,8 @@ fn rules_set_event_snapshot() {
             "cap_per_voucher",
             "min_voucher_amount",
             "min_voucher_age_secs",
+            "starts_at",
+            "ends_at",
         ],
     );
     assert_eq!(field_u32(&e, "match_bps"), ONE_FOR_ONE);
@@ -2084,6 +2092,9 @@ fn stored_type_fixtures_decode_against_current_code() {
         min_voucher_age_secs: 3_600,
         eligible_countries: vec![&env, String::from_str(&env, "NG")],
         eligible_service_codes: vec![&env, CONSULT],
+        starts_at: 0,
+        ends_at: 0,
+        cap_per_provider: 0,
     };
 
     check_stored_type(
@@ -2123,7 +2134,8 @@ fn stored_type_fixtures_decode_against_current_code() {
                     amount: CONSULT_PRICE,
                 },
             ],
-        },
+            committed_per_provider: Vec::new(&env),
+        }
     );
     check_stored_type(
         &env,

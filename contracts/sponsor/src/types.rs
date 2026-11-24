@@ -50,6 +50,17 @@ pub struct Rules {
     pub eligible_countries: Vec<String>,
     /// The service codes that qualify. Empty means any service qualifies.
     pub eligible_service_codes: Vec<u32>,
+    /// The campaign start time, in ledger seconds since the epoch. `0`
+    /// means unbounded in the past; matches before this time are rejected.
+    pub starts_at: u64,
+    /// The campaign end time, in ledger seconds since the epoch. `0`
+    /// means unbounded in the future; matches after this time are rejected.
+    pub ends_at: u64,
+    /// The maximum total the sponsor will commit to matches for one clinic.
+    /// `0` means no cap. When non-zero, the desk tracks the sponsor's
+    /// committed value per clinic and refuses matches that would exceed it.
+    /// The cap is reduced when a matched voucher is refunded.
+    pub cap_per_provider: i128,
 }
 
 /// A match the sponsor has made whose matching voucher is still open.
@@ -86,6 +97,9 @@ pub struct SponsorAccount {
     pub rules: Rules,
     /// Matches whose matching voucher is still open.
     pub open_matches: Vec<OpenMatch>,
+    /// Committed value per provider, for `cap_per_provider` enforcement.
+    /// Zero or absent means no per-provider cap.
+    pub committed_per_provider: Vec<(Address, i128)>,
 }
 
 /// The desk's totals across every sponsor.
@@ -194,8 +208,10 @@ pub enum SponsorError {
     /// A counter would have to exceed the largest amount the token can
     /// represent.
     MathOverflow = 25,
+    /// The sponsor has exceeded the per-provider cap set in rules.
+    CapExceeded = 26,
     /// There is no admin nomination waiting to be accepted.
-    NoPendingAdmin = 26,
+    NoPendingAdmin = 27,
 }
 
 /// Maps the shared helpers' failures onto this contract's error numbers, so
