@@ -247,6 +247,14 @@
                     },
                     {
                       "key": {
+                        "symbol": "eligible_providers"
+                      },
+                      "val": {
+                        "vec": []
+                      }
+                    },
+                    {
+                      "key": {
                         "symbol": "eligible_service_codes"
                       },
                       "val": {
@@ -1268,6 +1276,14 @@
                                 "string": "NG"
                               }
                             ]
+                          }
+                        },
+                        {
+                          "key": {
+                            "symbol": "eligible_providers"
+                          },
+                          "val": {
+                            "vec": []
                           }
                         },
                         {

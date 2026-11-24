@@ -118,6 +118,7 @@ run mkdir -p "$(dirname "$OUT")"
 
 capture ADMIN_ADDR stellar keys address "$ADMIN"
 capture ISSUER_ADDR stellar keys address "$ISSUER"
+capture SPONSOR_ADDR stellar keys address "$SPONSOR"
 
 say "Building contracts"
 if [ "$DRY_RUN" -eq 1 ]; then
@@ -139,8 +140,8 @@ capture USDC_ID stellar contract id asset \
 echo "  USDC: $USDC_ID"
 
 # Contracts deploy in dependency order: registry and receipt own no
-# references, voucher points at both.
-say "Deploying registry"
+# references, voucher points at both, sponsor depends on both.
+say "Deploying sponsor desk"
 capture REGISTRY_ID stellar contract deploy \
   --wasm "$WASM_DIR/sci_registry.wasm" \
   --source-account "$ADMIN" --network "$NETWORK"
@@ -181,6 +182,19 @@ run stellar contract invoke --id "$VOUCHER_ID" --source-account "$ADMIN" \
   --attester_share_bps "$ATTESTER_SHARE_BPS" \
   --fee_account "$ADMIN_ADDR"
 
+say "Deploying sponsor desk"
+capture SPONSOR_ID stellar contract deploy \
+  --wasm "$WASM_DIR/sci_sponsor.wasm" \
+  --source-account "$ADMIN" --network "$NETWORK"
+echo "  sponsor:  $SPONSOR_ID"
+
+say "Initializing sponsor desk"
+run stellar contract invoke --id "$SPONSOR_ID" --source-account "$ADMIN" \
+  --network "$NETWORK" -- initialize --admin "$ADMIN_ADDR" \
+  --registry "$REGISTRY_ID" \
+  --voucher "$VOUCHER_ID" \
+  --token "$USDC_ID"
+
 if [ "$DRY_RUN" -eq 1 ]; then
   printf '+ cat > %q <<ENVEOF\n' "$OUT"
   printf '  STELLAR_NETWORK=%s\n' "$NETWORK"
@@ -219,6 +233,7 @@ RECEIPT_CONTRACT_ID=$RECEIPT_ID
 USDC_CONTRACT_ID=$USDC_ID
 USDC_ISSUER=$ISSUER_ADDR
 ADMIN_ADDRESS=$ADMIN_ADDR
+SPONSOR_CONTRACT_ID=$SPONSOR_ID
 ENVEOF
 
 say "Deployed — copy into your backend and frontend .env files"

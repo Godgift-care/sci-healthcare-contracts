@@ -53,6 +53,7 @@ pub(crate) fn empty_rules(env: &Env) -> Rules {
         min_voucher_age_secs: 0,
         eligible_countries: soroban_sdk::Vec::new(env),
         eligible_service_codes: soroban_sdk::Vec::new(env),
+        eligible_providers: soroban_sdk::Vec::new(env),
     }
 }
 

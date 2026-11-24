@@ -330,6 +330,14 @@
                     },
                     {
                       "key": {
+                        "symbol": "eligible_providers"
+                      },
+                      "val": {
+                        "vec": []
+                      }
+                    },
+                    {
+                      "key": {
                         "symbol": "eligible_service_codes"
                       },
                       "val": {
@@ -1706,6 +1714,14 @@
                         {
                           "key": {
                             "symbol": "eligible_countries"
+                          },
+                          "val": {
+                            "vec": []
+                          }
+                        },
+                        {
+                          "key": {
+                            "symbol": "eligible_providers"
                           },
                           "val": {
                             "vec": []

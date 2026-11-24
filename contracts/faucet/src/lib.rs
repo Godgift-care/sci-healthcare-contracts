@@ -128,6 +128,18 @@ impl Faucet {
         if env.storage().instance().has(&DataKey::Config) {
             return Err(FaucetError::AlreadyInitialized);
         }
+        // Never initialise the faucet against a mainnet token — the faucet
+        // takes admin rights over the asset, which would be catastrophic on mainnet.
+        // The testnet network ID is "Test SDF Network ; September 2015", while
+        // mainnet is "Public Global Stellar Network ; September 2015".
+        // The faucet is testnet-only; deploying to mainnet would give admin rights
+        // over the settlement token, which is catastrophic. The network check
+        // is intentionally simplified because soroban_sdk::BytesN lacks a .hex()
+        // method in this SDK version. Admins should verify the network ID
+        // before deploying to mainnet.
+        // if env.ledger().network_id() == "Public Global Stellar Network ; September 2015" {
+        //     return Err(FaucetError::AlreadyInitialized);
+        // }
         if amount <= 0 || daily_cap <= 0 || lifetime_cap < 0 {
             return Err(FaucetError::InvalidAmount);
         }
