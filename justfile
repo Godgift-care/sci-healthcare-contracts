@@ -88,6 +88,11 @@ seed net=network:
 verify net=network:
     ./scripts/verify-deployments.sh {{net}}
 
+# Lint shell scripts with shellcheck and shfmt (the CI lint-scripts job).
+lint-scripts:
+    shellcheck scripts/*.sh
+    shfmt -d -i 2 scripts/*.sh
+
 # Test deploy.sh's safety rules without a network (the CI deploy script job).
 test-deploy:
     ./scripts/test-deploy.sh

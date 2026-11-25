@@ -120,6 +120,21 @@ capture ADMIN_ADDR stellar keys address "$ADMIN"
 capture ISSUER_ADDR stellar keys address "$ISSUER"
 capture SPONSOR_ADDR stellar keys address "$SPONSOR"
 
+# Public-network safeguard: mainnet requires explicit operator confirmation.
+# --dry-run is still allowed (it sends no transactions), but an interactive
+# confirmation is mandatory; there is no --yes bypass.
+if [ "$NETWORK" = "mainnet" ] && [ "$DRY_RUN" -eq 0 ]; then
+  printf '\n\033[1;33mWARNING: You are about to deploy to MAINNET.\033[0m\n'
+  printf 'Admin identity:  %s (%s)\n' "$ADMIN" "$ADMIN_ADDR"
+  printf 'Issuer identity: %s (%s)\n' "$ISSUER" "$ISSUER_ADDR"
+  printf '\nType the word \033[1mmainnet\033[0m to confirm, or press Ctrl-C to abort: '
+  read -r _confirm < /dev/tty
+  if [ "$_confirm" != "mainnet" ]; then
+    printf 'Aborted.\n' >&2
+    exit 1
+  fi
+fi
+
 say "Building contracts"
 if [ "$DRY_RUN" -eq 1 ]; then
   printf '+ %s >/dev/null\n' "$(quote_cmd "$ROOT/scripts/build-wasm.sh" "$WASM_DIR")"

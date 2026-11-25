@@ -71,6 +71,21 @@ ADMIN_ADDR="$(stellar keys address "$ADMIN")" || die "no identity named $ADMIN (
 NEW_ADDR="$(stellar keys address "$NEW_ID")" || die "no identity named $NEW_ID"
 [ "$ADMIN_ADDR" != "$NEW_ADDR" ] || die "$NEW_ID is already the admin key $ADMIN_ADDR"
 
+# Public-network safeguard: mainnet requires explicit operator confirmation.
+# --dry-run is still allowed (it sends no transactions), but an interactive
+# confirmation is mandatory; there is no --yes bypass.
+if [ "$NETWORK" = "mainnet" ] && [ "$DRY_RUN" -eq 0 ]; then
+  printf '\n\033[1;33mWARNING: You are about to rotate the admin key on MAINNET.\033[0m\n'
+  printf 'Current admin: %s (%s)\n' "$ADMIN_ADDR" "$ADMIN"
+  printf 'New admin:     %s (%s)\n' "$NEW_ADDR" "$NEW_ID"
+  printf '\nType the word \033[1mmainnet\033[0m to confirm, or press Ctrl-C to abort: '
+  read -r _confirm < /dev/tty
+  if [ "$_confirm" != "mainnet" ]; then
+    printf 'Aborted.\n' >&2
+    exit 1
+  fi
+fi
+
 # name:id-variable. Each contract's admin is read the way that contract exposes it.
 CONTRACTS=(registry:REGISTRY_CONTRACT_ID voucher:VOUCHER_CONTRACT_ID receipt:RECEIPT_CONTRACT_ID)
 
