@@ -150,6 +150,7 @@ fn rules(env: &Env, match_bps: u32, cap: i128) -> Rules {
         min_voucher_age_secs: 0,
         eligible_countries: Vec::new(env),
         eligible_service_codes: Vec::new(env),
+        eligible_providers: Vec::new(env),
     }
 }
 
@@ -216,6 +217,7 @@ fn rules_are_stored_and_read_back() {
         min_voucher_age_secs: 60,
         eligible_countries: vec![&f.env, String::from_str(&f.env, "NG")],
         eligible_service_codes: vec![&f.env, CONSULT],
+        eligible_providers: Vec::new(&f.env),
     };
     f.desk.set_rules(&f.sponsor, &rules);
 
@@ -2084,6 +2086,7 @@ fn stored_type_fixtures_decode_against_current_code() {
         min_voucher_age_secs: 3_600,
         eligible_countries: vec![&env, String::from_str(&env, "NG")],
         eligible_service_codes: vec![&env, CONSULT],
+        eligible_providers: Vec::new(&env),
     };
 
     check_stored_type(

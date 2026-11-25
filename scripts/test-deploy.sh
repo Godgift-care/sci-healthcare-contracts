@@ -76,6 +76,7 @@ case "$*" in
       *sci_registry.wasm) echo "CREGISTRYCONTRACTID" ;;
       *sci_receipt.wasm) echo "CRECEIPTCONTRACTID" ;;
       *sci_voucher.wasm) echo "CVOUCHERCONTRACTID" ;;
+      *sci_sponsor.wasm) echo "CSPONSORCONTRACTID" ;;
       *) echo "CUNKNOWNCONTRACTID" ;;
     esac
     exit 0
@@ -123,6 +124,8 @@ grep -q '^RECEIPT_CONTRACT_ID=CRECEIPTCONTRACTID$' "$env_file" ||
   fail "env file has the wrong receipt id"
 grep -q '^USDC_CONTRACT_ID=CUSDCCONTRACTID$' "$env_file" ||
   fail "env file has the wrong token id"
+grep -q '^SPONSOR_CONTRACT_ID=CSPONSORCONTRACTID$' "$env_file" ||
+  fail "env file has the wrong sponsor id"
 grep -q 'Saved to ' "$TMP/first.out" || fail "first run has no summary"
 pass "first run deploys and writes the env file"
 
@@ -137,6 +140,8 @@ grep -qi 'refusing to overwrite' "$TMP/second.err" ||
   fail "second run does not explain why it stopped"
 grep -q -- '--force' "$TMP/second.err" || fail "second run does not mention --force"
 cmp -s "$env_file" "$TMP/env.before" || fail "second run changed the env file"
+grep -q '^SPONSOR_CONTRACT_ID=CSPONSORCONTRACTID$' "$env_file" ||
+  fail "second run removed the sponsor id"
 [ ! -s "$STELLAR_LOG" ] || fail "second run called stellar before refusing"
 [ ! -s "$BUILD_LOG" ] || fail "second run built before refusing"
 pass "second run refuses without --force and leaves the deployment alone"
@@ -147,6 +152,8 @@ run_deploy testnet --force >"$TMP/force.out"
 if grep -q '^STALE=1$' "$env_file"; then
   fail "--force did not replace the existing env file"
 fi
+grep -q '^SPONSOR_CONTRACT_ID=CSPONSORCONTRACTID$' "$env_file" ||
+  fail "--force wrote a broken env file (missing sponsor id)"
 grep -q '^REGISTRY_CONTRACT_ID=CREGISTRYCONTRACTID$' "$env_file" ||
   fail "--force wrote a broken env file"
 pass "--force replaces an existing deployment"
@@ -159,6 +166,8 @@ run_deploy testnet --dry-run >"$TMP/dry-existing.out"
 grep -q 'already exists; --dry-run will not touch it' "$TMP/dry-existing.out" ||
   fail "dry run does not say the existing env file is untouched"
 cmp -s "$env_file" "$TMP/env.before" || fail "dry run changed an existing env file"
+grep -q '^SPONSOR_CONTRACT_ID=CSPONSORCONTRACTID$' "$env_file" ||
+  fail "dry run lost the sponsor id"
 [ ! -s "$STELLAR_LOG" ] || fail "dry run with an existing env file called stellar"
 [ ! -s "$BUILD_LOG" ] || fail "dry run with an existing env file ran the build"
 pass "dry run with an existing env file sends nothing"

@@ -50,6 +50,10 @@ pub struct Rules {
     pub eligible_countries: Vec<String>,
     /// The service codes that qualify. Empty means any service qualifies.
     pub eligible_service_codes: Vec<u32>,
+    /// The providers (clinic addresses) that qualify. Empty means any provider
+    /// qualifies. Bounded to a reasonable length; duplicated entries are
+    /// allowed but have no extra effect.
+    pub eligible_providers: Vec<Address>,
 }
 
 /// A match the sponsor has made whose matching voucher is still open.

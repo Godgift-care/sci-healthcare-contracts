@@ -271,6 +271,9 @@ impl SponsorDesk {
                 return Err(SponsorError::CountryNotEligible);
             }
         }
+        if !rules.eligible_providers.is_empty() && !rules.eligible_providers.contains(&provider) {
+            return Err(SponsorError::ProviderNotEligible);
+        }
         if !rules.eligible_service_codes.is_empty()
             && !rules.eligible_service_codes.contains(service_code)
         {
@@ -546,6 +549,10 @@ impl SponsorDesk {
             if country.len() != 2 {
                 return Err(SponsorError::InvalidRules);
             }
+        }
+        // eligible_providers is bounded; enforce a reasonable cap.
+        if rules.eligible_providers.len() > 20 {
+            return Err(SponsorError::InvalidRules);
         }
         Ok(())
     }
