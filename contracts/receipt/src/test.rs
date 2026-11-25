@@ -1940,6 +1940,27 @@ fn stored_type_fixtures_decode_against_current_code() {
 }
 
 #[test]
+fn receipt_with_an_unexpected_layout_is_not_found() {
+    // A stored value that is neither a current nor a legacy receipt must not
+    // be decoded into one: report it missing, exactly like an absent entry.
+    let f = setup();
+    let contract = f.client.address.clone();
+    f.env.as_contract(&contract, || {
+        let bad = soroban_sdk::Vec::<soroban_sdk::Val>::from_array(
+            &f.env,
+            [soroban_sdk::Val::from(1u32)],
+        );
+        f.env
+            .storage()
+            .persistent()
+            .set(&DataKey::Receipt(1u64), &bad);
+    });
+
+    let err = f.client.try_get_receipt(&1u64).err().unwrap().unwrap();
+    assert_eq!(err, ReceiptError::ReceiptNotFound);
+}
+
+#[test]
 fn old_format_receipt_still_decodes() {
     let f = setup();
     let provider = Address::generate(&f.env);
