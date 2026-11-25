@@ -206,22 +206,57 @@ mod tests {
         assert_eq!(err, RegistryError::NoPendingAdmin);
     }
 
+    /// Every status, in the row and column order of `ALLOWED`.
+    const ALL_STATUSES: [ProviderStatus; 4] = [
+        ProviderStatus::Pending,
+        ProviderStatus::Active,
+        ProviderStatus::Suspended,
+        ProviderStatus::Retired,
+    ];
+
+    /// The complete transition table, written out by hand: one row per `from`
+    /// status and one column per `to` status, in `ALL_STATUSES` order.
+    ///
+    /// This is deliberately not derived from `is_transition_allowed`: the
+    /// point is to state what the protocol allows independently, so a change
+    /// to the function has to be matched here or the test fails.
+    const ALLOWED: [[bool; 4]; 4] = [
+        // to: Pending, Active, Suspended, Retired
+        /* Pending   */
+        [false, true, true, false],
+        /* Active    */ [false, false, true, false],
+        /* Suspended */ [false, true, false, false],
+        /* Retired   */ [false, false, false, false],
+    ];
+
+    /// The row and column a status occupies in `ALLOWED`.
+    ///
+    /// The `match` is exhaustive on purpose: adding a `ProviderStatus`
+    /// variant makes this fail to compile, which means a status cannot be
+    /// added without extending the table above and the test below.
+    fn status_index(status: ProviderStatus) -> usize {
+        match status {
+            ProviderStatus::Pending => 0,
+            ProviderStatus::Active => 1,
+            ProviderStatus::Suspended => 2,
+            ProviderStatus::Retired => 3,
+        }
+    }
+
     #[test]
-    fn provider_status_transitions() {
-        use ProviderStatus::*;
-        assert!(ProviderStatus::is_transition_allowed(Pending, Active));
-        assert!(ProviderStatus::is_transition_allowed(Pending, Suspended));
-        assert!(ProviderStatus::is_transition_allowed(Active, Suspended));
-        assert!(ProviderStatus::is_transition_allowed(Suspended, Active));
-        assert!(!ProviderStatus::is_transition_allowed(Pending, Pending));
-        assert!(!ProviderStatus::is_transition_allowed(Active, Active));
-        assert!(!ProviderStatus::is_transition_allowed(Suspended, Suspended));
-        assert!(!ProviderStatus::is_transition_allowed(Active, Pending));
-        assert!(!ProviderStatus::is_transition_allowed(Suspended, Pending));
-        assert!(!ProviderStatus::is_transition_allowed(Pending, Retired));
-        assert!(!ProviderStatus::is_transition_allowed(Retired, Active));
-        assert!(!ProviderStatus::is_transition_allowed(Retired, Suspended));
-        assert!(!ProviderStatus::is_transition_allowed(Retired, Retired));
+    fn provider_status_transition_table_is_exhaustive() {
+        for from in ALL_STATUSES {
+            for to in ALL_STATUSES {
+                let expected = ALLOWED[status_index(from)][status_index(to)];
+                assert_eq!(
+                    ProviderStatus::is_transition_allowed(from, to),
+                    expected,
+                    "is_transition_allowed({from:?}, {to:?}) disagrees with the table in \
+                     docs/developers/contracts.md. A status pair that is not written down \
+                     here is a pair nobody has agreed on",
+                );
+            }
+        }
     }
 
     #[test]
