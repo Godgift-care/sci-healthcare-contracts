@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["read_receipt","write_receipt"],"struct":["StoredReceipt","StoredReceiptV1"]};
