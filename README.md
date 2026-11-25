@@ -25,7 +25,7 @@ Soroban contracts for prepaid, purpose-bound care vouchers on Stellar.
 
 
 
-Someone funds a voucher for a specific clinic and a specific service. The money sits in escrow and is released only once an independent attester confirms the care was delivered. If it never happens, the funder gets it back. The funder does not have to be the patient — a relative sending money from abroad uses exactly the same path, which is the point: a remittance that can only be spent on the care it was sent for.
+Someone funds a voucher for a specific clinic and a specific service. The money sits in escrow and is released only once an independent attester confirms the care was delivered. If it never happens, the funder gets it back. The funder does not have to be the patient  a relative sending money from abroad uses exactly the same path, which is the point: a remittance that can only be spent on the care it was sent for.
 
 **No patient health information ever touches the ledger.** Vouchers carry a coarse service category and an opaque beneficiary reference, never a diagnosis, a result, or a name.
 
