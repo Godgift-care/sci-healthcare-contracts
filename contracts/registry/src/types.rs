@@ -144,6 +144,19 @@ pub enum DataKey {
     CountryAt(String, u32),
     /// Number of providers in a given status.
     StatusCount(ProviderStatus),
+    /// Admin-configured registration deposit terms.
+    RegistrationDepositConfig,
+    /// Deposit held for a pending provider, with the original terms.
+    RegistrationDeposit(Address),
+}
+
+/// Token and destination used for refundable provider registration deposits.
+#[contracttype]
+#[derive(Clone, Debug, PartialEq)]
+pub struct RegistrationDepositConfig {
+    pub token: Address,
+    pub amount: i128,
+    pub fee_account: Address,
 }
 
 #[contracterror]
@@ -177,6 +190,9 @@ pub enum RegistryError {
     /// "no status change yet" and is only ever written by registration, so a
     /// real change — above all reinstating a suspended clinic — must say why.
     MissingReasonCode = 16,
+    InvalidDepositAmount = 17,
+    TokenTransferFailed = 18,
+    TokenAmountMismatch = 19,
 }
 
 /// Maps the shared helpers' failures onto this contract's error numbers, so

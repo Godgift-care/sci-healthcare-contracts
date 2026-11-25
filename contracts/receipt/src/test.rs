@@ -2,7 +2,7 @@
 
 use std::string::ToString;
 
-use soroban_sdk::{testutils::Address as _, Address, BytesN, Env, String};
+use soroban_sdk::{testutils::Address as _, Address, BytesN, Env, String, Vec};
 
 use crate::{
     ReceiptBook, ReceiptBookClient, ReceiptError, MAX_RECEIPTS_PAGE, MAX_RECEIPTS_PER_CALL,
@@ -13,6 +13,67 @@ struct Fixture {
     client: ReceiptBookClient<'static>,
     admin: Address,
     minter: Address,
+}
+
+#[test]
+fn global_receipt_count_overflow_is_refused() {
+    let f = setup();
+    let contract = f.client.address.clone();
+    f.env.as_contract(&contract, || {
+        f.env
+            .storage()
+            .instance()
+            .set(&DataKey::TotalCount, &u32::MAX);
+    });
+
+    let provider = Address::generate(&f.env);
+    let err = f
+        .client
+        .try_mint(
+            &f.minter,
+            &1u64,
+            &bref(&f.env, 7),
+            &provider,
+            &101u32,
+            &10i128,
+        )
+        .err()
+        .unwrap()
+        .unwrap();
+    assert_eq!(err, ReceiptError::MathOverflow);
+    assert!(f.client.try_get_receipt(&1u64).is_err());
+    assert_eq!(f.client.totals(), (u32::MAX, 0));
+}
+
+#[test]
+fn global_receipt_total_overflow_is_refused() {
+    let f = setup();
+    let contract = f.client.address.clone();
+    let near_max = i128::MAX - 5;
+    f.env.as_contract(&contract, || {
+        f.env
+            .storage()
+            .instance()
+            .set(&DataKey::TotalAmount, &near_max);
+    });
+
+    let provider = Address::generate(&f.env);
+    let err = f
+        .client
+        .try_mint(
+            &f.minter,
+            &1u64,
+            &bref(&f.env, 7),
+            &provider,
+            &101u32,
+            &10i128,
+        )
+        .err()
+        .unwrap()
+        .unwrap();
+    assert_eq!(err, ReceiptError::MathOverflow);
+    assert!(f.client.try_get_receipt(&1u64).is_err());
+    assert_eq!(f.client.totals(), (0, near_max));
 }
 
 fn setup() -> Fixture {
@@ -31,6 +92,37 @@ fn setup() -> Fixture {
         admin,
         minter,
     }
+}
+
+#[test]
+fn bump_extends_receipt_ttl_without_changing_fields() {
+    let f = setup();
+    let provider = Address::generate(&f.env);
+    let patient = bref(&f.env, 7);
+    f.client
+        .mint(&f.minter, &1u64, &patient, &provider, &101u32, &30_000_000);
+    let before = f.client.get_receipt(&1u64);
+
+    advance_days(&f, 95);
+    let mut ids = Vec::new(&f.env);
+    ids.push_back(1);
+    ids.push_back(999);
+    f.client.bump(&ids);
+
+    assert_eq!(receipt_ttl(&f, 1), NINETY_DAYS);
+    assert_eq!(f.client.get_receipt(&1u64), before);
+}
+
+#[test]
+fn bump_refuses_batches_over_the_limit() {
+    let f = setup();
+    let mut ids = Vec::new(&f.env);
+    for id in 0..=MAX_RECEIPTS_PER_BUMP {
+        ids.push_back(u64::from(id));
+    }
+
+    let err = f.client.try_bump(&ids).err().unwrap().unwrap();
+    assert_eq!(err, ReceiptError::BatchTooLarge);
 }
 
 fn bref(env: &Env, seed: u8) -> BytesN<32> {
@@ -372,6 +464,7 @@ fn provider_stats_report_exact_count_and_total() {
 
     assert_eq!(f.client.provider_stats(&clinic_a), (3, 70_000_005));
     assert_eq!(f.client.provider_stats(&clinic_b), (1, 10_000_000));
+    assert_eq!(f.client.totals(), (4, 80_000_005));
 
     // The count agrees with the per-beneficiary and per-clinic views: one
     // set of receipts, three ways of reading it.
@@ -876,6 +969,10 @@ const AUTH_MATRIX: &[AuthCase] = &[
         auth: Auth::Free("none (view)"),
     },
     AuthCase {
+        function: "totals",
+        auth: Auth::Free("none (view)"),
+    },
+    AuthCase {
         function: "receipts_of_provider",
         auth: Auth::Free("none (view)"),
     },
@@ -999,6 +1096,9 @@ fn run_case(f: &AuthFixture, function: &str) -> CaseRun {
         }
         "provider_stats" => {
             client.provider_stats(&f.f.minter);
+        }
+        "totals" => {
+            client.totals();
         }
         "receipts_of_provider" => {
             client.receipts_of_provider(&f.f.minter, &0u32, &10u32);

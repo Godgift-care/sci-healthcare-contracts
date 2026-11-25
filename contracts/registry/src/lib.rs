@@ -23,14 +23,17 @@ mod types;
 mod test;
 
 use sci_common as common;
-use soroban_sdk::{contract, contractimpl, Address, BytesN, Env, String, Vec};
+use soroban_sdk::{contract, contractimpl, token, Address, BytesN, Env, String, Vec};
 
 pub use events::{
     AdminChanged, AdminProposed, AttesterAdded, AttesterRemoved, CapacityChanged, Initialized,
     ProviderCategoryChanged, ProviderRegistered, ProviderStatusChanged, ServiceAvailabilityChanged,
     ServicePriceScheduled, ServiceRemoved, ServiceUpserted, VerificationEvidenceSet,
 };
-pub use types::{DataKey, Provider, ProviderCategory, ProviderStatus, RegistryError, ServiceItem};
+pub use types::{
+    DataKey, Provider, ProviderCategory, ProviderStatus, RegistrationDepositConfig, RegistryError,
+    ServiceItem,
+};
 
 use storage::{
     extend_instance, has_admin, has_provider, list_providers_by_country, read_admin, read_attester,
@@ -71,6 +74,43 @@ impl Registry {
         Ok(())
     }
 
+    /// Sets the token, amount and rejection destination for future registrations.
+    ///
+    /// Existing deposits retain the terms recorded when their provider
+    /// registered. An amount of zero disables deposits without changing the
+    /// behavior of `register_provider`.
+    pub fn set_registration_deposit(
+        env: Env,
+        admin: Address,
+        token: Address,
+        amount: i128,
+        fee_account: Address,
+    ) -> Result<(), RegistryError> {
+        Self::require_admin(&env, &admin)?;
+        if amount < 0 {
+            return Err(RegistryError::InvalidDepositAmount);
+        }
+
+        env.storage().instance().set(
+            &DataKey::RegistrationDepositConfig,
+            &RegistrationDepositConfig {
+                token,
+                amount,
+                fee_account,
+            },
+        );
+        extend_instance(&env);
+        Ok(())
+    }
+
+    /// Reads the deposit terms for future registrations, if configured.
+    pub fn registration_deposit(env: Env) -> Option<RegistrationDepositConfig> {
+        extend_instance(&env);
+        env.storage()
+            .instance()
+            .get(&DataKey::RegistrationDepositConfig)
+    }
+
     /// Self-registers a provider in `Pending` state.
     ///
     /// Registration is permissionless; activation is not. A provider cannot
@@ -99,6 +139,17 @@ impl Registry {
         }
         if has_provider(&env, &owner) {
             return Err(RegistryError::ProviderExists);
+        }
+
+        let deposit_config: Option<RegistrationDepositConfig> = env
+            .storage()
+            .instance()
+            .get(&DataKey::RegistrationDepositConfig);
+        if let Some(config) = deposit_config.as_ref().filter(|config| config.amount > 0) {
+            Self::receive_registration_deposit(&env, config, &owner)?;
+            let key = DataKey::RegistrationDeposit(owner.clone());
+            env.storage().persistent().set(&key, config);
+            common::extend_persistent(&env, &key);
         }
 
         let registered_at = env.ledger().timestamp();
@@ -182,6 +233,10 @@ impl Registry {
     /// index so `providers_in` can find them. When they become non-`Active`
     /// (e.g. `Suspended`), they are removed from the index using swap-and-pop
     /// so the index stays consistent and reads remain O(1) amortized.
+    ///
+    /// A pending provider's deposit is returned on activation and forwarded to
+    /// the saved fee account on rejection (`Pending → Suspended`). If that
+    /// transfer fails, the status change reverts and the deposit remains held.
     pub fn set_provider_status(
         env: Env,
         admin: Address,
@@ -199,6 +254,13 @@ impl Registry {
             return Err(RegistryError::InvalidTransition);
         }
         let prev_status = provider.status;
+        if prev_status == ProviderStatus::Pending {
+            Self::release_registration_deposit(
+                &env,
+                &provider_addr,
+                status == ProviderStatus::Suspended,
+            )?;
+        }
         provider.status = status;
         provider.reason_code = reason_code;
         write_provider(&env, &provider_addr, &provider);
@@ -298,7 +360,9 @@ impl Registry {
     /// must register again. Retiring an already-retired clinic is refused
     /// with `InvalidTransition`, so the lifecycle history stays free of
     /// no-op events. `reason_code` follows the same documented codes as
-    /// `set_provider_status` (see `docs/protocol/trust.md`).
+    /// `set_provider_status` (see `docs/protocol/trust.md`). Withdrawing while
+    /// pending returns any registration deposit; a failed transfer leaves the
+    /// provider pending so the deposit can be released later.
     pub fn retire(env: Env, owner: Address, reason_code: u32) -> Result<(), RegistryError> {
         owner.require_auth();
 
@@ -307,6 +371,9 @@ impl Registry {
             return Err(RegistryError::InvalidTransition);
         }
         let prev_status = provider.status;
+        if prev_status == ProviderStatus::Pending {
+            Self::release_registration_deposit(&env, &owner, false)?;
+        }
         provider.status = ProviderStatus::Retired;
         provider.reason_code = reason_code;
         write_provider(&env, &owner, &provider);
@@ -763,6 +830,79 @@ impl Registry {
     }
 
     // ----- internal -----
+
+    fn token_balance(client: &token::Client, account: &Address) -> Result<i128, RegistryError> {
+        match client.try_balance(account) {
+            Ok(Ok(balance)) => Ok(balance),
+            _ => Err(RegistryError::TokenTransferFailed),
+        }
+    }
+
+    fn receive_registration_deposit(
+        env: &Env,
+        config: &RegistrationDepositConfig,
+        owner: &Address,
+    ) -> Result<(), RegistryError> {
+        let client = token::Client::new(env, &config.token);
+        let registry = env.current_contract_address();
+        let owner_before = Self::token_balance(&client, owner)?;
+        let registry_before = Self::token_balance(&client, &registry)?;
+        match client.try_transfer(owner, &registry, &config.amount) {
+            Ok(Ok(())) => {}
+            _ => return Err(RegistryError::TokenTransferFailed),
+        }
+        let owner_after = Self::token_balance(&client, owner)?;
+        let registry_after = Self::token_balance(&client, &registry)?;
+        Self::require_exact_movement(owner_before, owner_after, -config.amount)?;
+        Self::require_exact_movement(registry_before, registry_after, config.amount)
+    }
+
+    fn release_registration_deposit(
+        env: &Env,
+        owner: &Address,
+        rejected_for_cause: bool,
+    ) -> Result<(), RegistryError> {
+        let key = DataKey::RegistrationDeposit(owner.clone());
+        let Some(deposit) = env
+            .storage()
+            .persistent()
+            .get::<_, RegistrationDepositConfig>(&key)
+        else {
+            return Ok(());
+        };
+        common::extend_persistent(env, &key);
+
+        let destination = if rejected_for_cause {
+            &deposit.fee_account
+        } else {
+            owner
+        };
+        let client = token::Client::new(env, &deposit.token);
+        let registry = env.current_contract_address();
+        let registry_before = Self::token_balance(&client, &registry)?;
+        let recipient_before = Self::token_balance(&client, destination)?;
+        match client.try_transfer(&registry, destination, &deposit.amount) {
+            Ok(Ok(())) => {}
+            _ => return Err(RegistryError::TokenTransferFailed),
+        }
+        let registry_after = Self::token_balance(&client, &registry)?;
+        let recipient_after = Self::token_balance(&client, destination)?;
+        Self::require_exact_movement(registry_before, registry_after, -deposit.amount)?;
+        Self::require_exact_movement(recipient_before, recipient_after, deposit.amount)?;
+        env.storage().persistent().remove(&key);
+        Ok(())
+    }
+
+    fn require_exact_movement(
+        before: i128,
+        after: i128,
+        expected: i128,
+    ) -> Result<(), RegistryError> {
+        match after.checked_sub(before) {
+            Some(moved) if moved == expected => Ok(()),
+            _ => Err(RegistryError::TokenAmountMismatch),
+        }
+    }
 
     fn require_admin(env: &Env, admin: &Address) -> Result<(), RegistryError> {
         let stored = read_admin(env)?;

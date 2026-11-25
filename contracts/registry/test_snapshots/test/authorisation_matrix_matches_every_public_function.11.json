@@ -98,16 +98,13 @@
           "function": {
             "contract_fn": {
               "contract_address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM",
-              "function_name": "set_service_available",
+              "function_name": "remove_service",
               "args": [
                 {
                   "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHK3M"
                 },
                 {
                   "u32": 101
-                },
-                {
-                  "bool": false
                 }
               ]
             }
@@ -335,93 +332,6 @@
               "key": {
                 "vec": [
                   {
-                    "symbol": "Service"
-                  },
-                  {
-                    "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHK3M"
-                  },
-                  {
-                    "u32": 101
-                  }
-                ]
-              },
-              "durability": "persistent",
-              "val": {
-                "map": [
-                  {
-                    "key": {
-                      "symbol": "active"
-                    },
-                    "val": {
-                      "bool": true
-                    }
-                  },
-                  {
-                    "key": {
-                      "symbol": "available"
-                    },
-                    "val": {
-                      "bool": false
-                    }
-                  },
-                  {
-                    "key": {
-                      "symbol": "code"
-                    },
-                    "val": {
-                      "u32": 101
-                    }
-                  },
-                  {
-                    "key": {
-                      "symbol": "effective_at"
-                    },
-                    "val": {
-                      "u64": "0"
-                    }
-                  },
-                  {
-                    "key": {
-                      "symbol": "label"
-                    },
-                    "val": {
-                      "string": "Consult"
-                    }
-                  },
-                  {
-                    "key": {
-                      "symbol": "pending_price"
-                    },
-                    "val": {
-                      "i128": "0"
-                    }
-                  },
-                  {
-                    "key": {
-                      "symbol": "price"
-                    },
-                    "val": {
-                      "i128": "30000000"
-                    }
-                  }
-                ]
-              }
-            }
-          },
-          "ext": "v0"
-        },
-        "live_until": 1555200
-      },
-      {
-        "entry": {
-          "last_modified_ledger_seq": 0,
-          "data": {
-            "contract_data": {
-              "ext": "v0",
-              "contract": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM",
-              "key": {
-                "vec": [
-                  {
                     "symbol": "StatusCount"
                   },
                   {
@@ -608,23 +518,20 @@
           "v0": {
             "topics": [
               {
-                "symbol": "service_availability_changed"
+                "symbol": "service_removed"
               },
               {
                 "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHK3M"
-              },
-              {
-                "u32": 101
               }
             ],
             "data": {
               "map": [
                 {
                   "key": {
-                    "symbol": "available"
+                    "symbol": "code"
                   },
                   "val": {
-                    "bool": false
+                    "u32": 101
                   }
                 }
               ]

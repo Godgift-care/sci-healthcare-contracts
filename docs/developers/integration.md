@@ -195,6 +195,14 @@ const REGISTRY_ERRORS = {
   9: 'InvalidCountry',
   10: 'EmptyName',
   11: 'NoPendingAdmin',
+  12: 'PriceNoticeTooShort',
+  13: 'PriceIncreaseNeedsNotice',
+  14: 'InvalidTransition',
+  15: 'LargePriceJumpNeedsConfirmation',
+  16: 'MissingReasonCode',
+  17: 'InvalidDepositAmount',
+  18: 'TokenTransferFailed',
+  19: 'TokenAmountMismatch',
 };
 
 const VOUCHER_ERRORS = {
@@ -228,6 +236,9 @@ const RECEIPT_ERRORS = {
   5: 'ReceiptExists',
   6: 'InvalidAmount',
   7: 'NoPendingAdmin',
+  8: 'NoPendingMinter',
+  9: 'MathOverflow',
+  10: 'BatchTooLarge',
 };
 
 function describeError(contractId, method, message) {
@@ -509,6 +520,10 @@ const count = await read(contracts.receipt, 'count_for', [
   arg.bytes32(beneficiaryRef.toString('hex')),
 ]);
 console.log('settled episodes', Number(count));
+
+// Protocol-wide receipt count and total settled amount, in token base units.
+const [receiptCount, totalAmount] = await read(contracts.receipt, 'totals');
+console.log('protocol totals', Number(receiptCount), String(totalAmount));
 ```
 
 The contract stores receipts by voucher id and exposes `count_for(ref)` for a
@@ -539,6 +554,12 @@ console.log(receipts.map((r) => String(r.voucher_id)));
 
 Two clinics' indexes are separate, so this list never includes another
 clinic's receipts.
+
+Anyone can call `bump(ids)` to extend the TTL of existing receipts without
+changing their fields. Reading an id restores its receipt if it has been
+archived before extending the TTL. It accepts at most 50 voucher ids per call;
+split larger sets into batches. Missing ids are ignored. The caller pays the
+transaction fee, but no role or patient signature is required.
 
 The indexer holds only public on-chain data and needs the same 64-character
 reference. It cannot enumerate patients without the key.

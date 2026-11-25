@@ -90,37 +90,6 @@
           "sub_invocations": []
         }
       ]
-    ],
-    [
-      [
-        "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHK3M",
-        {
-          "function": {
-            "contract_fn": {
-              "contract_address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM",
-              "function_name": "schedule_service_price",
-              "args": [
-                {
-                  "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHK3M"
-                },
-                {
-                  "u32": 101
-                },
-                {
-                  "i128": "30000000"
-                },
-                {
-                  "u64": "86400"
-                },
-                {
-                  "bool": false
-                }
-              ]
-            }
-          },
-          "sub_invocations": []
-        }
-      ]
     ]
   ],
   "ledger": {
@@ -383,7 +352,7 @@
                       "symbol": "effective_at"
                     },
                     "val": {
-                      "u64": "86400"
+                      "u64": "0"
                     }
                   },
                   {
@@ -399,7 +368,7 @@
                       "symbol": "pending_price"
                     },
                     "val": {
-                      "i128": "30000000"
+                      "i128": "0"
                     }
                   },
                   {
@@ -572,26 +541,6 @@
         "entry": {
           "last_modified_ledger_seq": 0,
           "data": {
-            "contract_data": {
-              "ext": "v0",
-              "contract": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHK3M",
-              "key": {
-                "ledger_key_nonce": {
-                  "nonce": "4837995959683129791"
-                }
-              },
-              "durability": "temporary",
-              "val": "void"
-            }
-          },
-          "ext": "v0"
-        },
-        "live_until": 6311999
-      },
-      {
-        "entry": {
-          "last_modified_ledger_seq": 0,
-          "data": {
             "contract_code": {
               "ext": "v0",
               "hash": "a41146d7d116b29faf18d228425fa97194e16df1d4f3e5d4f51c58ca557fcc6d",
@@ -614,7 +563,7 @@
           "v0": {
             "topics": [
               {
-                "symbol": "service_price_scheduled"
+                "symbol": "service_upserted"
               },
               {
                 "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHK3M"
@@ -627,10 +576,10 @@
               "map": [
                 {
                   "key": {
-                    "symbol": "effective_at"
+                    "symbol": "label"
                   },
                   "val": {
-                    "u64": "86400"
+                    "string": "Consult"
                   }
                 },
                 {

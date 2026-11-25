@@ -103,7 +103,7 @@ for n in $(seq 1 "$CLINICS"); do
     printf '  %-22s %s already registered\n' "$id" "$country"
   else
     inv "$REGISTRY_CONTRACT_ID" "$id" -- register_provider --owner "$addr" \
-      --name "$name" --country "$country" >/dev/null
+      --name "$name" --country "$country" --category 0 >/dev/null
     printf '  %-22s %s registered\n' "$id" "$country"
   fi
   inv "$REGISTRY_CONTRACT_ID" "$ADMIN" -- set_provider_status --admin "$ADMIN_ADDR" \

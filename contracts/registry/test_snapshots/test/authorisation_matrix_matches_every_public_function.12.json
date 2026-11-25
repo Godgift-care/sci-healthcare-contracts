@@ -70,13 +70,50 @@
           "function": {
             "contract_fn": {
               "contract_address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM",
-              "function_name": "set_capacity",
+              "function_name": "upsert_service",
               "args": [
                 {
                   "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHK3M"
                 },
                 {
-                  "u32": 5
+                  "u32": 101
+                },
+                {
+                  "string": "Consult"
+                },
+                {
+                  "i128": "30000000"
+                }
+              ]
+            }
+          },
+          "sub_invocations": []
+        }
+      ]
+    ],
+    [
+      [
+        "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHK3M",
+        {
+          "function": {
+            "contract_fn": {
+              "contract_address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM",
+              "function_name": "schedule_service_price",
+              "args": [
+                {
+                  "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHK3M"
+                },
+                {
+                  "u32": 101
+                },
+                {
+                  "i128": "30000000"
+                },
+                {
+                  "u64": "86400"
+                },
+                {
+                  "bool": false
                 }
               ]
             }
@@ -96,33 +133,6 @@
     "min_temp_entry_ttl": 16,
     "max_entry_ttl": 6312000,
     "ledger_entries": [
-      {
-        "entry": {
-          "last_modified_ledger_seq": 0,
-          "data": {
-            "contract_data": {
-              "ext": "v0",
-              "contract": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM",
-              "key": {
-                "vec": [
-                  {
-                    "symbol": "Capacity"
-                  },
-                  {
-                    "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHK3M"
-                  }
-                ]
-              },
-              "durability": "persistent",
-              "val": {
-                "u32": 5
-              }
-            }
-          },
-          "ext": "v0"
-        },
-        "live_until": 1555200
-      },
       {
         "entry": {
           "last_modified_ledger_seq": 0,
@@ -331,6 +341,93 @@
               "key": {
                 "vec": [
                   {
+                    "symbol": "Service"
+                  },
+                  {
+                    "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHK3M"
+                  },
+                  {
+                    "u32": 101
+                  }
+                ]
+              },
+              "durability": "persistent",
+              "val": {
+                "map": [
+                  {
+                    "key": {
+                      "symbol": "active"
+                    },
+                    "val": {
+                      "bool": true
+                    }
+                  },
+                  {
+                    "key": {
+                      "symbol": "available"
+                    },
+                    "val": {
+                      "bool": true
+                    }
+                  },
+                  {
+                    "key": {
+                      "symbol": "code"
+                    },
+                    "val": {
+                      "u32": 101
+                    }
+                  },
+                  {
+                    "key": {
+                      "symbol": "effective_at"
+                    },
+                    "val": {
+                      "u64": "86400"
+                    }
+                  },
+                  {
+                    "key": {
+                      "symbol": "label"
+                    },
+                    "val": {
+                      "string": "Consult"
+                    }
+                  },
+                  {
+                    "key": {
+                      "symbol": "pending_price"
+                    },
+                    "val": {
+                      "i128": "30000000"
+                    }
+                  },
+                  {
+                    "key": {
+                      "symbol": "price"
+                    },
+                    "val": {
+                      "i128": "30000000"
+                    }
+                  }
+                ]
+              }
+            }
+          },
+          "ext": "v0"
+        },
+        "live_until": 1555200
+      },
+      {
+        "entry": {
+          "last_modified_ledger_seq": 0,
+          "data": {
+            "contract_data": {
+              "ext": "v0",
+              "contract": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM",
+              "key": {
+                "vec": [
+                  {
                     "symbol": "StatusCount"
                   },
                   {
@@ -475,6 +572,26 @@
         "entry": {
           "last_modified_ledger_seq": 0,
           "data": {
+            "contract_data": {
+              "ext": "v0",
+              "contract": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHK3M",
+              "key": {
+                "ledger_key_nonce": {
+                  "nonce": "4837995959683129791"
+                }
+              },
+              "durability": "temporary",
+              "val": "void"
+            }
+          },
+          "ext": "v0"
+        },
+        "live_until": 6311999
+      },
+      {
+        "entry": {
+          "last_modified_ledger_seq": 0,
+          "data": {
             "contract_code": {
               "ext": "v0",
               "hash": "a41146d7d116b29faf18d228425fa97194e16df1d4f3e5d4f51c58ca557fcc6d",
@@ -497,20 +614,31 @@
           "v0": {
             "topics": [
               {
-                "symbol": "capacity_changed"
+                "symbol": "service_price_scheduled"
               },
               {
                 "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHK3M"
+              },
+              {
+                "u32": 101
               }
             ],
             "data": {
               "map": [
                 {
                   "key": {
-                    "symbol": "max_outstanding"
+                    "symbol": "effective_at"
                   },
                   "val": {
-                    "u32": 5
+                    "u64": "86400"
+                  }
+                },
+                {
+                  "key": {
+                    "symbol": "price"
+                  },
+                  "val": {
+                    "i128": "30000000"
                   }
                 }
               ]

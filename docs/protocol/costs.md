@@ -64,8 +64,8 @@ bytes to that entry and its rent.
 The contract instance is one ledger entry shared by every key kept in instance
 storage. `PendingAdmin` (registry and voucher) and `PendingMinter` (receipt)
 live in that same entry, so a handover in progress makes it a little larger
-rather than creating a separate entry. The table shows the ordinary state with
-no handover pending.
+rather than creating a separate entry. Receipt's global count and amount totals
+also live there. The table shows the ordinary state with no handover pending.
 
 `OpenEscrow` and `NextId` are written by `create_voucher`; `AttestationCap` is
 written by the admin, and the instance row above includes it. A deployment

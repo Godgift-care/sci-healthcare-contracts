@@ -80,6 +80,12 @@ pub struct Provider {
     pub verification_evidence: Option<BytesN<32>>,
 }
 
+pub struct RegistrationDepositConfig {
+    pub token: Address,
+    pub amount: i128,
+    pub fee_account: Address,
+}
+
 pub struct ServiceItem {
     pub code: u32,            // coarse category, never a diagnosis
     pub label: String,
@@ -96,11 +102,13 @@ pub struct ServiceItem {
 | Function | Parameters | Returns | Auth | Errors |
 | --- | --- | --- | --- | --- |
 | `initialize` | `admin: Address` | `()` | once | `AlreadyInitialized` |
-| `register_provider` | `owner, name, country, category: ProviderCategory` | `()` | `owner` | `EmptyName`, `InvalidCountry`, `ProviderExists` |
+| `set_registration_deposit` | `admin, token, amount: i128, fee_account` | `()` | `admin` | `NotAuthorized`, `InvalidDepositAmount` |
+| `registration_deposit` | — | `Option<RegistrationDepositConfig>` | view | — |
+| `register_provider` | `owner, name, country, category: ProviderCategory` | `()` | `owner` | `EmptyName`, `InvalidCountry`, `ProviderExists`, `TokenTransferFailed`, `TokenAmountMismatch` |
 | `update_provider_category` | `provider_addr, category: ProviderCategory` | `()` | `provider_addr` | `ProviderNotFound` |
-| `set_provider_status` | `admin, provider_addr, status, reason_code: u32` | `()` | `admin` | `NotAuthorized`, `MissingReasonCode`, `ProviderNotFound`, `InvalidTransition` |
+| `set_provider_status` | `admin, provider_addr, status, reason_code: u32` | `()` | `admin` | `NotAuthorized`, `MissingReasonCode`, `ProviderNotFound`, `InvalidTransition`, `TokenTransferFailed`, `TokenAmountMismatch` |
 | `set_verification_evidence` | `admin, provider_addr, evidence_hash: BytesN<32>` | `()` | `admin` | `NotAuthorized`, `ProviderNotFound` |
-| `retire` | `owner, reason_code: u32` | `()` | `owner` | `ProviderNotFound`, `InvalidTransition` |
+| `retire` | `owner, reason_code: u32` | `()` | `owner` | `ProviderNotFound`, `InvalidTransition`, `TokenTransferFailed`, `TokenAmountMismatch` |
 | `upsert_service` | `provider_addr, code, label, price` | `()` | `provider_addr` | `InvalidPrice`, `EmptyName`, `ProviderNotActive`, `PriceIncreaseNeedsNotice` |
 | `schedule_service_price` | `provider_addr, code, price, effective_at, confirm_large_change: bool` | `()` | `provider_addr` | `InvalidPrice`, `ProviderNotActive`, `ServiceNotFound`, `PriceNoticeTooShort`, `LargePriceJumpNeedsConfirmation` |
 | `remove_service` | `provider_addr, code` | `()` | `provider_addr` | `ServiceNotFound` |
@@ -130,6 +138,18 @@ pub struct ServiceItem {
 `get_service_price` returns `0` when the service is absent or inactive. It exists so `voucher` can validate pricing over an interface of primitives only, without the two contracts sharing types.
 
 `register_provider` accepts a country only in the shape of an ISO 3166-1 alpha-2 code: exactly two ASCII uppercase letters. `ng`, `N1`, two spaces and multi-byte characters are all refused with `InvalidCountry`, so the app and the indexer can never see one country registered as two, or junk codes break the country filter. Checking the code against the full ISO list is an off-chain concern.
+
+Registration deposits are disabled by default. The admin can set the settlement
+token, non-negative amount and fee account with
+`set_registration_deposit(admin, token, amount, fee_account)`; an amount of
+zero leaves registration unchanged. A positive amount is transferred from the
+registering clinic and held until the pending application leaves that state:
+activation returns it, rejection (`Pending → Suspended`) forwards it to the
+configured fee account, and clinic withdrawal returns it. Each deposit keeps
+the token and destination configured at registration, so changing the
+configuration cannot redirect or strand an outstanding deposit. Token
+transfers are checked for exact balance changes and a failed release reverts
+the status transition, leaving the deposit recorded for retry.
 
 `list_providers(start, limit)` returns providers in registration order, paged by `start` with `limit` capped at `MAX_PROVIDERS_PAGE` (50). Page by calling again with `start += returned.len()`. It is the on-chain discovery any app or auditor can use instead of trusting an indexer, and it needs no signature.
 
@@ -167,6 +187,8 @@ Every public function, with the exact signer it demands — no signature that is
 | Function | Signer required |
 | --- | --- |
 | `initialize` | none (one-shot) |
+| `set_registration_deposit` | `admin` |
+| `registration_deposit` | none (view) |
 | `register_provider` | `owner` |
 | `update_provider_category` | `provider_addr` |
 | `set_provider_status` | `admin` |
@@ -537,6 +559,7 @@ pub struct Receipt {
 | `get_receipts` | `ids` | `Vec<Receipt>` | view |
 | `count_for` | `beneficiary_ref` | `u32` | view |
 | `provider_stats` | `provider` | `(u32, i128)` | view |
+| `totals` | — | `(u32, i128)` | view |
 | `receipts_of_provider` | `provider, start, limit` | `Vec<Receipt>` | view |
 | `name` | — | `String` | none (view) |
 | `symbol` | — | `String` | none (view) |
@@ -560,6 +583,10 @@ Receipts are soulbound: there is deliberately no transfer function, so a receipt
 
 **`provider_stats`** — a clinic's on-chain track record in one call: `(count, total_amount)`, the receipts minted for that provider and the sum of their amounts, read straight from `ProviderCount(provider)` and `ProviderTotal(provider)`. Exact and read-only: no signature, no indexer, and a provider with no receipts gets `(0, 0)` rather than an error. Both entries are extended on read like every other persistent entry. `mint` keeps both with **checked arithmetic** (`checked_add`): a count or total that would overflow is refused with `MathOverflow` (#9) instead of wrapping, so a clinic's record can never understate what it was paid.
 
+**`totals`** returns the protocol-wide `(receipt_count, total_amount)` and is updated atomically by every successful `mint`. Both counters use checked arithmetic and refuse an overflowing mint with `MathOverflow` (#9). On an already-deployed instance, the aggregate starts at zero and counts mints after this change; it does not reconstruct older receipts.
+
+**`bump(ids)`** is permissionless and extends the persistent TTL of existing receipts without changing their fields. Reading each id restores an archived entry before its TTL is extended. It accepts at most `MAX_RECEIPTS_PER_BUMP` (50) ids; larger batches fail with `BatchTooLarge` (#10), and missing ids are ignored. Split larger lists into separate calls.
+
 ### Authorisation matrix
 
 Every public function, with the exact signer it demands. `AUTH_MATRIX` in `contracts/receipt/src/test.rs` drives both `authorisation_matrix_matches_every_public_function` and this table.
@@ -578,6 +605,7 @@ Every public function, with the exact signer it demands. `AUTH_MATRIX` in `contr
 | `get_receipts` | none (view) |
 | `count_for` | none (view) |
 | `provider_stats` | none (view) |
+| `totals` | none (view) |
 | `receipts_of_provider` | none (view) |
 | `name` | none (view) |
 | `symbol` | none (view) |
@@ -819,10 +847,12 @@ stays in the live ledger. These are the numbers, all in ledgers:
 | Entry | Durability | Extended when | Threshold | Extend to |
 | --- | --- | --- | --- | --- |
 | Contract instance (config, admin, id counter) — all contracts | instance | every write | 7 days | 30 days |
+| `RegistrationDepositConfig` (registry) | instance | every registry write and deposit-config read | 7 days | 30 days |
 | `Voucher(id)` | persistent | every read and write | 30 days | 90 days |
-| `Provider`, `Service`, `Attester` | persistent | every read and write | 30 days | 90 days |
+| `Provider`, `Service`, `Attester`, `RegistrationDeposit(owner)` | persistent | every read and write | 30 days | 90 days |
 | `Receipt(id)`, `Count(beneficiary_ref)` | persistent | every read and write | 30 days | 90 days |
 | `ProviderCount(provider)`, `ProviderTotal(provider)`, `ProviderReceipt(provider, index)` | persistent | every mint, and `receipts_of_provider` / `provider_stats` reads | 30 days | 90 days |
+| `TotalCount`, `TotalAmount` (receipt) | instance | every receipt mint and `totals` read | 7 days | 30 days |
 | Sponsor `Sponsor(address)`, `Match(id)`, `OriginalOf(id)` | persistent | every read and write | 30 days | 90 days |
 | Faucet `LastDrip(address)` | temporary | every drip | 1 day | 7 days |
 | Faucet `LifetimeDripped(address)` | persistent | every drip and lifetime-cap read | 30 days | 90 days |

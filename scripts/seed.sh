@@ -53,7 +53,7 @@ fi
 say "Registering provider"
 stellar contract invoke --id "$REGISTRY_CONTRACT_ID" --source-account "$CLINIC_ID" $N \
   -- register_provider --owner "$CLINIC" \
-  --name "Ikeja General Clinic" --country "NG" 2>&1 | quiet
+  --name "Ikeja General Clinic" --country "NG" --category 0 2>&1 | quiet
 
 # ProviderStatus is a unit enum with explicit discriminants, so the CLI
 # takes the integer: 0 Pending, 1 Active, 2 Suspended, 3 Retired.

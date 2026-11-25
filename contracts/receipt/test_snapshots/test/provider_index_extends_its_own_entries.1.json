@@ -262,6 +262,30 @@
                       "val": {
                         "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHK3M"
                       }
+                    },
+                    {
+                      "key": {
+                        "vec": [
+                          {
+                            "symbol": "TotalAmount"
+                          }
+                        ]
+                      },
+                      "val": {
+                        "i128": "30000000"
+                      }
+                    },
+                    {
+                      "key": {
+                        "vec": [
+                          {
+                            "symbol": "TotalCount"
+                          }
+                        ]
+                      },
+                      "val": {
+                        "u32": 1
+                      }
                     }
                   ]
                 }

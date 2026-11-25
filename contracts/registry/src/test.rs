@@ -3,7 +3,9 @@
 use std::string::ToString;
 
 use soroban_sdk::{
-    testutils::{Address as _, Ledger as _},
+    contract, contractimpl, contracttype,
+    testutils::{Address as _, IssuerFlags, Ledger as _},
+    token::{self},
     Address, BytesN, Env, String, Vec,
 };
 
@@ -221,6 +223,14 @@ const AUTH_MATRIX: &[AuthCase] = &[
         auth: Auth::Free("none (one-shot)"),
     },
     AuthCase {
+        function: "set_registration_deposit",
+        auth: signer("`admin`", admin_addr),
+    },
+    AuthCase {
+        function: "registration_deposit",
+        auth: Auth::Free("none (view)"),
+    },
+    AuthCase {
         function: "register_provider",
         auth: signer("`owner`", new_provider_addr),
     },
@@ -388,7 +398,14 @@ fn run_case(f: &AuthFixture, function: &str) -> CaseRun {
             RegistryClient::new(&env, &address).initialize(&Address::generate(&env));
             return case_run(&env);
         }
+        "set_registration_deposit" => {
+            client.set_registration_deposit(&f.f.admin, &f.provider, &5, &f.new_provider);
+        }
+        "registration_deposit" => {
+            client.registration_deposit();
+        }
         "register_provider" => {
+            configure_deposit(&f.f, &f.new_provider, 5);
             client.register_provider(
                 &f.new_provider,
                 &label("Lagos Clinic"),
@@ -401,11 +418,17 @@ fn run_case(f: &AuthFixture, function: &str) -> CaseRun {
             client.update_provider_category(&f.provider, &ProviderCategory::Pharmacy);
         }
         "set_provider_status" => {
-            activate(&f.f, &f.provider);
+            configure_deposit(&f.f, &f.provider, 5);
+            client.register_provider(
+                &f.provider,
+                &label("Lagos Clinic"),
+                &label("NG"),
+                &ProviderCategory::Clinic,
+            );
             client.set_provider_status(
                 &f.f.admin,
                 &f.provider,
-                &ProviderStatus::Suspended,
+                &ProviderStatus::Active,
                 &REASON_VERIFIED,
             );
         }
@@ -415,7 +438,13 @@ fn run_case(f: &AuthFixture, function: &str) -> CaseRun {
             client.set_verification_evidence(&f.f.admin, &f.provider, &hash);
         }
         "retire" => {
-            activate(&f.f, &f.provider);
+            configure_deposit(&f.f, &f.provider, 5);
+            client.register_provider(
+                &f.provider,
+                &label("Lagos Clinic"),
+                &label("NG"),
+                &ProviderCategory::Clinic,
+            );
             client.retire(&f.provider, &REASON_VERIFIED);
         }
         "upsert_service" => {

@@ -290,7 +290,9 @@ KEEPER_SECRET=<funded account seed> npm run keeper -- --watch
 | Function | Auth | Purpose |
 | --- | --- | --- |
 | `initialize(admin)` | once | Sets the administrator |
-| `register_provider(owner, name, country)` | owner | Self-registers a clinic as `Pending` |
+| `set_registration_deposit(admin, token, amount, fee_account)` | admin | Sets the refundable registration deposit; amount defaults to zero |
+| `registration_deposit()` | view | Reads the configured deposit, if any |
+| `register_provider(owner, name, country, category)` | owner | Self-registers a clinic as `Pending`; pays the configured deposit |
 | `set_provider_status(admin, provider, status, reason_code)` | admin | Only `Pending` → `Active`/`Suspended`, `Active` → `Suspended`, `Suspended` → `Active` |
 | `retire(owner, reason_code)` | owner | Clinic leaves the registry for good (`Retired`, terminal) |
 | `upsert_service(provider, code, label, price)` | provider | Lists a billable service or lowers its price; requires `Active` |
@@ -335,6 +337,8 @@ KEEPER_SECRET=<funded account seed> npm run keeper -- --watch
 | `propose_minter(admin, new_minter)` | admin | Nominates a new voucher contract |
 | `accept_minter(new_minter)` | new_minter | Completes the handover |
 | `mint(minter, voucher_id, beneficiary_ref, provider, service_code, amount)` | minter | Records a settled episode |
+| `totals()` | view | Protocol-wide receipt count and total amount paid |
+| `bump(ids)` | none | Extends up to 50 receipt TTLs; anyone can call |
 | `count_for(beneficiary_ref)` | view | Settled episodes for a beneficiary |
 | `provider_stats(provider)` | view | A clinic's receipt count and total paid |
 | `receipts_of_provider(provider, start, limit)` | view | A clinic's receipts in mint order, capped at 50 per page |
