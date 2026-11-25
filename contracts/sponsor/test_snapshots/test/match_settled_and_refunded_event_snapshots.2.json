@@ -1761,54 +1761,30 @@
               },
               "durability": "persistent",
               "val": {
-                "map": [
+                "vec": [
                   {
-                    "key": {
-                      "symbol": "amount"
-                    },
-                    "val": {
-                      "i128": "3000000"
-                    }
+                    "u64": "2"
                   },
                   {
-                    "key": {
-                      "symbol": "beneficiary_ref"
-                    },
-                    "val": {
-                      "bytes": "0909090909090909090909090909090909090909090909090909090909090909"
-                    }
+                    "bytes": "0909090909090909090909090909090909090909090909090909090909090909"
                   },
                   {
-                    "key": {
-                      "symbol": "provider"
-                    },
-                    "val": {
-                      "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAITA4"
-                    }
+                    "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAITA4"
                   },
                   {
-                    "key": {
-                      "symbol": "service_code"
-                    },
-                    "val": {
-                      "u32": 101
-                    }
+                    "u32": 101
                   },
                   {
-                    "key": {
-                      "symbol": "settled_at"
-                    },
-                    "val": {
-                      "u64": "1700262800"
-                    }
+                    "i128": "3000000"
                   },
                   {
-                    "key": {
-                      "symbol": "voucher_id"
-                    },
-                    "val": {
-                      "u64": "2"
-                    }
+                    "i128": "30000"
+                  },
+                  {
+                    "i128": "2970000"
+                  },
+                  {
+                    "u64": "1700262800"
                   }
                 ]
               }

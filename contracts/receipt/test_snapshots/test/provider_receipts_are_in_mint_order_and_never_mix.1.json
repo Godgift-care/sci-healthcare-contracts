@@ -33,6 +33,12 @@
                 },
                 {
                   "i128": "10"
+                },
+                {
+                  "i128": "0"
+                },
+                {
+                  "i128": "10"
                 }
               ]
             }
@@ -64,6 +70,12 @@
                 },
                 {
                   "u32": 101
+                },
+                {
+                  "i128": "20"
+                },
+                {
+                  "i128": "0"
                 },
                 {
                   "i128": "20"
@@ -101,6 +113,12 @@
                 },
                 {
                   "i128": "30"
+                },
+                {
+                  "i128": "0"
+                },
+                {
+                  "i128": "30"
                 }
               ]
             }
@@ -132,6 +150,12 @@
                 },
                 {
                   "u32": 202
+                },
+                {
+                  "i128": "40"
+                },
+                {
+                  "i128": "0"
                 },
                 {
                   "i128": "40"
@@ -431,54 +455,30 @@
               },
               "durability": "persistent",
               "val": {
-                "map": [
+                "vec": [
                   {
-                    "key": {
-                      "symbol": "amount"
-                    },
-                    "val": {
-                      "i128": "10"
-                    }
+                    "u64": "1"
                   },
                   {
-                    "key": {
-                      "symbol": "beneficiary_ref"
-                    },
-                    "val": {
-                      "bytes": "0707070707070707070707070707070707070707070707070707070707070707"
-                    }
+                    "bytes": "0707070707070707070707070707070707070707070707070707070707070707"
                   },
                   {
-                    "key": {
-                      "symbol": "provider"
-                    },
-                    "val": {
-                      "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAITA4"
-                    }
+                    "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAITA4"
                   },
                   {
-                    "key": {
-                      "symbol": "service_code"
-                    },
-                    "val": {
-                      "u32": 101
-                    }
+                    "u32": 101
                   },
                   {
-                    "key": {
-                      "symbol": "settled_at"
-                    },
-                    "val": {
-                      "u64": "0"
-                    }
+                    "i128": "10"
                   },
                   {
-                    "key": {
-                      "symbol": "voucher_id"
-                    },
-                    "val": {
-                      "u64": "1"
-                    }
+                    "i128": "0"
+                  },
+                  {
+                    "i128": "10"
+                  },
+                  {
+                    "u64": "0"
                   }
                 ]
               }
@@ -507,54 +507,30 @@
               },
               "durability": "persistent",
               "val": {
-                "map": [
+                "vec": [
                   {
-                    "key": {
-                      "symbol": "amount"
-                    },
-                    "val": {
-                      "i128": "20"
-                    }
+                    "u64": "2"
                   },
                   {
-                    "key": {
-                      "symbol": "beneficiary_ref"
-                    },
-                    "val": {
-                      "bytes": "0707070707070707070707070707070707070707070707070707070707070707"
-                    }
+                    "bytes": "0707070707070707070707070707070707070707070707070707070707070707"
                   },
                   {
-                    "key": {
-                      "symbol": "provider"
-                    },
-                    "val": {
-                      "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAK3IM"
-                    }
+                    "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAK3IM"
                   },
                   {
-                    "key": {
-                      "symbol": "service_code"
-                    },
-                    "val": {
-                      "u32": 101
-                    }
+                    "u32": 101
                   },
                   {
-                    "key": {
-                      "symbol": "settled_at"
-                    },
-                    "val": {
-                      "u64": "0"
-                    }
+                    "i128": "20"
                   },
                   {
-                    "key": {
-                      "symbol": "voucher_id"
-                    },
-                    "val": {
-                      "u64": "2"
-                    }
+                    "i128": "0"
+                  },
+                  {
+                    "i128": "20"
+                  },
+                  {
+                    "u64": "0"
                   }
                 ]
               }
@@ -583,54 +559,30 @@
               },
               "durability": "persistent",
               "val": {
-                "map": [
+                "vec": [
                   {
-                    "key": {
-                      "symbol": "amount"
-                    },
-                    "val": {
-                      "i128": "30"
-                    }
+                    "u64": "3"
                   },
                   {
-                    "key": {
-                      "symbol": "beneficiary_ref"
-                    },
-                    "val": {
-                      "bytes": "0707070707070707070707070707070707070707070707070707070707070707"
-                    }
+                    "bytes": "0707070707070707070707070707070707070707070707070707070707070707"
                   },
                   {
-                    "key": {
-                      "symbol": "provider"
-                    },
-                    "val": {
-                      "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAITA4"
-                    }
+                    "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAITA4"
                   },
                   {
-                    "key": {
-                      "symbol": "service_code"
-                    },
-                    "val": {
-                      "u32": 202
-                    }
+                    "u32": 202
                   },
                   {
-                    "key": {
-                      "symbol": "settled_at"
-                    },
-                    "val": {
-                      "u64": "0"
-                    }
+                    "i128": "30"
                   },
                   {
-                    "key": {
-                      "symbol": "voucher_id"
-                    },
-                    "val": {
-                      "u64": "3"
-                    }
+                    "i128": "0"
+                  },
+                  {
+                    "i128": "30"
+                  },
+                  {
+                    "u64": "0"
                   }
                 ]
               }
@@ -659,54 +611,30 @@
               },
               "durability": "persistent",
               "val": {
-                "map": [
+                "vec": [
                   {
-                    "key": {
-                      "symbol": "amount"
-                    },
-                    "val": {
-                      "i128": "40"
-                    }
+                    "u64": "4"
                   },
                   {
-                    "key": {
-                      "symbol": "beneficiary_ref"
-                    },
-                    "val": {
-                      "bytes": "0707070707070707070707070707070707070707070707070707070707070707"
-                    }
+                    "bytes": "0707070707070707070707070707070707070707070707070707070707070707"
                   },
                   {
-                    "key": {
-                      "symbol": "provider"
-                    },
-                    "val": {
-                      "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAK3IM"
-                    }
+                    "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAK3IM"
                   },
                   {
-                    "key": {
-                      "symbol": "service_code"
-                    },
-                    "val": {
-                      "u32": 202
-                    }
+                    "u32": 202
                   },
                   {
-                    "key": {
-                      "symbol": "settled_at"
-                    },
-                    "val": {
-                      "u64": "0"
-                    }
+                    "i128": "40"
                   },
                   {
-                    "key": {
-                      "symbol": "voucher_id"
-                    },
-                    "val": {
-                      "u64": "4"
-                    }
+                    "i128": "0"
+                  },
+                  {
+                    "i128": "40"
+                  },
+                  {
+                    "u64": "0"
                   }
                 ]
               }

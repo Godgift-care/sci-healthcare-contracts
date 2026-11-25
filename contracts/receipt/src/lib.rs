@@ -21,6 +21,8 @@
 
 extern crate alloc;
 
+mod storage;
+
 use sci_common as common;
 use soroban_sdk::{
     contract, contracterror, contractevent, contractimpl, contracttype, Address, BytesN, Env,
@@ -71,6 +73,13 @@ pub struct ReceiptMinted {
 /// read exceed the host's resource limits; callers page with `start`.
 pub const MAX_RECEIPTS_PAGE: u32 = 50;
 
+/// Most receipts one `get_receipts` call may read.
+///
+/// A batch read is capped so a caller cannot ask for an unbounded amount of
+/// ledger work in one transaction. Ids past the cap are ignored, exactly like
+/// ids that do not name a receipt.
+pub const MAX_RECEIPTS_PER_CALL: u32 = 50;
+
 /// Human-readable name wallets and explorers show for a receipt.
 const RECEIPT_NAME: &str = "SCI Care Receipt";
 /// Token-style symbol explorers use when listing the receipt.
@@ -92,7 +101,17 @@ pub struct Receipt {
     pub beneficiary_ref: BytesN<32>,
     pub provider: Address,
     pub service_code: u32,
+    /// The gross amount the voucher was worth when it settled.
     pub amount: i128,
+    /// The protocol fee taken from `amount` at settlement, in the same base
+    /// units. Zero on receipts minted before the fee was recorded, which were
+    /// written before the protocol recorded the split at all.
+    pub fee: i128,
+    /// `amount - fee`: what the clinic actually received. A clinic's accounts
+    /// read this rather than having to pair a receipt with a settlement
+    /// event. On a receipt minted before the fee was recorded it is `amount`,
+    /// the only amount that receipt knows. Always `net + fee == amount`.
+    pub net: i128,
     pub settled_at: u64,
 }
 
@@ -134,6 +153,10 @@ pub enum ReceiptError {
     /// Wrapping either one would understate a clinic's track record, so the
     /// mint is refused instead.
     MathOverflow = 9,
+    /// `fee + net` did not equal `amount`. A receipt whose split does not add
+    /// up would tell a clinic's accounts something the voucher never paid, so
+    /// the mint is refused instead of storing it.
+    AmountSplitMismatch = 10,
 }
 
 /// Maps the shared helpers' failures onto this contract's error numbers, so
@@ -150,6 +173,7 @@ impl From<common::CommonError> for ReceiptError {
 #[contract]
 pub struct ReceiptBook;
 
+#[allow(clippy::too_many_arguments)]
 #[contractimpl]
 impl ReceiptBook {
     /// Sets the admin and the minter. Callable exactly once.
@@ -207,6 +231,13 @@ impl ReceiptBook {
     }
 
     /// Records a settled care episode. Callable only by the minter.
+    ///
+    /// `amount` is the gross value of the voucher, `fee` the protocol fee
+    /// taken from it and `net` what the provider received. They must add up:
+    /// `net + fee == amount`. The voucher contract passes the same three
+    /// numbers it paid out, so a receipt can be reconciled without the
+    /// settlement event.
+    #[allow(clippy::too_many_arguments)]
     pub fn mint(
         env: Env,
         minter: Address,
@@ -215,6 +246,8 @@ impl ReceiptBook {
         provider: Address,
         service_code: u32,
         amount: i128,
+        fee: i128,
+        net: i128,
     ) -> Result<(), ReceiptError> {
         let stored: Address = env
             .storage()
@@ -226,8 +259,11 @@ impl ReceiptBook {
         }
         minter.require_auth();
 
-        if amount <= 0 {
+        if amount <= 0 || fee < 0 || net < 0 {
             return Err(ReceiptError::InvalidAmount);
+        }
+        if fee.checked_add(net) != Some(amount) {
+            return Err(ReceiptError::AmountSplitMismatch);
         }
 
         let key = DataKey::Receipt(voucher_id);
@@ -242,10 +278,11 @@ impl ReceiptBook {
             provider: provider.clone(),
             service_code,
             amount,
+            fee,
+            net,
             settled_at,
         };
-        env.storage().persistent().set(&key, &receipt);
-        common::extend_persistent(&env, &key);
+        storage::write_receipt(&env, &receipt);
 
         let count_key = DataKey::Count(beneficiary_ref.clone());
         let count: u32 = env.storage().persistent().get(&count_key).unwrap_or(0);
@@ -332,14 +369,28 @@ impl ReceiptBook {
     }
 
     pub fn get_receipt(env: Env, voucher_id: u64) -> Result<Receipt, ReceiptError> {
-        let key = DataKey::Receipt(voucher_id);
-        let receipt: Receipt = env
-            .storage()
-            .persistent()
-            .get(&key)
-            .ok_or(ReceiptError::ReceiptNotFound)?;
-        common::extend_persistent(&env, &key);
+        let receipt = storage::read_receipt(&env, voucher_id)?;
+        common::extend_persistent(&env, &DataKey::Receipt(voucher_id));
         Ok(receipt)
+    }
+
+    /// Reads several receipts in one call, in the order the ids were given.
+    ///
+    /// A care summary reads a patient's history in one simulation instead of
+    /// one per receipt. Unknown ids are skipped rather than failing the whole
+    /// call, so a page built from an index that has since changed still
+    /// returns everything it can. At most `MAX_RECEIPTS_PER_CALL` ids are
+    /// read; the rest are ignored, exactly like unknown ids. No signature is
+    /// required, and every receipt read is TTL-extended like `get_receipt`.
+    pub fn get_receipts(env: Env, ids: Vec<u64>) -> Vec<Receipt> {
+        let mut receipts = Vec::new(&env);
+        for index in 0..ids.len().min(MAX_RECEIPTS_PER_CALL) {
+            let voucher_id = ids.get_unchecked(index);
+            if let Ok(receipt) = Self::get_receipt(env.clone(), voucher_id) {
+                receipts.push_back(receipt);
+            }
+        }
+        receipts
     }
 
     /// How many settled care episodes this beneficiary reference has.

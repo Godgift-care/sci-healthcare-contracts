@@ -33,6 +33,12 @@
                 },
                 {
                   "i128": "10"
+                },
+                {
+                  "i128": "0"
+                },
+                {
+                  "i128": "10"
                 }
               ]
             }
@@ -186,54 +192,30 @@
               },
               "durability": "persistent",
               "val": {
-                "map": [
+                "vec": [
                   {
-                    "key": {
-                      "symbol": "amount"
-                    },
-                    "val": {
-                      "i128": "10"
-                    }
+                    "u64": "1"
                   },
                   {
-                    "key": {
-                      "symbol": "beneficiary_ref"
-                    },
-                    "val": {
-                      "bytes": "0707070707070707070707070707070707070707070707070707070707070707"
-                    }
+                    "bytes": "0707070707070707070707070707070707070707070707070707070707070707"
                   },
                   {
-                    "key": {
-                      "symbol": "provider"
-                    },
-                    "val": {
-                      "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAITA4"
-                    }
+                    "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAITA4"
                   },
                   {
-                    "key": {
-                      "symbol": "service_code"
-                    },
-                    "val": {
-                      "u32": 101
-                    }
+                    "u32": 101
                   },
                   {
-                    "key": {
-                      "symbol": "settled_at"
-                    },
-                    "val": {
-                      "u64": "0"
-                    }
+                    "i128": "10"
                   },
                   {
-                    "key": {
-                      "symbol": "voucher_id"
-                    },
-                    "val": {
-                      "u64": "1"
-                    }
+                    "i128": "0"
+                  },
+                  {
+                    "i128": "10"
+                  },
+                  {
+                    "u64": "0"
                   }
                 ]
               }

@@ -517,9 +517,13 @@ pub struct Receipt {
     pub provider: Address,
     pub service_code: u32,
     pub amount: i128,
+    pub fee: i128,
+    pub net: i128,
     pub settled_at: u64,
 }
 ```
+
+`amount` is the gross value of the vouchers, `fee` the protocol fee taken from it at settlement and `net` what the clinic received: always `net + fee == amount`. A receipt minted before these two fields existed still decodes, with `fee = 0` and `net = amount` — the gross amount was all that layout recorded.
 
 ### Functions
 
@@ -528,8 +532,9 @@ pub struct Receipt {
 | `initialize` | `admin, minter` | `()` | once |
 | `propose_minter` | `admin, new_minter` | `()` | `admin` |
 | `accept_minter` | `new_minter` | `()` | `new_minter` |
-| `mint` | `minter, voucher_id, beneficiary_ref, provider, service_code, amount` | `()` | `minter` |
+| `mint` | `minter, voucher_id, beneficiary_ref, provider, service_code, amount, fee, net` | `()` | `minter` |
 | `get_receipt` | `voucher_id` | `Receipt` | view |
+| `get_receipts` | `ids` | `Vec<Receipt>` | view |
 | `count_for` | `beneficiary_ref` | `u32` | view |
 | `provider_stats` | `provider` | `(u32, i128)` | view |
 | `receipts_of_provider` | `provider, start, limit` | `Vec<Receipt>` | view |
@@ -546,6 +551,10 @@ Only the minter — the voucher contract — may mint. Contract instances are de
 Both the admin and the minter are handed over in two steps. `propose_minter(admin, new_minter)` only records a nomination and emits `minter_proposed`; `accept_minter(new_minter)` is what changes `get_minter()`. A typo in the proposed address therefore cannot hand minting rights to the wrong contract, and cannot stop receipts, because the old minter keeps working until the nominee accepts. `get_pending_minter()` shows an outstanding nomination.
 
 Receipts are soulbound: there is deliberately no transfer function, so a receipt stays bound to the beneficiary reference it was minted against. `name`, `symbol` and `receipt_uri` are read-only wallet metadata. `receipt_uri(voucher_id)` returns `https://receipts.sci.health/v1/receipt/<voucher_id>` — the voucher id only, no patient or beneficiary data — so explorers can display the receipt without exposing any PHI.
+
+`mint` records the settlement split as well as the gross amount: `fee` is the protocol fee and `net` is what the clinic received, so a clinic's accounts can reconcile a receipt without pairing it with the settlement event. The voucher contract passes the same three numbers it paid out, and a split that does not add up is refused with `AmountSplitMismatch` (#10).
+
+`get_receipts(ids)` reads several receipts in one call, in the order the ids were given. Unknown ids are skipped rather than failing the whole call, and at most `MAX_RECEIPTS_PER_CALL` (50) ids are read; the rest are ignored exactly like unknown ids. A care summary therefore reads a patient's history in one simulation instead of one per receipt.
 
 `mint` also appends the voucher id to a per-provider index, so a clinic can prove its track record to a funder or auditor without an indexer. `receipts_of_provider(provider, start, limit)` returns that clinic's receipts in mint order, newest last. `limit` is capped at `MAX_RECEIPTS_PAGE` (50); page with `start += returned.len()`. The index is keyed by provider address, so two clinics' receipts never mix, and a provider with no receipts gets an empty vector rather than an error.
 
@@ -566,6 +575,7 @@ Every public function, with the exact signer it demands. `AUTH_MATRIX` in `contr
 | `get_pending_admin` | none (view) |
 | `get_pending_minter` | none (view) |
 | `get_receipt` | none (view) |
+| `get_receipts` | none (view) |
 | `count_for` | none (view) |
 | `provider_stats` | none (view) |
 | `receipts_of_provider` | none (view) |
@@ -589,6 +599,7 @@ Every public function, with the exact signer it demands. `AUTH_MATRIX` in `contr
 | 7 | `NoPendingAdmin` |
 | 8 | `NoPendingMinter` |
 | 9 | `MathOverflow` |
+| 10 | `AmountSplitMismatch` |
 
 ### Events
 

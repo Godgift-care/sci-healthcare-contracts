@@ -4,7 +4,9 @@ use std::string::ToString;
 
 use soroban_sdk::{testutils::Address as _, Address, BytesN, Env, String};
 
-use crate::{ReceiptBook, ReceiptBookClient, ReceiptError, MAX_RECEIPTS_PAGE};
+use crate::{
+    ReceiptBook, ReceiptBookClient, ReceiptError, MAX_RECEIPTS_PAGE, MAX_RECEIPTS_PER_CALL,
+};
 
 struct Fixture {
     env: Env,
@@ -77,6 +79,8 @@ fn minter_mints_receipt() {
         &provider,
         &101u32,
         &30_000_000i128,
+        &0i128,
+        &30_000_000i128,
     );
 
     let r = f.client.get_receipt(&1u64);
@@ -84,7 +88,136 @@ fn minter_mints_receipt() {
     assert_eq!(r.provider, provider);
     assert_eq!(r.service_code, 101);
     assert_eq!(r.amount, 30_000_000i128);
+    assert_eq!(r.fee, 0);
+    assert_eq!(r.net, 30_000_000i128);
     assert_eq!(r.beneficiary_ref, patient);
+}
+
+#[test]
+fn fee_and_net_are_recorded_on_the_receipt() {
+    let f = setup();
+    let provider = Address::generate(&f.env);
+    let patient = bref(&f.env, 7);
+
+    // A 1% protocol fee on a 30 USDC voucher, as the voucher contract pays it.
+    f.client.mint(
+        &f.minter,
+        &1u64,
+        &patient,
+        &provider,
+        &101u32,
+        &30_000_000i128,
+        &300_000i128,
+        &29_700_000i128,
+    );
+
+    let r = f.client.get_receipt(&1u64);
+    assert_eq!(r.amount, 30_000_000);
+    assert_eq!(r.fee, 300_000);
+    assert_eq!(r.net, 29_700_000);
+    assert_eq!(r.net + r.fee, r.amount);
+}
+
+#[test]
+fn fee_and_net_must_add_up_to_the_amount() {
+    let f = setup();
+    let provider = Address::generate(&f.env);
+    let patient = bref(&f.env, 7);
+
+    // A split that does not add up would misstate what the clinic received.
+    let err = f
+        .client
+        .try_mint(
+            &f.minter,
+            &1u64,
+            &patient,
+            &provider,
+            &101u32,
+            &30_000_000i128,
+            &300_000i128,
+            &29_000_000i128,
+        )
+        .err()
+        .unwrap()
+        .unwrap();
+    assert_eq!(err, ReceiptError::AmountSplitMismatch);
+    assert!(f.client.try_get_receipt(&1u64).is_err());
+
+    // A negative side is not an amount at all.
+    let err = f
+        .client
+        .try_mint(
+            &f.minter,
+            &1u64,
+            &patient,
+            &provider,
+            &101u32,
+            &30_000_000i128,
+            &-1i128,
+            &30_000_001i128,
+        )
+        .err()
+        .unwrap()
+        .unwrap();
+    assert_eq!(err, ReceiptError::InvalidAmount);
+    assert!(f.client.try_get_receipt(&1u64).is_err());
+}
+
+#[test]
+fn get_receipts_keeps_the_input_order_and_skips_unknown_ids() {
+    let f = setup();
+    let provider = Address::generate(&f.env);
+    let patient = bref(&f.env, 7);
+
+    for id in 1..=3u64 {
+        f.client.mint(
+            &f.minter,
+            &id,
+            &patient,
+            &provider,
+            &101u32,
+            &(id as i128 * 10),
+            &0i128,
+            &(id as i128 * 10),
+        );
+    }
+
+    // 9 does not exist; the known ids keep the order they were asked for.
+    let ids = soroban_sdk::Vec::from_array(&f.env, [3u64, 9u64, 1u64]);
+    let receipts = f.client.get_receipts(&ids);
+    assert_eq!(receipts.len(), 2);
+    assert_eq!(receipts.get(0).unwrap().voucher_id, 3);
+    assert_eq!(receipts.get(0).unwrap().net, 30);
+    assert_eq!(receipts.get(1).unwrap().voucher_id, 1);
+
+    // Nothing asked for is an empty list, not an error.
+    let none = f.client.get_receipts(&soroban_sdk::Vec::new(&f.env));
+    assert_eq!(none.len(), 0);
+}
+
+#[test]
+fn get_receipts_caps_the_batch() {
+    let f = setup();
+    let provider = Address::generate(&f.env);
+    let patient = bref(&f.env, 7);
+
+    let total = MAX_RECEIPTS_PER_CALL + 5;
+    let mut ids = soroban_sdk::Vec::new(&f.env);
+    for id in 1..=total as u64 {
+        f.client.mint(
+            &f.minter, &id, &patient, &provider, &101u32, &10i128, &0i128, &10i128,
+        );
+        ids.push_back(id);
+    }
+
+    // The cap is enforced: ids past it are ignored, exactly like unknown ids.
+    let receipts = f.client.get_receipts(&ids);
+    assert_eq!(receipts.len(), MAX_RECEIPTS_PER_CALL);
+    assert_eq!(receipts.get(0).unwrap().voucher_id, 1);
+    assert_eq!(
+        receipts.get(MAX_RECEIPTS_PER_CALL - 1).unwrap().voucher_id,
+        MAX_RECEIPTS_PER_CALL as u64,
+    );
 }
 
 #[test]
@@ -101,6 +234,8 @@ fn non_minter_cannot_mint() {
             &bref(&f.env, 7),
             &provider,
             &101u32,
+            &30_000_000i128,
+            &0i128,
             &30_000_000i128,
         )
         .err()
@@ -122,6 +257,8 @@ fn receipts_are_not_mintable_twice() {
         &provider,
         &101u32,
         &30_000_000i128,
+        &0i128,
+        &30_000_000i128,
     );
 
     let err = f
@@ -132,6 +269,8 @@ fn receipts_are_not_mintable_twice() {
             &patient,
             &provider,
             &101u32,
+            &30_000_000i128,
+            &0i128,
             &30_000_000i128,
         )
         .err()
@@ -154,6 +293,8 @@ fn non_positive_amount_rejected() {
             &provider,
             &101u32,
             &0i128,
+            &0i128,
+            &0i128,
         )
         .err()
         .unwrap()
@@ -170,12 +311,15 @@ fn count_tracks_episodes_per_beneficiary() {
 
     assert_eq!(f.client.count_for(&alice), 0);
 
-    f.client
-        .mint(&f.minter, &1u64, &alice, &provider, &101u32, &10i128);
-    f.client
-        .mint(&f.minter, &2u64, &alice, &provider, &202u32, &20i128);
-    f.client
-        .mint(&f.minter, &3u64, &bob, &provider, &101u32, &30i128);
+    f.client.mint(
+        &f.minter, &1u64, &alice, &provider, &101u32, &10i128, &0i128, &10i128,
+    );
+    f.client.mint(
+        &f.minter, &2u64, &alice, &provider, &202u32, &20i128, &0i128, &20i128,
+    );
+    f.client.mint(
+        &f.minter, &3u64, &bob, &provider, &101u32, &30i128, &0i128, &30i128,
+    );
 
     assert_eq!(f.client.count_for(&alice), 2);
     assert_eq!(f.client.count_for(&bob), 1);
@@ -199,6 +343,8 @@ fn provider_stats_report_exact_count_and_total() {
         &clinic_a,
         &101u32,
         &30_000_000i128,
+        &0i128,
+        &30_000_000i128,
     );
     f.client.mint(
         &f.minter,
@@ -206,6 +352,8 @@ fn provider_stats_report_exact_count_and_total() {
         &patient,
         &clinic_b,
         &101u32,
+        &10_000_000i128,
+        &0i128,
         &10_000_000i128,
     );
     f.client.mint(
@@ -215,9 +363,12 @@ fn provider_stats_report_exact_count_and_total() {
         &clinic_a,
         &202u32,
         &40_000_000i128,
+        &0i128,
+        &40_000_000i128,
     );
-    f.client
-        .mint(&f.minter, &4u64, &patient, &clinic_a, &101u32, &5i128);
+    f.client.mint(
+        &f.minter, &4u64, &patient, &clinic_a, &101u32, &5i128, &0i128, &5i128,
+    );
 
     assert_eq!(f.client.provider_stats(&clinic_a), (3, 70_000_005));
     assert_eq!(f.client.provider_stats(&clinic_b), (1, 10_000_000));
@@ -241,8 +392,9 @@ fn provider_count_overflow_is_refused() {
     let f = setup();
     let provider = Address::generate(&f.env);
     let patient = bref(&f.env, 7);
-    f.client
-        .mint(&f.minter, &1u64, &patient, &provider, &101u32, &10i128);
+    f.client.mint(
+        &f.minter, &1u64, &patient, &provider, &101u32, &10i128, &0i128, &10i128,
+    );
 
     let contract = f.client.address.clone();
     f.env.as_contract(&contract, || {
@@ -254,7 +406,9 @@ fn provider_count_overflow_is_refused() {
 
     let err = f
         .client
-        .try_mint(&f.minter, &2u64, &patient, &provider, &101u32, &10i128)
+        .try_mint(
+            &f.minter, &2u64, &patient, &provider, &101u32, &10i128, &0i128, &10i128,
+        )
         .err()
         .unwrap()
         .unwrap();
@@ -272,8 +426,9 @@ fn provider_total_overflow_is_refused() {
     let f = setup();
     let provider = Address::generate(&f.env);
     let patient = bref(&f.env, 7);
-    f.client
-        .mint(&f.minter, &1u64, &patient, &provider, &101u32, &10i128);
+    f.client.mint(
+        &f.minter, &1u64, &patient, &provider, &101u32, &10i128, &0i128, &10i128,
+    );
 
     let contract = f.client.address.clone();
     let near_max = i128::MAX - 5;
@@ -286,7 +441,9 @@ fn provider_total_overflow_is_refused() {
 
     let err = f
         .client
-        .try_mint(&f.minter, &2u64, &patient, &provider, &101u32, &10i128)
+        .try_mint(
+            &f.minter, &2u64, &patient, &provider, &101u32, &10i128, &0i128, &10i128,
+        )
         .err()
         .unwrap()
         .unwrap();
@@ -306,14 +463,18 @@ fn provider_receipts_are_in_mint_order_and_never_mix() {
 
     // Interleave the two clinics' receipts: the index must keep each
     // clinic's own order, not the global mint order.
-    f.client
-        .mint(&f.minter, &1u64, &patient, &clinic_a, &101u32, &10i128);
-    f.client
-        .mint(&f.minter, &2u64, &patient, &clinic_b, &101u32, &20i128);
-    f.client
-        .mint(&f.minter, &3u64, &patient, &clinic_a, &202u32, &30i128);
-    f.client
-        .mint(&f.minter, &4u64, &patient, &clinic_b, &202u32, &40i128);
+    f.client.mint(
+        &f.minter, &1u64, &patient, &clinic_a, &101u32, &10i128, &0i128, &10i128,
+    );
+    f.client.mint(
+        &f.minter, &2u64, &patient, &clinic_b, &101u32, &20i128, &0i128, &20i128,
+    );
+    f.client.mint(
+        &f.minter, &3u64, &patient, &clinic_a, &202u32, &30i128, &0i128, &30i128,
+    );
+    f.client.mint(
+        &f.minter, &4u64, &patient, &clinic_b, &202u32, &40i128, &0i128, &40i128,
+    );
 
     let a = f.client.receipts_of_provider(&clinic_a, &0u32, &10u32);
     assert_eq!(a.len(), 2);
@@ -342,8 +503,9 @@ fn provider_receipts_page_and_cap_the_limit() {
     let patient = bref(&f.env, 7);
 
     for id in 1..=60u64 {
-        f.client
-            .mint(&f.minter, &id, &patient, &provider, &101u32, &10i128);
+        f.client.mint(
+            &f.minter, &id, &patient, &provider, &101u32, &10i128, &0i128, &10i128,
+        );
     }
 
     // A limit above MAX_RECEIPTS_PAGE is capped.
@@ -385,10 +547,12 @@ fn provider_index_skips_a_corrupted_entry() {
     let f = setup();
     let provider = Address::generate(&f.env);
     let patient = bref(&f.env, 7);
-    f.client
-        .mint(&f.minter, &1u64, &patient, &provider, &101u32, &10i128);
-    f.client
-        .mint(&f.minter, &2u64, &patient, &provider, &101u32, &20i128);
+    f.client.mint(
+        &f.minter, &1u64, &patient, &provider, &101u32, &10i128, &0i128, &10i128,
+    );
+    f.client.mint(
+        &f.minter, &2u64, &patient, &provider, &101u32, &20i128, &0i128, &20i128,
+    );
 
     let contract = f.client.address.clone();
     f.env.as_contract(&contract, || {
@@ -433,8 +597,9 @@ fn receipt_uri_contains_no_patient_data() {
     let f = setup();
     let patient = bref(&f.env, 7);
     let provider = Address::generate(&f.env);
-    f.client
-        .mint(&f.minter, &1u64, &patient, &provider, &101u32, &10i128);
+    f.client.mint(
+        &f.minter, &1u64, &patient, &provider, &101u32, &10i128, &0i128, &10i128,
+    );
 
     let uri = f.client.receipt_uri(&1u64);
     // Derived from the voucher id only: no patient data, no beneficiary ref.
@@ -477,6 +642,8 @@ fn minter_handover_takes_two_steps() {
             &bref(&f.env, 7),
             &provider,
             &101u32,
+            &10i128,
+            &0i128,
             &10i128,
         )
         .err()
@@ -697,6 +864,10 @@ const AUTH_MATRIX: &[AuthCase] = &[
         auth: Auth::Free("none (view)"),
     },
     AuthCase {
+        function: "get_receipts",
+        auth: Auth::Free("none (view)"),
+    },
+    AuthCase {
         function: "count_for",
         auth: Auth::Free("none (view)"),
     },
@@ -749,6 +920,8 @@ fn mint_one(f: &Fixture) {
         &bref(&f.env, 7),
         &Address::generate(&f.env),
         &101u32,
+        &30_000_000i128,
+        &0i128,
         &30_000_000i128,
     );
 }
@@ -816,6 +989,10 @@ fn run_case(f: &AuthFixture, function: &str) -> CaseRun {
         "get_receipt" => {
             mint_one(&f.f);
             client.get_receipt(&1u64);
+        }
+        "get_receipts" => {
+            mint_one(&f.f);
+            client.get_receipts(&soroban_sdk::Vec::from_array(env, [1u64, 404u64]));
         }
         "count_for" => {
             client.count_for(&bref(env, 7));
@@ -1223,6 +1400,8 @@ fn receipt_minted_event_snapshot() {
         &provider,
         &101u32,
         &30_000_000i128,
+        &0i128,
+        &30_000_000i128,
     );
 
     let e = one_event(&f.env, &f.client.address);
@@ -1324,8 +1503,16 @@ fn receipt_survives_sixty_days_of_activity() {
     let f = setup();
     let provider = Address::generate(&f.env);
     let patient = bref(&f.env, 7);
-    f.client
-        .mint(&f.minter, &1u64, &patient, &provider, &101u32, &30_000_000);
+    f.client.mint(
+        &f.minter,
+        &1u64,
+        &patient,
+        &provider,
+        &101u32,
+        &30_000_000,
+        &0i128,
+        &30_000_000,
+    );
 
     // Ten days at a time, the way the app lists a patient's history.
     for day in 1..=6 {
@@ -1351,8 +1538,16 @@ fn receipt_read_restores_a_lapsed_entry() {
     let f = setup();
     let provider = Address::generate(&f.env);
     let patient = bref(&f.env, 7);
-    f.client
-        .mint(&f.minter, &1u64, &patient, &provider, &101u32, &30_000_000);
+    f.client.mint(
+        &f.minter,
+        &1u64,
+        &patient,
+        &provider,
+        &101u32,
+        &30_000_000,
+        &0i128,
+        &30_000_000,
+    );
 
     // 95 days of silence: past the 90-day TTL the mint set on the receipt.
     advance_days(&f, 95);
@@ -1369,8 +1564,16 @@ fn count_for_extends_its_own_entry() {
     let f = setup();
     let provider = Address::generate(&f.env);
     let patient = bref(&f.env, 7);
-    f.client
-        .mint(&f.minter, &1u64, &patient, &provider, &101u32, &30_000_000);
+    f.client.mint(
+        &f.minter,
+        &1u64,
+        &patient,
+        &provider,
+        &101u32,
+        &30_000_000,
+        &0i128,
+        &30_000_000,
+    );
 
     // Day 61: the counter has crossed the 30-day threshold. Only a read of
     // `count_for` can extend it — the receipt's own TTL does not cover it.
@@ -1388,8 +1591,16 @@ fn provider_index_extends_its_own_entries() {
     let f = setup();
     let provider = Address::generate(&f.env);
     let patient = bref(&f.env, 7);
-    f.client
-        .mint(&f.minter, &1u64, &patient, &provider, &101u32, &30_000_000);
+    f.client.mint(
+        &f.minter,
+        &1u64,
+        &patient,
+        &provider,
+        &101u32,
+        &30_000_000,
+        &0i128,
+        &30_000_000,
+    );
 
     // Day 61: the index entries are past their 30-day threshold. Only a
     // read through `receipts_of_provider` extends them.
@@ -1405,8 +1616,16 @@ fn provider_stats_extend_their_own_entries() {
     let f = setup();
     let provider = Address::generate(&f.env);
     let patient = bref(&f.env, 7);
-    f.client
-        .mint(&f.minter, &1u64, &patient, &provider, &101u32, &30_000_000);
+    f.client.mint(
+        &f.minter,
+        &1u64,
+        &patient,
+        &provider,
+        &101u32,
+        &30_000_000,
+        &0i128,
+        &30_000_000,
+    );
 
     // Day 61: the counters are past their 30-day threshold. Only a read of
     // `provider_stats` extends them — the receipt's own TTL does not cover
@@ -1687,16 +1906,77 @@ fn stored_type_fixtures_decode_against_current_code() {
         "GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWHF",
     );
 
+    // The fixture is the named layout the release before fee/net recorded,
+    // and must keep decoding: `fee = 0`, `net = amount`.
     check_stored_type(
         &env,
         "receipt",
-        crate::Receipt {
+        crate::storage::StoredReceiptV1 {
             voucher_id: 42,
             beneficiary_ref: bref(&env, 7),
-            provider,
+            provider: provider.clone(),
             service_code: 101,
             amount: 30_000_000,
             settled_at: 1_700_000_000,
         },
     );
+
+    // The current positional layout, pinned so a later field change has to be
+    // made deliberately and with a migration.
+    check_stored_type(
+        &env,
+        "receipt_v2",
+        crate::storage::StoredReceipt::from_receipt(&crate::Receipt {
+            voucher_id: 42,
+            beneficiary_ref: bref(&env, 7),
+            provider,
+            service_code: 101,
+            amount: 30_000_000,
+            fee: 300_000,
+            net: 29_700_000,
+            settled_at: 1_700_000_000,
+        }),
+    );
+}
+
+#[test]
+fn old_format_receipt_still_decodes() {
+    let f = setup();
+    let provider = Address::generate(&f.env);
+    let id = 42u64;
+
+    // Exactly what the previous release wrote: a named receipt without the
+    // split. It must read back, with the gross amount as the net.
+    let old = crate::storage::StoredReceiptV1 {
+        voucher_id: id,
+        beneficiary_ref: bref(&f.env, 7),
+        provider: provider.clone(),
+        service_code: 101,
+        amount: 30_000_000,
+        settled_at: 1_700_000_000,
+    };
+    let contract = f.client.address.clone();
+    f.env.as_contract(&contract, || {
+        f.env
+            .storage()
+            .persistent()
+            .set(&DataKey::Receipt(id), &old);
+    });
+
+    let r = f.client.get_receipt(&id);
+    assert_eq!(r.voucher_id, id);
+    assert_eq!(r.provider, provider);
+    assert_eq!(r.service_code, 101);
+    assert_eq!(r.amount, 30_000_000);
+    assert_eq!(r.settled_at, 1_700_000_000);
+    assert_eq!(r.fee, 0, "the old layout never recorded a fee");
+    assert_eq!(r.net, 30_000_000, "the gross amount is all it knew");
+    assert_eq!(r.net + r.fee, r.amount);
+
+    // And the batch view reads it the same way.
+    let receipts = f
+        .client
+        .get_receipts(&soroban_sdk::Vec::from_array(&f.env, [id]));
+    assert_eq!(receipts.len(), 1);
+    assert_eq!(receipts.get(0).unwrap().net, 30_000_000);
 }

@@ -1320,6 +1320,8 @@ impl VoucherEscrow {
             &voucher.provider,
             &voucher.service_code,
             &voucher.amount,
+            &fee,
+            &net,
         );
 
         VoucherSettled {
@@ -1381,6 +1383,8 @@ impl VoucherEscrow {
                 &voucher.provider,
                 &voucher.service_code,
                 &to_provider,
+                &fee,
+                &net,
             );
         }
         Ok(())

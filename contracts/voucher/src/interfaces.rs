@@ -1,3 +1,7 @@
+// The generated client for `ReceiptInterface::mint` carries the same argument
+// list as the contract, which is longer than clippy's default budget.
+#![allow(clippy::too_many_arguments)]
+
 use soroban_sdk::{contractclient, Address, BytesN, Env};
 
 /// The slice of `sci-registry` this contract depends on.
@@ -26,5 +30,7 @@ pub trait ReceiptInterface {
         provider: Address,
         service_code: u32,
         amount: i128,
+        fee: i128,
+        net: i128,
     );
 }

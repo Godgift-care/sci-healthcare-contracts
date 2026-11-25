@@ -1147,12 +1147,24 @@ fn full_lifecycle_pays_provider_and_mints_receipt() {
     );
     assert_eq!(f.token.balance(&f.voucher.address), 0);
 
-    // Care receipt exists and carries no clinical data.
+    // Care receipt exists and carries no clinical data. It records the same
+    // split the settlement paid, so a clinic's accounts need only the receipt.
     let r = f.receipts.get_receipt(&id);
     assert_eq!(r.provider, f.provider);
     assert_eq!(r.service_code, CONSULT);
     assert_eq!(r.amount, CONSULT_PRICE);
+    assert_eq!(r.fee, expected_fee);
+    assert_eq!(r.net, expected_net);
+    assert_eq!(r.net + r.fee, r.amount);
     assert_eq!(f.receipts.count_for(&patient(&f.env)), 1);
+
+    // And the batch read returns it, split intact.
+    let receipts = f
+        .receipts
+        .get_receipts(&soroban_sdk::Vec::from_array(&f.env, [id]));
+    assert_eq!(receipts.len(), 1);
+    assert_eq!(receipts.get(0).unwrap().fee, expected_fee);
+    assert_eq!(receipts.get(0).unwrap().net, expected_net);
 }
 
 #[test]

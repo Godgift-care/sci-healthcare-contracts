@@ -101,6 +101,7 @@ Source: `ReceiptError` in `contracts/receipt/src/lib.rs`.
 | 7 | `NoPendingAdmin` | `accept_admin` was called with no nomination waiting. | Have the current admin call `propose_admin` first. |
 | 8 | `NoPendingMinter` | `accept_minter` was called with no minter nomination waiting. | Have the admin call `propose_minter` first. |
 | 9 | `MathOverflow` | A provider's receipt count or total would overflow. | The mint is refused; report it. |
+| 10 | `AmountSplitMismatch` | `fee + net` did not equal `amount`. | The receipt would misstate what the clinic received; mint again with the split the settlement paid. |
 
 ## faucet (testnet only)
 
