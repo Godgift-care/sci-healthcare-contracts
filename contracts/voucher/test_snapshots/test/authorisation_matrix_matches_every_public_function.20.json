@@ -166,7 +166,7 @@
           "function": {
             "contract_fn": {
               "contract_address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAATYON",
-              "function_name": "set_presence_threshold",
+              "function_name": "set_max_escrow_per_provider",
               "args": [
                 {
                   "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM"
@@ -902,7 +902,7 @@
                       "key": {
                         "vec": [
                           {
-                            "symbol": "PresenceThreshold"
+                            "symbol": "EscrowCap"
                           }
                         ]
                       },
@@ -1196,7 +1196,7 @@
           "v0": {
             "topics": [
               {
-                "symbol": "presence_threshold_changed"
+                "symbol": "escrow_cap_changed"
               },
               {
                 "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM"
@@ -1206,7 +1206,7 @@
               "map": [
                 {
                   "key": {
-                    "symbol": "threshold"
+                    "symbol": "max"
                   },
                   "val": {
                     "i128": "30000000"

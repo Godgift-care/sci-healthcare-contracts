@@ -36,6 +36,7 @@ pub(crate) struct StoredVoucher(
     u64,             // dispute_deadline
     Option<Address>, // attester
     u32,             // updated_ledger
+    u32,             // response_code
 );
 
 /// The positional layout before `updated_ledger` was appended.
@@ -43,6 +44,26 @@ pub(crate) struct StoredVoucher(
 /// Kept only so a voucher written by an older deployment still decodes. New
 /// writes always use `StoredVoucher`; a read falls back to this and reports
 /// `updated_ledger = 0`, meaning the ledger is unknown.
+#[contracttype]
+#[derive(Clone)]
+pub(crate) struct StoredVoucherV2(
+    pub(crate) Address,
+    pub(crate) BytesN<32>,
+    pub(crate) Address,
+    pub(crate) u32,
+    pub(crate) i128,
+    pub(crate) VoucherStatus,
+    pub(crate) u64,
+    pub(crate) u64,
+    pub(crate) u64,
+    pub(crate) u64,
+    pub(crate) u64,
+    pub(crate) Option<Address>,
+    pub(crate) u32,
+);
+
+/// The positional layout before both the ledger stamp and dispute response
+/// were appended.
 #[contracttype]
 #[derive(Clone)]
 pub(crate) struct StoredVoucherV1(
@@ -76,6 +97,7 @@ impl StoredVoucher {
             v.dispute_deadline,
             v.attester.clone(),
             v.updated_ledger,
+            v.response_code,
         )
     }
 
@@ -95,6 +117,29 @@ impl StoredVoucher {
             dispute_deadline: self.10,
             attester: self.11,
             updated_ledger: self.12,
+            response_code: self.13,
+        }
+    }
+}
+
+impl StoredVoucherV2 {
+    pub(crate) fn into_voucher(self, id: u64) -> Voucher {
+        Voucher {
+            id,
+            funder: self.0,
+            beneficiary_ref: self.1,
+            provider: self.2,
+            service_code: self.3,
+            amount: self.4,
+            status: self.5,
+            created_at: self.6,
+            expires_at: self.7,
+            claimed_at: self.8,
+            attested_at: self.9,
+            dispute_deadline: self.10,
+            attester: self.11,
+            updated_ledger: self.12,
+            response_code: 0,
         }
     }
 }
@@ -116,6 +161,7 @@ impl StoredVoucherV1 {
             dispute_deadline: self.10,
             attester: self.11,
             updated_ledger: 0,
+            response_code: 0,
         }
     }
 }
@@ -163,13 +209,18 @@ pub(crate) fn read_voucher_without_extend(env: &Env, id: u64) -> Result<Voucher,
         .get(&key)
         .ok_or(VoucherError::VoucherNotFound)?;
 
-    // Check the encoded length before converting: unpacking a 12-field vec
-    // into the 13-field `StoredVoucher` traps inside the host rather than
-    // returning a conversion error, and an old voucher must still decode.
+    // Check the encoded length before converting: unpacking a shorter vec
+    // into a longer tuple traps inside the host rather than returning a
+    // conversion error, and vouchers from older deployments must still decode.
     let fields = Vec::<Val>::try_from_val(env, &raw).map_err(|_| VoucherError::VoucherNotFound)?;
-    if fields.len() as usize == 13 {
+    if fields.len() as usize == 14 {
         return StoredVoucher::try_from_val(env, &raw)
             .map(|stored| stored.into_voucher(id))
+            .map_err(|_| VoucherError::VoucherNotFound);
+    }
+    if fields.len() as usize == 13 {
+        return StoredVoucherV2::try_from_val(env, &raw)
+            .map(|old| old.into_voucher(id))
             .map_err(|_| VoucherError::VoucherNotFound);
     }
     if fields.len() as usize == 12 {

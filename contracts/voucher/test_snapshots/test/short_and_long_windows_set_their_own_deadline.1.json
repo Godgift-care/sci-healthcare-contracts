@@ -1556,6 +1556,9 @@
                   },
                   {
                     "u32": 0
+                  },
+                  {
+                    "u32": 0
                   }
                 ]
               }
@@ -1623,6 +1626,9 @@
                   },
                   {
                     "u32": 0
+                  },
+                  {
+                    "u32": 0
                   }
                 ]
               }
@@ -1687,6 +1693,9 @@
                   },
                   {
                     "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAITA4"
+                  },
+                  {
+                    "u32": 0
                   },
                   {
                     "u32": 0

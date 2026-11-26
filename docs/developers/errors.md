@@ -85,6 +85,8 @@ Source: `VoucherError` in `contracts/voucher/src/types.rs`.
 | 32 | `PresenceCommitmentRequired` | The voucher is above the presence threshold but has no commitment. | Fund it with a `presence_commitment`. |
 | 33 | `InvalidPresenceThreshold` | The presence threshold is negative. | Pass zero or a positive threshold. |
 | 34 | `TokenAmountMismatch` | The token moved a different amount than requested (fees or hooks). | Use a standard token such as USDC; the whole call reverted. |
+| 35 | `InvalidResponseCode` | The clinic submitted a dispute response with code 0. | Submit a non-zero response code. |
+| 36 | `DisputeAlreadyResponded` | The clinic already submitted a response to this dispute. | Read the existing response; submitting another is not allowed. |
 | 42 | `PriceChanged` | The registry price changed between the quote and this call. | Re-quote and sign again; nothing was escrowed. |
 
 ## receipt

@@ -62,6 +62,8 @@ pub struct Voucher {
     /// which is only approximate. Vouchers written before this field existed
     /// decode with `0`, meaning the ledger is unknown.
     pub updated_ledger: u32,
+    /// Clinic's response to a dispute; zero means no response was submitted.
+    pub response_code: u32,
 }
 
 /// Optional terms a funder can attach to a voucher with
@@ -227,6 +229,10 @@ pub enum VoucherError {
     /// The registry price changed between the quote the funder saw and this
     /// call. Nothing was escrowed; re-quote before signing.
     PriceChanged = 42,
+    /// A clinic response code must be nonzero; zero means no response.
+    InvalidResponseCode = 35,
+    /// A clinic may respond to a dispute only once.
+    DisputeAlreadyResponded = 36,
 }
 
 /// Maps the shared helpers' failures onto this contract's error numbers, so
