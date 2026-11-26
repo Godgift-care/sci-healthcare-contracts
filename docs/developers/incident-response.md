@@ -166,6 +166,42 @@ Within 5 working days, publish a blameless post-mortem in the repository's secur
 
 Each action item gets an issue. Add anything this runbook got wrong to it in the same change.
 
+## 7. Testnet reset recovery
+
+Stellar testnet is reset periodically (usually once per quarter). Every contract, every funded account and all ledger state is wiped. The demo is completely down until the following procedure is run.
+
+**One command restores a working deployment:**
+
+```bash
+./scripts/after-reset.sh --network testnet
+```
+
+The script:
+
+1. Funds `sci-admin` and `sci-issuer` via friendbot.
+2. Deploys and initialises every contract (`scripts/deploy.sh testnet --force`), overwriting `deployments/testnet.env` and `deployments/testnet.json`.
+3. Seeds the demo clinic, attester and voucher (`scripts/seed.sh`).
+4. Verifies wiring and bytecode (`scripts/verify-deployment.sh`, `scripts/verify-deployments.sh`).
+5. Deploys the testnet faucet (`scripts/deploy-faucet.sh testnet`).
+6. Prints the exact `REGISTRY_CONTRACT_ID`, `VOUCHER_CONTRACT_ID`, `RECEIPT_CONTRACT_ID` and `USDC_CONTRACT_ID` values to update in the backend and frontend.
+
+**After the script succeeds:**
+
+- Commit the updated `deployments/testnet.env` and `deployments/testnet.json`.
+- Update the backend and frontend environment variables as printed and redeploy them.
+- Announce the new contract ids in the development channel.
+
+**Prerequisites:**
+
+- `sci-admin` and `sci-issuer` stellar identities exist locally (`stellar keys generate <name>`).
+- The stellar CLI, `wasm-opt` and `jq` are on `PATH`.
+
+To preview without sending transactions:
+
+```bash
+./scripts/after-reset.sh --network testnet --dry-run
+```
+
 ## Rehearse it
 
 Run this runbook against a local node or testnet before mainnet, and after every change to an admin function: deploy with `scripts/deploy.sh`, seed with `scripts/seed.sh`, then walk through [Triage](#1-triage-first-30-minutes) step 4, every [Containment](#2-containment) lever and its undo, and an [Admin rotation](#3-admin-rotation) to a throwaway key. Log how long each took.
