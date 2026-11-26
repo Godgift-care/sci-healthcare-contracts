@@ -319,6 +319,7 @@ pub struct Config {
     pub registry: Address,
     pub receipt_book: Address,
     pub token: Address,
+    pub max_amount: i128,              // maximum single voucher, in token base units
     pub dispute_window: u64,
     pub fee_bps: u32,
     pub attester_share_bps: u32,       // part of fee_bps, never more
@@ -342,7 +343,7 @@ pub struct Exposure {            // a clinic's open vouchers
 
 | Function | Parameters | Returns | Auth |
 | --- | --- | --- | --- |
-| `initialize` | `admin, registry, receipt_book, token, dispute_window, fee_bps, attester_share_bps, fee_account` | `()` | once |
+| `initialize` | `admin, registry, receipt_book, token, max_amount, dispute_window, fee_bps, attester_share_bps, fee_account` | `()` | once |
 | `create_voucher` | `funder, beneficiary_ref, provider, service_code, amount, expires_at` | `u64` | `funder` |
 | `create_voucher_with_options` | `funder, beneficiary_ref, provider, service_code, amount, expires_at, options: VoucherOptions` | `u64` | `funder` |
 | `create_voucher_at_price` | `funder, beneficiary_ref, provider, service_code, amount, expires_at, expected_price` | `u64` | `funder` |
@@ -362,7 +363,8 @@ pub struct Exposure {            // a clinic's open vouchers
 | `set_attestation_cap` | `admin, cap: u32` | `()` | `admin` |
 | `set_dispute_window_bounds` | `admin, min: u64, max: u64` | `()` | `admin` |
 | `set_max_escrow_per_provider` | `admin, max: i128` | `()` | `admin` |
-| `set_presence_threshold` | `admin, threshold: i128` | `()` | `admin` |
+| `schedule_max_amount` | `admin, max_amount: i128, effective_at: u64` | `()` | `admin` |
+| `activate_max_amount` | — | `()` | **none** |
 | `propose_admin` | `admin, new_admin` | `()` | `admin` |
 | `accept_admin` | `new_admin` | `()` | `new_admin` |
 | `get_voucher` | `voucher_id` | `Voucher` | view |
@@ -376,11 +378,14 @@ pub struct Exposure {            // a clinic's open vouchers
 | `get_attestation_cap` | — | `u32` | view |
 | `attestations_left` | `attester` | `u32` | view |
 | `get_pending_admin` | — | `Option<Address>` | view |
+| `get_pending_max_amount` | — | `Option<(i128, u64)>` | view |
 | `get_config` | — | `Config` | view |
 | `next_voucher_id` | — | `u64` | view |
 | `quote` | `amount` | `(i128, i128)` | view |
 | `escrow_summary` | — | `(i128, i128)` | view |
 | `version` | — | `String` | view |
+
+`max_amount` is the positive maximum amount for one voucher in the settlement token's smallest unit. The deployment default is 1,000,000,000 stroops (100 USDC at seven decimals). `create_voucher` accepts the cap itself and rejects larger amounts (`AmountExceedsMax`, #37). To change it, an admin calls `schedule_max_amount` with an `effective_at` at least 24 hours in the future; scheduling another value replaces the pending change and restarts the notice period. `activate_max_amount` is permissionless but succeeds only at or after that time. Until activation, the existing cap remains active. `get_pending_max_amount` returns the scheduled `(amount, effective_at)`, or `None`.
 
 `fee_bps` is capped at 1000 (10%) at initialisation. `attester_share_bps` is the part of the voucher amount paid to the attester who confirmed delivery, and must be **no greater than `fee_bps`** (`InvalidAttesterShare`, #21). It is carved out of the fee, so the clinic's net is unchanged and the payouts sum exactly to the voucher amount. Zero keeps the pre-attester-share behaviour: the fee account receives the whole fee.
 
@@ -412,7 +417,8 @@ Every public function, with the exact signer it demands. `AUTH_MATRIX` in `contr
 | `set_attestation_cap` | `admin` |
 | `set_dispute_window_bounds` | `admin` |
 | `set_max_escrow_per_provider` | `admin` |
-| `set_presence_threshold` | `admin` |
+| `schedule_max_amount` | `admin` |
+| `activate_max_amount` | none (permissionless) |
 | `propose_admin` | `admin` |
 | `accept_admin` | `new_admin` |
 | `get_dispute_window_bounds` | none (view) |
@@ -423,6 +429,7 @@ Every public function, with the exact signer it demands. `AUTH_MATRIX` in `contr
 | `get_attestation_cap` | none (view) |
 | `attestations_left` | none (view) |
 | `get_pending_admin` | none (view) |
+| `get_pending_max_amount` | none (view) |
 | `refundable_at` | none (view) |
 | `get_voucher` | none (view) |
 | `statuses` | none (view) |
@@ -439,7 +446,7 @@ rejects the voucher's own provider even if it holds that role.
 
 ### What each function checks
 
-**`create_voucher`** — funder must not be the provider (`SelfFunded`); amount > 0; expiry in the future; provider is `Active`; the service exists and is active; amount ≥ listed price; the service is not paused (`ServiceUnavailable`); the clinic is below the capacity it declared in the registry (`ProviderAtCapacity`); the clinic's escrow plus this amount stays within the per-clinic cap (`EscrowCapReached`). Transfers the token *before* writing the voucher, so a failed transfer reverts everything.
+**`create_voucher`** — amount > 0 and no greater than `config.max_amount` (`AmountExceedsMax`); expiry in the future; provider is `Active`; the service exists and is active; amount ≥ listed price; the service is not paused (`ServiceUnavailable`); the clinic is below the capacity it declared in the registry (`ProviderAtCapacity`); the clinic's escrow plus this amount stays within the per-clinic cap (`EscrowCapReached`). Transfers the token *before* writing the voucher, so a failed transfer reverts everything.
 
 **`set_max_escrow_per_provider`** — caller is admin; `max` ≥ 0 (`InvalidEscrowCap`). `0`, the default, is unlimited. The cap limits what one clinic can hold in escrow across all its open vouchers, so a verified clinic that turns out to be fraudulent is exposed to at most this much. `get_exposure(provider)` returns the clinic's open voucher count and escrowed value; both fall when a voucher settles or refunds, including through `resolve_dispute` and `resolve_split`, and the value falls by the refunded difference when `reduce_amount` lowers a voucher. Lowering the cap only affects new vouchers.
 
@@ -467,9 +474,9 @@ rejects the voucher's own provider even if it holds that role.
 
 **`set_attestation_cap`** — caller is admin; `cap` ≥ 1 (`InvalidAttestationCap`). Each attester may attest at most `cap` vouchers per UTC day (`timestamp / 86400`); the next is rejected with `AttestationCapReached` until midnight UTC, when the counter resets. The default is `DEFAULT_MAX_ATTESTATIONS_PER_DAY` (100). Counters live in temporary storage keyed by `(attester, day)`. The cap bounds what a stolen attester key can confirm before the admin removes it from the registry; `attestations_left(attester)` and the `remaining_today` field of `voucher_attested` show how close an attester is.
 
-**`dispute`** — caller is the funder; status is `Claimed`, or `Attested` and before the deadline. Stores the ledger time in `disputed_at`.
+**`schedule_max_amount` / `activate_max_amount`** — only the admin may schedule a positive amount (`InvalidMaxAmount`), and the effective time must be at least `MAX_AMOUNT_CHANGE_DELAY_SECS` (24 hours) ahead (`MaxAmountNoticeTooShort`). A pending proposal can be replaced, which starts a fresh delay. Activation is permissionless; it fails before `effective_at` (`MaxAmountChangeNotReady`) or when no proposal exists (`NoPendingMaxAmount`). The cap applies to new vouchers only; existing vouchers remain valid if a later cap is lower.
 
-**`respond_to_dispute`** — caller is the voucher's provider; status is `Disputed`; `response_code` must be nonzero (zero means no response), and only one response can be recorded. The code is stored on the voucher and emitted in `dispute_responded`.
+**`dispute`** — caller is the funder; status is `Claimed`, or `Attested` and before the deadline.
 
 **`settle`** — status is `Attested`; now ≥ `dispute_deadline`; the contract still holds the voucher's amount (`EscrowShortfall` if the token issuer clawed escrow back); the token accepts the transfers (`TokenTransferFailed` if the issuer froze the escrow, the clinic or the attester). Pays the clinic `amount - fee`, the attester its share (`amount * attester_share_bps / 10_000`), and the fee account the remaining fee, then mints a receipt. The three payouts sum to `amount` exactly. If no attester is recorded — a dispute resolved for the provider without an attestation — the fee account receives the whole fee.
 
@@ -512,10 +519,11 @@ rejects the voucher's own provider even if it holds that role.
 |  |  | 29 | `InvalidPresenceProof` |
 |  |  | 30 | `NoPresenceCommitment` |
 |  |  | 31 | `InvalidDisputeWindow` |
-|  |  | 34 | `SelfFunded` |
-|  |  | 42 | `PriceChanged` |
-|  |  | 35 | `InvalidResponseCode` |
-|  |  | 36 | `DisputeAlreadyResponded` |
+|  |  | 36 | `InvalidMaxAmount` |
+|  |  | 37 | `AmountExceedsMax` |
+|  |  | 38 | `MaxAmountNoticeTooShort` |
+|  |  | 39 | `NoPendingMaxAmount` |
+|  |  | 40 | `MaxAmountChangeNotReady` |
 
 ### Events
 

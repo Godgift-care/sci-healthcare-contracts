@@ -166,13 +166,16 @@
           "function": {
             "contract_fn": {
               "contract_address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAATYON",
-              "function_name": "set_attestation_cap",
+              "function_name": "schedule_max_amount",
               "args": [
                 {
                   "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM"
                 },
                 {
-                  "u32": 10
+                  "i128": "60000000"
+                },
+                {
+                  "u64": "1700086400"
                 }
               ]
             }
@@ -885,6 +888,14 @@
                           },
                           {
                             "key": {
+                              "symbol": "max_amount"
+                            },
+                            "val": {
+                              "i128": "1000000000"
+                            }
+                          },
+                          {
+                            "key": {
                               "symbol": "receipt_book"
                             },
                             "val": {
@@ -906,6 +917,25 @@
                             "val": {
                               "address": "CDS3FDGQ4JA2V3F26Y4BMWWJEC5TT26RJBN7KIQKUMVO2MAOCMDTSZ7A"
                             }
+                          }
+                        ]
+                      }
+                    },
+                    {
+                      "key": {
+                        "vec": [
+                          {
+                            "symbol": "PendingMaxAmount"
+                          }
+                        ]
+                      },
+                      "val": {
+                        "vec": [
+                          {
+                            "i128": "60000000"
+                          },
+                          {
+                            "u64": "1700086400"
                           }
                         ]
                       }
@@ -1166,38 +1196,5 @@
       }
     ]
   },
-  "events": [
-    {
-      "event": {
-        "ext": "v0",
-        "contract_id": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAATYON",
-        "type": "contract",
-        "body": {
-          "v0": {
-            "topics": [
-              {
-                "symbol": "attestation_cap_changed"
-              },
-              {
-                "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM"
-              }
-            ],
-            "data": {
-              "map": [
-                {
-                  "key": {
-                    "symbol": "cap"
-                  },
-                  "val": {
-                    "u32": 10
-                  }
-                }
-              ]
-            }
-          }
-        }
-      },
-      "failed_call": false
-    }
-  ]
+  "events": []
 }

@@ -166,13 +166,13 @@
           "function": {
             "contract_fn": {
               "contract_address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAATYON",
-              "function_name": "set_presence_threshold",
+              "function_name": "propose_admin",
               "args": [
                 {
                   "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM"
                 },
                 {
-                  "i128": "30000000"
+                  "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAXI7N"
                 }
               ]
             }
@@ -873,6 +873,14 @@
                           },
                           {
                             "key": {
+                              "symbol": "max_amount"
+                            },
+                            "val": {
+                              "i128": "1000000000"
+                            }
+                          },
+                          {
+                            "key": {
                               "symbol": "receipt_book"
                             },
                             "val": {
@@ -902,12 +910,12 @@
                       "key": {
                         "vec": [
                           {
-                            "symbol": "PresenceThreshold"
+                            "symbol": "PendingAdmin"
                           }
                         ]
                       },
                       "val": {
-                        "i128": "30000000"
+                        "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAXI7N"
                       }
                     }
                   ]
@@ -1176,7 +1184,7 @@
           "v0": {
             "topics": [
               {
-                "symbol": "presence_threshold_changed"
+                "symbol": "admin_proposed"
               },
               {
                 "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM"
@@ -1186,10 +1194,10 @@
               "map": [
                 {
                   "key": {
-                    "symbol": "threshold"
+                    "symbol": "pending_admin"
                   },
                   "val": {
-                    "i128": "30000000"
+                    "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAXI7N"
                   }
                 }
               ]

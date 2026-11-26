@@ -94,6 +94,9 @@ pub struct Config {
     pub receipt_book: Address,
     /// Settlement token. USDC on Stellar in production.
     pub token: Address,
+    /// Maximum amount accepted for one voucher, in the settlement token's
+    /// smallest unit.
+    pub max_amount: i128,
     /// Seconds a funder has to dispute after attestation.
     pub dispute_window: u64,
     /// Protocol fee in basis points. 100 = 1%.
@@ -117,6 +120,8 @@ pub enum DataKey {
     Voucher(u64),
     /// Address nominated by `propose_admin`, awaiting `accept_admin`.
     PendingAdmin,
+    /// The pending voucher amount cap and the earliest time it may be activated.
+    PendingMaxAmount,
     /// Most attestations one attester may make per UTC day. Unset means
     /// `DEFAULT_MAX_ATTESTATIONS_PER_DAY`.
     AttestationCap,
@@ -218,15 +223,16 @@ pub enum VoucherError {
     /// The chosen dispute window is outside the allowed bounds, or the bounds
     /// themselves are invalid.
     InvalidDisputeWindow = 31,
-    /// The provider cannot fund a voucher to itself.
-    SelfFunded = 34,
-    /// The registry price changed between the quote the funder saw and this
-    /// call. Nothing was escrowed; re-quote before signing.
-    PriceChanged = 42,
-    /// A clinic response code must be nonzero; zero means no response.
-    InvalidResponseCode = 35,
-    /// A clinic may respond to a dispute only once.
-    DisputeAlreadyResponded = 36,
+    /// The configured maximum voucher amount must be positive.
+    InvalidMaxAmount = 36,
+    /// The requested voucher amount exceeds the configured maximum.
+    AmountExceedsMax = 37,
+    /// A maximum amount change must be scheduled at least 24 hours ahead.
+    MaxAmountNoticeTooShort = 38,
+    /// There is no scheduled maximum amount change to activate.
+    NoPendingMaxAmount = 39,
+    /// The scheduled maximum amount change is not ready to activate.
+    MaxAmountChangeNotReady = 40,
 }
 
 /// Maps the shared helpers' failures onto this contract's error numbers, so
