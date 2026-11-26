@@ -109,6 +109,834 @@ fn priced_service(f: &Fixture) -> Address {
 
 const START: u64 = 1_700_000_000;
 
+#[test]
+fn scheduled_price_applies_at_the_effective_time() {
+    let f = setup();
+    let provider = priced_service(&f);
+    let effective_at = START + MIN_PRICE_NOTICE_SECS;
+
+    f.client
+        .schedule_service_price(&provider, &CONSULT, &(PRICE * 2), &effective_at);
+
+    // Before: the current price stands and the upcoming one is visible.
+    assert_eq!(f.client.get_service_price(&provider, &CONSULT), PRICE);
+    assert_eq!(
+        f.client.get_upcoming_price(&provider, &CONSULT),
+        (PRICE * 2, effective_at)
+    );
+    f.env
+        .ledger()
+        .with_mut(|li| li.timestamp = effective_at - 1);
+    assert_eq!(f.client.get_service_price(&provider, &CONSULT), PRICE);
+
+    // At the effective time it applies, with nobody calling in.
+    f.env.ledger().with_mut(|li| li.timestamp = effective_at);
+    assert_eq!(f.client.get_service_price(&provider, &CONSULT), PRICE * 2);
+    assert_eq!(f.client.get_service(&provider, &CONSULT).price, PRICE * 2);
+    assert_eq!(f.client.get_upcoming_price(&provider, &CONSULT), (0, 0));
+    let codes = Vec::from_array(&f.env, [CONSULT]);
+    assert_eq!(
+        f.client
+            .get_services(&provider, &codes)
+            .get_unchecked(0)
+            .price,
+        PRICE * 2
+    );
+}
+
+#[test]
+fn scheduled_price_needs_the_minimum_notice() {
+    let f = setup();
+    let provider = priced_service(&f);
+
+    for effective_at in [START, START + MIN_PRICE_NOTICE_SECS - 1] {
+        let err = f
+            .client
+            .try_schedule_service_price(&provider, &CONSULT, &(PRICE * 2), &effective_at)
+            .err()
+            .unwrap()
+            .unwrap();
+        assert_eq!(err, RegistryError::PriceNoticeTooShort);
+    }
+    assert_eq!(f.client.get_upcoming_price(&provider, &CONSULT), (0, 0));
+}
+
+#[test]
+fn rescheduling_replaces_the_earlier_schedule() {
+    let f = setup();
+    let provider = priced_service(&f);
+    let first = START + MIN_PRICE_NOTICE_SECS;
+    let second = START + 2 * MIN_PRICE_NOTICE_SECS;
+
+    f.client
+        .schedule_service_price(&provider, &CONSULT, &(PRICE * 2), &first);
+    // Scheduling the current price is how a clinic calls a change off.
+    f.client
+        .schedule_service_price(&provider, &CONSULT, &PRICE, &second);
+
+    f.env.ledger().with_mut(|li| li.timestamp = first);
+    assert_eq!(f.client.get_service_price(&provider, &CONSULT), PRICE);
+    assert_eq!(
+        f.client.get_upcoming_price(&provider, &CONSULT),
+        (PRICE, second)
+    );
+}
+
+#[test]
+fn upsert_keeps_a_scheduled_price() {
+    let f = setup();
+    let provider = priced_service(&f);
+    let effective_at = START + MIN_PRICE_NOTICE_SECS;
+    f.client
+        .schedule_service_price(&provider, &CONSULT, &(PRICE * 2), &effective_at);
+
+    f.client.upsert_service(
+        &provider,
+        &CONSULT,
+        &String::from_str(&f.env, "Consult (renamed)"),
+        &PRICE,
+    );
+
+    assert_eq!(
+        f.client.get_upcoming_price(&provider, &CONSULT),
+        (PRICE * 2, effective_at)
+    );
+}
+
+#[test]
+fn schedule_rejects_bad_input() {
+    let f = setup();
+    let provider = priced_service(&f);
+    let effective_at = START + MIN_PRICE_NOTICE_SECS;
+
+    let err = f
+        .client
+        .try_schedule_service_price(&provider, &CONSULT, &0i128, &effective_at)
+        .err()
+        .unwrap()
+        .unwrap();
+    assert_eq!(err, RegistryError::InvalidPrice);
+
+    let err = f
+        .client
+        .try_schedule_service_price(&provider, &999u32, &PRICE, &effective_at)
+        .err()
+        .unwrap()
+        .unwrap();
+    assert_eq!(err, RegistryError::ServiceNotFound);
+
+    let err = f
+        .client
+        .try_get_upcoming_price(&provider, &999u32)
+        .err()
+        .unwrap()
+        .unwrap();
+    assert_eq!(err, RegistryError::ServiceNotFound);
+
+    f.client
+        .set_provider_status(&f.admin, &provider, &ProviderStatus::Suspended);
+    let err = f
+        .client
+        .try_schedule_service_price(&provider, &CONSULT, &PRICE, &effective_at)
+        .err()
+        .unwrap()
+        .unwrap();
+    assert_eq!(err, RegistryError::ProviderNotActive);
+}
+
+#[test]
+fn pending_provider_cannot_add_services() {
+    let f = setup();
+    let provider = Address::generate(&f.env);
+    f.client.register_provider(
+        &provider,
+        &String::from_str(&f.env, "Unverified Clinic"),
+        &String::from_str(&f.env, "NG"),
+    );
+
+    let err = f
+        .client
+        .try_upsert_service(
+            &provider,
+            &101u32,
+            &String::from_str(&f.env, "Consult"),
+            &30_000_000i128,
+        )
+        .err()
+        .unwrap()
+        .unwrap();
+    assert_eq!(err, RegistryError::ProviderNotActive);
+}
+
+#[test]
+fn suspended_provider_cannot_reprice() {
+    let f = setup();
+    let provider = register_active_provider(&f);
+    f.client.upsert_service(
+        &provider,
+        &101u32,
+        &String::from_str(&f.env, "Consult"),
+        &30_000_000i128,
+    );
+    f.client
+        .set_provider_status(&f.admin, &provider, &ProviderStatus::Suspended);
+
+    let err = f
+        .client
+        .try_upsert_service(
+            &provider,
+            &101u32,
+            &String::from_str(&f.env, "Consult"),
+            &1i128,
+        )
+        .err()
+        .unwrap()
+        .unwrap();
+    assert_eq!(err, RegistryError::ProviderNotActive);
+}
+
+#[test]
+fn non_positive_price_rejected() {
+    let f = setup();
+    let provider = register_active_provider(&f);
+    let label = String::from_str(&f.env, "Consult");
+
+    for bad in [0i128, -1i128] {
+        let err = f
+            .client
+            .try_upsert_service(&provider, &101u32, &label, &bad)
+            .err()
+            .unwrap()
+            .unwrap();
+        assert_eq!(err, RegistryError::InvalidPrice);
+    }
+}
+
+#[test]
+fn removing_absent_service_errors() {
+    let f = setup();
+    let provider = register_active_provider(&f);
+    let err = f
+        .client
+        .try_remove_service(&provider, &999u32)
+        .err()
+        .unwrap()
+        .unwrap();
+    assert_eq!(err, RegistryError::ServiceNotFound);
+}
+
+#[test]
+fn remove_service_clears_it() {
+    let f = setup();
+    let provider = register_active_provider(&f);
+    f.client.upsert_service(
+        &provider,
+        &101u32,
+        &String::from_str(&f.env, "Consult"),
+        &30_000_000i128,
+    );
+    f.client.remove_service(&provider, &101u32);
+
+    let err = f
+        .client
+        .try_get_service(&provider, &101u32)
+        .err()
+        .unwrap()
+        .unwrap();
+    assert_eq!(err, RegistryError::ServiceNotFound);
+}
+
+#[test]
+fn get_services_batches_and_skips_missing() {
+    let f = setup();
+    let provider = register_active_provider(&f);
+    f.client.upsert_service(
+        &provider,
+        &101u32,
+        &String::from_str(&f.env, "Consult"),
+        &30_000_000i128,
+    );
+    f.client.upsert_service(
+        &provider,
+        &202u32,
+        &String::from_str(&f.env, "Malaria RDT"),
+        &10_000_000i128,
+    );
+
+    let codes = Vec::from_array(&f.env, [101u32, 202u32, 999u32]);
+    let items = f.client.get_services(&provider, &codes);
+    assert_eq!(items.len(), 2);
+}
+
+#[test]
+fn new_service_is_available() {
+    let f = setup();
+    let provider = register_active_provider(&f);
+    f.client.upsert_service(
+        &provider,
+        &202u32,
+        &String::from_str(&f.env, "Malaria RDT"),
+        &10_000_000i128,
+    );
+
+    assert!(f.client.get_service(&provider, &202u32).available);
+    assert!(f.client.is_service_available(&provider, &202u32));
+}
+
+#[test]
+fn paused_service_stays_listed_and_priced() {
+    let f = setup();
+    let provider = register_active_provider(&f);
+    f.client.upsert_service(
+        &provider,
+        &202u32,
+        &String::from_str(&f.env, "Malaria RDT"),
+        &10_000_000i128,
+    );
+
+    f.client.set_service_available(&provider, &202u32, &false);
+
+    let item = f.client.get_service(&provider, &202u32);
+    assert!(!item.available);
+    assert!(item.active);
+    assert!(!f.client.is_service_available(&provider, &202u32));
+    // Still priced, so `voucher` can say "unavailable" rather than "not offered".
+    assert_eq!(
+        f.client.get_service_price(&provider, &202u32),
+        10_000_000i128
+    );
+    let codes = Vec::from_array(&f.env, [202u32]);
+    assert_eq!(f.client.get_services(&provider, &codes).len(), 1);
+
+    f.client.set_service_available(&provider, &202u32, &true);
+    assert!(f.client.is_service_available(&provider, &202u32));
+}
+
+#[test]
+fn repricing_a_paused_service_keeps_it_paused() {
+    let f = setup();
+    let provider = register_active_provider(&f);
+    let label = String::from_str(&f.env, "Malaria RDT");
+    f.client
+        .upsert_service(&provider, &202u32, &label, &10_000_000i128);
+    f.client.set_service_available(&provider, &202u32, &false);
+
+    f.client
+        .upsert_service(&provider, &202u32, &label, &9_000_000i128);
+
+    assert!(!f.client.get_service(&provider, &202u32).available);
+}
+
+#[test]
+fn pausing_absent_service_errors() {
+    let f = setup();
+    let provider = register_active_provider(&f);
+    let err = f
+        .client
+        .try_set_service_available(&provider, &999u32, &false)
+        .err()
+        .unwrap()
+        .unwrap();
+    assert_eq!(err, RegistryError::ServiceNotFound);
+    assert!(!f.client.is_service_available(&provider, &999u32));
+}
+
+/// Clinics are listed in registration order, and pagination pages through them.
+#[test]
+fn list_providers_in_registration_order() {
+    let f = setup();
+
+    let a = Address::generate(&f.env);
+    let b = Address::generate(&f.env);
+    let c = Address::generate(&f.env);
+
+    f.client.register_provider(
+        &a,
+        &String::from_str(&f.env, "A Clinic"),
+        &String::from_str(&f.env, "NG"),
+    );
+    f.client.register_provider(
+        &b,
+        &String::from_str(&f.env, "B Clinic"),
+        &String::from_str(&f.env, "KE"),
+    );
+    f.client.register_provider(
+        &c,
+        &String::from_str(&f.env, "C Clinic"),
+        &String::from_str(&f.env, "GH"),
+    );
+
+    let first = f.client.list_providers(&0u32, &2u32);
+    assert_eq!(first.len(), 2);
+    assert_eq!(first.get_unchecked(0).owner, a);
+    assert_eq!(
+        first.get_unchecked(0).country,
+        String::from_str(&f.env, "NG")
+    );
+    assert_eq!(first.get_unchecked(1).owner, b);
+    assert_eq!(
+        first.get_unchecked(1).country,
+        String::from_str(&f.env, "KE")
+    );
+
+    let second = f.client.list_providers(&2u32, &2u32);
+    assert_eq!(second.len(), 1);
+    assert_eq!(second.get_unchecked(0).owner, c);
+    assert_eq!(
+        second.get_unchecked(0).country,
+        String::from_str(&f.env, "GH")
+    );
+
+    let all = f.client.list_providers(&0u32, &10u32);
+    assert_eq!(all.len(), 3);
+    assert_eq!(all.get_unchecked(0).owner, a);
+    assert_eq!(all.get_unchecked(1).owner, b);
+    assert_eq!(all.get_unchecked(2).owner, c);
+}
+
+/// A `start` beyond the end returns an empty list.
+#[test]
+fn list_providers_start_beyond_end_is_empty() {
+    let f = setup();
+    let provider = Address::generate(&f.env);
+    f.client.register_provider(
+        &provider,
+        &String::from_str(&f.env, "A Clinic"),
+        &String::from_str(&f.env, "NG"),
+    );
+
+    assert_eq!(f.client.list_providers(&1u32, &10u32).len(), 0);
+    assert_eq!(f.client.list_providers(&999u32, &10u32).len(), 0);
+}
+
+/// A limit above `MAX_PROVIDERS_PAGE` is clamped to the cap.
+#[test]
+fn list_providers_limit_is_capped() {
+    let f = setup();
+
+    for _ in 0..60 {
+        let provider = Address::generate(&f.env);
+        f.client.register_provider(
+            &provider,
+            &String::from_str(&f.env, "Clinic"),
+            &String::from_str(&f.env, "NG"),
+        );
+    }
+
+    let first = f.client.list_providers(&0u32, &u32::MAX);
+    assert_eq!(first.len(), MAX_PROVIDERS_PAGE);
+
+    let second = f.client.list_providers(&MAX_PROVIDERS_PAGE, &u32::MAX);
+    assert_eq!(second.len(), 10);
+}
+
+/// An empty registry lists nothing.
+#[test]
+fn list_providers_empty_registry() {
+    let f = setup();
+    assert_eq!(f.client.list_providers(&0u32, &10u32).len(), 0);
+}
+
+/// `providers_in` returns only `Active` clinics in one country: pending and
+/// suspended clinics stay out, suspension removes a clinic from the country
+/// index, and reactivation re-adds it once.
+#[test]
+fn providers_in_tracks_active_status() {
+    let f = setup();
+
+    let a = Address::generate(&f.env);
+    let b = Address::generate(&f.env);
+    let c = Address::generate(&f.env);
+
+    f.client.register_provider(
+        &a,
+        &String::from_str(&f.env, "A Clinic"),
+        &String::from_str(&f.env, "NG"),
+    );
+    f.client.register_provider(
+        &b,
+        &String::from_str(&f.env, "B Clinic"),
+        &String::from_str(&f.env, "NG"),
+    );
+    f.client.register_provider(
+        &c,
+        &String::from_str(&f.env, "C Clinic"),
+        &String::from_str(&f.env, "NG"),
+    );
+    f.client
+        .set_provider_status(&f.admin, &a, &ProviderStatus::Active);
+    f.client
+        .set_provider_status(&f.admin, &b, &ProviderStatus::Active);
+    // c stays Pending.
+
+    let ng = f
+        .client
+        .providers_in(&String::from_str(&f.env, "NG"), &0u32, &10u32);
+    assert_eq!(ng.len(), 2);
+    assert_eq!(ng.get_unchecked(0).owner, a);
+    assert_eq!(ng.get_unchecked(1).owner, b);
+
+    // Suspending b removes it; only a remains.
+    f.client
+        .set_provider_status(&f.admin, &b, &ProviderStatus::Suspended);
+    let ng = f
+        .client
+        .providers_in(&String::from_str(&f.env, "NG"), &0u32, &10u32);
+    assert_eq!(ng.len(), 1);
+    assert_eq!(ng.get_unchecked(0).owner, a);
+
+    // Reactivating b re-adds it once.
+    f.client
+        .set_provider_status(&f.admin, &b, &ProviderStatus::Active);
+    let ng = f
+        .client
+        .providers_in(&String::from_str(&f.env, "NG"), &0u32, &10u32);
+    assert_eq!(ng.len(), 2);
+    assert_eq!(ng.get_unchecked(0).owner, a);
+    assert_eq!(ng.get_unchecked(1).owner, b);
+
+    // Other countries are untouched.
+    assert_eq!(
+        f.client
+            .providers_in(&String::from_str(&f.env, "KE"), &0u32, &10u32)
+            .len(),
+        0
+    );
+}
+
+/// `providers_in` pages through a country's active clinics, capping `limit`
+/// at `MAX_PROVIDERS_PAGE`.
+#[test]
+fn providers_in_pages() {
+    let f = setup();
+
+    let mut providers = Vec::new(&f.env);
+    for _ in 0..7 {
+        let provider = Address::generate(&f.env);
+        f.client.register_provider(
+            &provider,
+            &String::from_str(&f.env, "Clinic"),
+            &String::from_str(&f.env, "NG"),
+        );
+        f.client
+            .set_provider_status(&f.admin, &provider, &ProviderStatus::Active);
+        providers.push_back(provider);
+    }
+
+    let first = f
+        .client
+        .providers_in(&String::from_str(&f.env, "NG"), &0u32, &3u32);
+    assert_eq!(first.len(), 3);
+    assert_eq!(first.get_unchecked(0).owner, providers.get_unchecked(0));
+    assert_eq!(first.get_unchecked(1).owner, providers.get_unchecked(1));
+    assert_eq!(first.get_unchecked(2).owner, providers.get_unchecked(2));
+
+    let second = f
+        .client
+        .providers_in(&String::from_str(&f.env, "NG"), &3u32, &3u32);
+    assert_eq!(second.len(), 3);
+    assert_eq!(second.get_unchecked(0).owner, providers.get_unchecked(3));
+    assert_eq!(second.get_unchecked(1).owner, providers.get_unchecked(4));
+    assert_eq!(second.get_unchecked(2).owner, providers.get_unchecked(5));
+
+    let last = f
+        .client
+        .providers_in(&String::from_str(&f.env, "NG"), &6u32, &3u32);
+    assert_eq!(last.len(), 1);
+    assert_eq!(last.get_unchecked(0).owner, providers.get_unchecked(6));
+
+    // start beyond the end returns nothing.
+    assert_eq!(
+        f.client
+            .providers_in(&String::from_str(&f.env, "NG"), &7u32, &10u32)
+            .len(),
+        0
+    );
+}
+
+/// The counter and index entries get their TTL extended on read, like every
+/// other persistent entry.
+#[test]
+fn list_providers_extends_index_ttl() {
+    let f = setup();
+    let a = Address::generate(&f.env);
+    let b = Address::generate(&f.env);
+    f.client.register_provider(
+        &a,
+        &String::from_str(&f.env, "A Clinic"),
+        &String::from_str(&f.env, "NG"),
+    );
+    f.client.register_provider(
+        &b,
+        &String::from_str(&f.env, "B Clinic"),
+        &String::from_str(&f.env, "KE"),
+    );
+
+    // Jump far enough that the 90-day TTL would lapse on every entry.
+    advance_days(&f, 95);
+
+    // Reading the index restores each lapsed entry and pushes it back out.
+    let providers = f.client.list_providers(&0u32, &10u32);
+    assert_eq!(providers.len(), 2);
+    assert_eq!(providers.get_unchecked(0).owner, a);
+    assert_eq!(providers.get_unchecked(1).owner, b);
+
+    let contract = f.client.address.clone();
+    let count_key = DataKey::ProviderCount;
+    let count_ttl = f.env.as_contract(&contract, || {
+        f.env.storage().persistent().get_ttl(&count_key)
+    });
+    assert_eq!(count_ttl, NINETY_DAYS);
+
+    let index_key = DataKey::ProviderAt(0);
+    let index_ttl = f.env.as_contract(&contract, || {
+        f.env.storage().persistent().get_ttl(&index_key)
+    });
+    assert_eq!(index_ttl, NINETY_DAYS);
+
+    // And each provider record itself is still live.
+    assert_eq!(f.client.get_provider(&a).owner, a);
+    assert_eq!(f.client.get_provider(&b).owner, b);
+}
+
+#[test]
+fn attester_lifecycle() {
+    let f = setup();
+    let attester = Address::generate(&f.env);
+    assert!(!f.client.is_attester(&attester));
+
+    f.client.add_attester(&f.admin, &attester);
+    assert!(f.client.is_attester(&attester));
+
+    f.client.remove_attester(&f.admin, &attester);
+    assert!(!f.client.is_attester(&attester));
+}
+
+#[test]
+fn non_admin_cannot_add_attester() {
+    let f = setup();
+    let impostor = Address::generate(&f.env);
+    let attester = Address::generate(&f.env);
+
+    let err = f
+        .client
+        .try_add_attester(&impostor, &attester)
+        .err()
+        .unwrap()
+        .unwrap();
+    assert_eq!(err, RegistryError::NotAuthorized);
+}
+
+#[test]
+fn verifier_lifecycle() {
+    let f = setup();
+    let verifier = Address::generate(&f.env);
+    assert!(!f.client.is_verifier(&verifier));
+
+    f.client.add_verifier(&f.admin, &verifier);
+    assert!(f.client.is_verifier(&verifier));
+
+    f.client.remove_verifier(&f.admin, &verifier);
+    assert!(!f.client.is_verifier(&verifier));
+}
+
+#[test]
+fn non_admin_cannot_add_or_remove_verifier() {
+    let f = setup();
+    let impostor = Address::generate(&f.env);
+    let verifier = Address::generate(&f.env);
+
+    let err = f
+        .client
+        .try_add_verifier(&impostor, &verifier)
+        .err()
+        .unwrap()
+        .unwrap();
+    assert_eq!(err, RegistryError::NotAuthorized);
+
+    f.client.add_verifier(&f.admin, &verifier);
+    let err = f
+        .client
+        .try_remove_verifier(&impostor, &verifier)
+        .err()
+        .unwrap()
+        .unwrap();
+    assert_eq!(err, RegistryError::NotAuthorized);
+}
+
+#[test]
+fn verifier_can_change_provider_status_and_role_boundaries() {
+    let f = setup();
+    let verifier = Address::generate(&f.env);
+    f.client.add_verifier(&f.admin, &verifier);
+
+    let provider = Address::generate(&f.env);
+    f.client.register_provider(
+        &provider,
+        &String::from_str(&f.env, "Verifier Clinic"),
+        &String::from_str(&f.env, "NG"),
+    );
+
+    // Verifier activates provider
+    f.client
+        .set_provider_status(&verifier, &provider, &ProviderStatus::Active);
+    assert!(f.client.is_active_provider(&provider));
+
+    // Verifier suspends provider
+    f.client
+        .set_provider_status(&verifier, &provider, &ProviderStatus::Suspended);
+    assert!(!f.client.is_active_provider(&provider));
+
+    // Verifier cannot add or remove attesters
+    let other = Address::generate(&f.env);
+    let err = f
+        .client
+        .try_add_attester(&verifier, &other)
+        .err()
+        .unwrap()
+        .unwrap();
+    assert_eq!(err, RegistryError::NotAuthorized);
+    let err = f
+        .client
+        .try_remove_attester(&verifier, &other)
+        .err()
+        .unwrap()
+        .unwrap();
+    assert_eq!(err, RegistryError::NotAuthorized);
+
+    // Verifier cannot add or remove verifiers
+    let err = f
+        .client
+        .try_add_verifier(&verifier, &other)
+        .err()
+        .unwrap()
+        .unwrap();
+    assert_eq!(err, RegistryError::NotAuthorized);
+    let err = f
+        .client
+        .try_remove_verifier(&verifier, &other)
+        .err()
+        .unwrap()
+        .unwrap();
+    assert_eq!(err, RegistryError::NotAuthorized);
+
+    // Verifier cannot propose admin
+    let err = f
+        .client
+        .try_propose_admin(&verifier, &other)
+        .err()
+        .unwrap()
+        .unwrap();
+    assert_eq!(err, RegistryError::NotAuthorized);
+
+    // Removed verifier loses access to change status
+    f.client.remove_verifier(&f.admin, &verifier);
+    let err = f
+        .client
+        .try_set_provider_status(&verifier, &provider, &ProviderStatus::Active)
+        .err()
+        .unwrap()
+        .unwrap();
+    assert_eq!(err, RegistryError::NotAuthorized);
+}
+
+#[test]
+fn admin_can_be_transferred() {
+    let f = setup();
+    let new_admin = Address::generate(&f.env);
+    f.client.propose_admin(&f.admin, &new_admin);
+    // Nothing changes until the nominee accepts.
+    assert_eq!(f.client.get_admin(), f.admin);
+    assert_eq!(f.client.get_pending_admin(), Some(new_admin.clone()));
+
+    f.client.accept_admin(&new_admin);
+    assert_eq!(f.client.get_admin(), new_admin);
+    assert_eq!(f.client.get_pending_admin(), None);
+
+    // Old admin loses authority.
+    let attester = Address::generate(&f.env);
+    let err = f
+        .client
+        .try_add_attester(&f.admin, &attester)
+        .err()
+        .unwrap()
+        .unwrap();
+    assert_eq!(err, RegistryError::NotAuthorized);
+}
+
+#[test]
+fn service_price_view_returns_price() {
+    let f = setup();
+    let provider = register_active_provider(&f);
+    f.client.upsert_service(
+        &provider,
+        &101u32,
+        &String::from_str(&f.env, "Consult"),
+        &30_000_000i128,
+    );
+    assert_eq!(
+        f.client.get_service_price(&provider, &101u32),
+        30_000_000i128
+    );
+}
+
+#[test]
+fn service_price_view_returns_zero_when_absent() {
+    let f = setup();
+    let provider = register_active_provider(&f);
+    assert_eq!(f.client.get_service_price(&provider, &999u32), 0);
+
+    let stranger = Address::generate(&f.env);
+    assert_eq!(f.client.get_service_price(&stranger, &101u32), 0);
+}
+
+#[test]
+fn only_the_nominee_can_accept_admin() {
+    let f = setup();
+    let nominee = Address::generate(&f.env);
+    let intruder = Address::generate(&f.env);
+    f.client.propose_admin(&f.admin, &nominee);
+
+    let err = f.client.try_accept_admin(&intruder).err().unwrap().unwrap();
+    assert_eq!(err, RegistryError::NotAuthorized);
+    assert_eq!(f.client.get_admin(), f.admin);
+}
+
+#[test]
+fn accept_admin_without_proposal_errors() {
+    let f = setup();
+    let someone = Address::generate(&f.env);
+    let err = f.client.try_accept_admin(&someone).err().unwrap().unwrap();
+    assert_eq!(err, RegistryError::NoPendingAdmin);
+}
+
+#[test]
+fn non_admin_cannot_propose_admin() {
+    let f = setup();
+    let someone = Address::generate(&f.env);
+    let err = f
+        .client
+        .try_propose_admin(&someone, &someone)
+        .err()
+        .unwrap()
+        .unwrap();
+    assert_eq!(err, RegistryError::NotAuthorized);
+}
+
+#[test]
+fn reproposing_replaces_the_nominee() {
+    let f = setup();
+    let typo = Address::generate(&f.env);
+    let intended = Address::generate(&f.env);
+    f.client.propose_admin(&f.admin, &typo);
+    f.client.propose_admin(&f.admin, &intended);
+
+    let err = f.client.try_accept_admin(&typo).err().unwrap().unwrap();
+    assert_eq!(err, RegistryError::NotAuthorized);
+    f.client.accept_admin(&intended);
+    assert_eq!(f.client.get_admin(), intended);
+}
+
 // ----- authorisation matrix -----
 //
 // One row per public function: the exact signer it must demand, and nothing
@@ -240,7 +1068,7 @@ const AUTH_MATRIX: &[AuthCase] = &[
     },
     AuthCase {
         function: "set_provider_status",
-        auth: signer("`admin`", admin_addr),
+        auth: signer("`caller`", admin_addr),
     },
     AuthCase {
         function: "set_verification_evidence",
@@ -276,6 +1104,14 @@ const AUTH_MATRIX: &[AuthCase] = &[
     },
     AuthCase {
         function: "remove_attester",
+        auth: signer("`admin`", admin_addr),
+    },
+    AuthCase {
+        function: "add_verifier",
+        auth: signer("`admin`", admin_addr),
+    },
+    AuthCase {
+        function: "remove_verifier",
         auth: signer("`admin`", admin_addr),
     },
     AuthCase {
@@ -344,6 +1180,10 @@ const AUTH_MATRIX: &[AuthCase] = &[
     },
     AuthCase {
         function: "get_capacity",
+        auth: Auth::Free("none (view)"),
+    },
+    AuthCase {
+        function: "is_verifier",
         auth: Auth::Free("none (view)"),
     },
     AuthCase {
@@ -491,6 +1331,13 @@ fn run_case(f: &AuthFixture, function: &str) -> CaseRun {
             client.add_attester(&f.f.admin, &f.new_provider);
             client.remove_attester(&f.f.admin, &f.new_provider);
         }
+        "add_verifier" => {
+            client.add_verifier(&f.f.admin, &f.new_provider);
+        }
+        "remove_verifier" => {
+            client.add_verifier(&f.f.admin, &f.new_provider);
+            client.remove_verifier(&f.f.admin, &f.new_provider);
+        }
         "propose_admin" => {
             client.propose_admin(&f.f.admin, &f.new_admin);
         }
@@ -545,8 +1392,8 @@ fn run_case(f: &AuthFixture, function: &str) -> CaseRun {
         "is_attester" => {
             client.is_attester(&f.provider);
         }
-        "list_attesters" => {
-            client.list_attesters(&0u32, &10u32);
+        "is_verifier" => {
+            client.is_verifier(&f.provider);
         }
         "version" => {
             client.version();
@@ -1103,6 +1950,29 @@ fn attester_removed_event_snapshot() {
 
     let e = one_event(&f);
     assert_layout(&e, "attester_removed", &[ScVal::from(&attester)], &[]);
+}
+
+#[test]
+fn verifier_added_event_snapshot() {
+    let f = setup();
+    let verifier = Address::generate(&f.env);
+
+    f.client.add_verifier(&f.admin, &verifier);
+
+    let e = one_event(&f);
+    assert_layout(&e, "verifier_added", &[ScVal::from(&verifier)], &[]);
+}
+
+#[test]
+fn verifier_removed_event_snapshot() {
+    let f = setup();
+    let verifier = Address::generate(&f.env);
+    f.client.add_verifier(&f.admin, &verifier);
+
+    f.client.remove_verifier(&f.admin, &verifier);
+
+    let e = one_event(&f);
+    assert_layout(&e, "verifier_removed", &[ScVal::from(&verifier)], &[]);
 }
 
 #[test]

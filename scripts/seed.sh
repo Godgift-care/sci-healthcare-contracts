@@ -91,8 +91,7 @@ stellar contract invoke --id "$REGISTRY_CONTRACT_ID" --source-account "$CLINIC_I
 # reason_code 1 = verified (docs/protocol/trust.md).
 say "Activating provider"
 stellar contract invoke --id "$REGISTRY_CONTRACT_ID" --source-account "$ADMIN" $N \
-  -- set_provider_status --admin "$ADMIN_ADDR" --provider_addr "$CLINIC" \
-  --status 1 --reason_code 1 2>&1 | quiet
+  -- set_provider_status --caller "$ADMIN_ADDR" --provider_addr "$CLINIC" --status 1 2>&1 | quiet
 
 say "Listing services"
 stellar contract invoke --id "$REGISTRY_CONTRACT_ID" --source-account "$CLINIC_ID" $N \

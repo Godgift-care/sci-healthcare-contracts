@@ -290,17 +290,16 @@ KEEPER_SECRET=<funded account seed> npm run keeper -- --watch
 | Function | Auth | Purpose |
 | --- | --- | --- |
 | `initialize(admin)` | once | Sets the administrator |
-| `set_registration_deposit(admin, token, amount, fee_account)` | admin | Sets the refundable registration deposit; amount defaults to zero |
-| `registration_deposit()` | view | Reads the configured deposit, if any |
-| `register_provider(owner, name, country, category)` | owner | Self-registers a clinic as `Pending`; pays the configured deposit |
-| `set_provider_status(admin, provider, status, reason_code)` | admin | Only `Pending` → `Active`/`Suspended`, `Active` → `Suspended`, `Suspended` → `Active` |
-| `retire(owner, reason_code)` | owner | Clinic leaves the registry for good (`Retired`, terminal) |
+| `register_provider(owner, name, country)` | owner | Self-registers a clinic as `Pending` |
+| `set_provider_status(caller, provider, status)` | admin or verifier | `Pending` → `Active` → `Suspended` |
 | `upsert_service(provider, code, label, price)` | provider | Lists a billable service or lowers its price; requires `Active` |
 | `schedule_service_price(provider, code, price, effective_at, confirm_large_change)` | provider | Schedules a price change at least 24 h ahead; a 5× rise needs `confirm_large_change = true` |
 | `remove_service(provider, code)` | provider | Delists a service |
 | `set_service_available(provider, code, available)` | provider | Pauses or resumes a service without delisting it |
 | `add_attester(admin, attester)` | admin | Grants attester rights |
 | `remove_attester(admin, attester)` | admin | Revokes them |
+| `add_verifier(admin, verifier)` | admin | Grants verifier rights |
+| `remove_verifier(admin, verifier)` | admin | Revokes them |
 | `propose_admin(admin, new_admin)` | admin | Nominates a new admin |
 | `accept_admin(new_admin)` | nominee | Completes the two-step handover |
 | `is_active_provider(provider)` | view | The check `voucher` relies on |
@@ -308,6 +307,7 @@ KEEPER_SECRET=<funded account seed> npm run keeper -- --watch
 | `is_service_available(provider, code)` | view | Listed, active and not paused |
 | `get_upcoming_price(provider, code)` | view | Scheduled price and when it applies, or `(0, 0)` |
 | `is_attester(addr)` | view | Attester check |
+| `is_verifier(addr)` | view | Verifier check |
 
 ### `voucher`
 

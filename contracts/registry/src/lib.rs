@@ -27,20 +27,15 @@ use soroban_sdk::{contract, contractimpl, token, Address, BytesN, Env, String, V
 
 pub use events::{
     AdminChanged, AdminProposed, AttesterAdded, AttesterRemoved, CapacityChanged, Initialized,
-    ProviderCategoryChanged, ProviderRegistered, ProviderStatusChanged, ProviderUpdated,
-    ServiceAvailabilityChanged, ServicePriceScheduled, ServiceRemoved, ServiceUpserted, Upgraded,
-    VerificationEvidenceSet,
-};
-pub use types::{
-    DataKey, Provider, ProviderCategory, ProviderStatus, RegistrationDepositConfig, RegistryError,
-    ServiceItem,
+    ProviderRegistered, ProviderStatusChanged, ServiceAvailabilityChanged, ServicePriceScheduled,
+    ServiceRemoved, ServiceUpserted, VerifierAdded, VerifierRemoved,
 };
 
 use storage::{
     extend_instance, has_admin, has_provider, list_providers_by_country, read_admin, read_attester,
-    read_capacity, read_pending_admin, read_provider, read_service,
+    read_capacity, read_pending_admin, read_provider, read_service, read_verifier,
     remove_service as storage_remove_service, write_admin, write_attester, write_capacity,
-    write_provider, write_service,
+    write_provider, write_service, write_verifier,
 };
 
 /// Least notice a clinic must give before a scheduled price takes effect.
@@ -296,7 +291,7 @@ impl Registry {
         Ok(())
     }
 
-    /// Moves a provider between lifecycle states. Admin only.
+    /// Moves a provider between lifecycle states. Admin or verifier.
     ///
     /// Only the four informative transitions are accepted — `Pending →
     /// Active`, `Pending → Suspended`, `Active → Suspended` and
@@ -325,15 +320,12 @@ impl Registry {
     /// transfer fails, the status change reverts and the deposit remains held.
     pub fn set_provider_status(
         env: Env,
-        admin: Address,
+        caller: Address,
         provider_addr: Address,
         status: ProviderStatus,
         reason_code: u32,
     ) -> Result<(), RegistryError> {
-        Self::require_admin(&env, &admin)?;
-        if reason_code == 0 {
-            return Err(RegistryError::MissingReasonCode);
-        }
+        Self::require_admin_or_verifier(&env, &caller)?;
 
         let mut provider = read_provider(&env, &provider_addr)?;
         if !ProviderStatus::is_transition_allowed(provider.status, status) {
@@ -763,62 +755,26 @@ impl Registry {
         Ok(())
     }
 
-            /// Adds an active service category. Admin only.
-    pub fn add_category(
+    /// Grants verifier rights. Admin only.
+    pub fn add_verifier(env: Env, admin: Address, verifier: Address) -> Result<(), RegistryError> {
+        Self::require_admin(&env, &admin)?;
+        write_verifier(&env, &verifier, true);
+        extend_instance(&env);
+        VerifierAdded { verifier }.publish(&env);
+        Ok(())
+    }
+
+    /// Revokes verifier rights. Admin only.
+    pub fn remove_verifier(
         env: Env,
         admin: Address,
-        code: u32,
-        label: String,
+        verifier: Address,
     ) -> Result<(), RegistryError> {
         Self::require_admin(&env, &admin)?;
-        if label.is_empty() {
-            return Err(RegistryError::EmptyName);
-        }
-        let key = CategoryKey::Item(code);
-        if env.storage().instance().has(&key) {
-            return Err(RegistryError::CategoryExists);
-        }
-        env.storage().instance().set(
-            &key,
-            &Category {
-                code,
-                label,
-                active: true,
-            },
-        );
+        write_verifier(&env, &verifier, false);
         extend_instance(&env);
+        VerifierRemoved { verifier }.publish(&env);
         Ok(())
-    }
-
-    /// Marks a category inactive, so new services can no longer use it. Admin only.
-    pub fn deprecate_category(env: Env, admin: Address, code: u32) -> Result<(), RegistryError> {
-        Self::require_admin(&env, &admin)?;
-        let key = CategoryKey::Item(code);
-        let mut cat: Category = env
-            .storage()
-            .instance()
-            .get(&key)
-            .ok_or(RegistryError::UnknownCategory)?;
-        cat.active = false;
-        env.storage().instance().set(&key, &cat);
-        extend_instance(&env);
-        Ok(())
-    }
-
-    /// Turns category enforcement on or off. Off by default. Admin only.
-    pub fn set_category_gate(env: Env, admin: Address, enabled: bool) -> Result<(), RegistryError> {
-        Self::require_admin(&env, &admin)?;
-        env.storage().instance().set(&CategoryKey::Gate, &enabled);
-        extend_instance(&env);
-        Ok(())
-    }
-
-    pub fn get_category(env: Env, code: u32) -> Option<Category> {
-        env.storage().instance().get(&CategoryKey::Item(code))
-    }
-
-    pub fn is_category_active(env: Env, code: u32) -> bool {
-        Self::get_category(env, code).is_some_and(|c| c.active)
     }
 
     /// Nominates a new admin. Takes effect only once they accept.
@@ -992,39 +948,8 @@ impl Registry {
         list_providers_by_country(&env, &country, start, limit)
     }
 
-    /// Storage layout version, or 0 if not yet set.
-    pub fn get_storage_version(env: Env) -> u32 {
-        env.storage()
-            .instance()
-            .get(&DataKey::StorageVersion)
-            .unwrap_or(0)
-    }
-
-    /// Upgrades the contract's Wasm byte-code in place. Admin only.
-    pub fn upgrade(
-        env: Env,
-        admin: Address,
-        new_wasm_hash: BytesN<32>,
-    ) -> Result<(), RegistryError> {
-        Self::require_admin(&env, &admin)?;
-        #[allow(deprecated)]
-        env.deployer()
-            .update_current_contract_wasm(new_wasm_hash.clone());
-        extend_instance(&env);
-        Upgraded { new_wasm_hash }.publish(&env);
-        Ok(())
-    }
-
-    /// Migrates the contract storage layout after an upgrade. Admin only.
-    pub fn migrate(env: Env, admin: Address) -> Result<(), RegistryError> {
-        Self::require_admin(&env, &admin)?;
-        let current_version = Self::get_storage_version(env.clone());
-        let new_version = current_version.saturating_add(1);
-        env.storage()
-            .instance()
-            .set(&DataKey::StorageVersion, &new_version);
-        extend_instance(&env);
-        Ok(())
+    pub fn is_verifier(env: Env, addr: Address) -> bool {
+        read_verifier(&env, &addr)
     }
 
     /// Crate version this contract was built from, e.g. `"0.2.0"`.
@@ -1132,6 +1057,17 @@ impl Registry {
     fn require_admin(env: &Env, admin: &Address) -> Result<(), RegistryError> {
         let stored = read_admin(env)?;
         common::require_admin(&stored, admin)?;
+        Ok(())
+    }
+
+    fn require_admin_or_verifier(env: &Env, caller: &Address) -> Result<(), RegistryError> {
+        let admin = read_admin(env)?;
+        let is_admin = &admin == caller;
+        let is_verifier = read_verifier(env, caller);
+        if !is_admin && !is_verifier {
+            return Err(RegistryError::NotAuthorized);
+        }
+        caller.require_auth();
         Ok(())
     }
 }

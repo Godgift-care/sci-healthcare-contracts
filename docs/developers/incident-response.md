@@ -72,7 +72,7 @@ Use the narrowest lever that stops the harm. Each is one call and can be undone.
 # Only Pending→Active, Pending→Suspended, Active→Suspended and
 # Suspended→Active are accepted; anything else fails with InvalidTransition.
 stellar contract invoke --id "$REGISTRY_CONTRACT_ID" --source-account "$ADMIN" --network "$NET" \
-  -- set_provider_status --admin "$ADMIN_ADDR" --provider_addr <clinic G...> --status 2 --reason_code 3
+  -- set_provider_status --caller "$ADMIN_ADDR" --provider_addr <clinic G...> --status 2
 ```
 
 **Remove an attester** — every further attestation by that key is rejected.
