@@ -824,6 +824,64 @@ fn rejects_expiry_in_the_past() {
     assert_eq!(err, VoucherError::InvalidExpiry);
 }
 
+// ----- reassigning a funded voucher's beneficiary -----
+
+#[test]
+fn reassign_changes_the_beneficiary_ref_and_emits_event() {
+    let f = setup();
+    let id = fund(&f);
+    let fixed = BytesN::from_array(&f.env, &[0x42u8; 32]);
+
+    f.voucher.reassign(&f.funder, &id, &fixed);
+
+    let e = one_event(&f);
+    assert_layout(
+        &e,
+        "voucher_reassigned",
+        &[ScVal::from(&f.funder)],
+        &["voucher_id", "old_ref", "new_ref"],
+    );
+    assert_eq!(field_u64(&e, "voucher_id"), id);
+
+    let voucher = f.voucher.get_voucher(&id);
+    assert_eq!(voucher.beneficiary_ref, fixed);
+    assert_eq!(voucher.status, VoucherStatus::Funded);
+    assert_eq!(voucher.provider, f.provider);
+    assert_eq!(voucher.amount, CONSULT_PRICE);
+}
+
+#[test]
+fn only_funder_can_reassign() {
+    let f = setup();
+    let id = fund(&f);
+    let stranger = Address::generate(&f.env);
+
+    let err = f
+        .voucher
+        .try_reassign(&stranger, &id, &BytesN::from_array(&f.env, &[0x42u8; 32]))
+        .err()
+        .unwrap()
+        .unwrap();
+    assert_eq!(err, VoucherError::NotAuthorized);
+    assert_eq!(f.voucher.get_voucher(&id).beneficiary_ref, patient(&f.env));
+}
+
+#[test]
+fn cannot_reassign_a_claimed_voucher() {
+    let f = setup();
+    let id = fund(&f);
+    f.voucher.claim(&f.provider, &id);
+
+    let err = f
+        .voucher
+        .try_reassign(&f.funder, &id, &BytesN::from_array(&f.env, &[0x42u8; 32]))
+        .err()
+        .unwrap()
+        .unwrap();
+    assert_eq!(err, VoucherError::InvalidStatus);
+    assert_eq!(f.voucher.get_voucher(&id).beneficiary_ref, patient(&f.env));
+}
+
 // ----- reducing an overpayment -----
 //
 // A funder who paid more than the listed price can bring the escrowed
@@ -2916,6 +2974,10 @@ const AUTH_MATRIX: &[AuthCase] = &[
         auth: signer("`funder`", funder_addr),
     },
     AuthCase {
+        function: "reassign",
+        auth: signer("`funder`", funder_addr),
+    },
+    AuthCase {
         function: "claim",
         auth: signer("`provider`", provider_addr),
     },
@@ -3138,6 +3200,10 @@ fn run_case(f: &AuthFixture, function: &str) -> CaseRun {
                 &CONSULT_PRICE,
             );
             voucher.redirect(&f.f.funder, &id, &provider);
+        }
+        "reassign" => {
+            let id = fund(&f.f);
+            voucher.reassign(&f.f.funder, &id, &BytesN::from_array(env, &[0x42u8; 32]));
         }
         "claim" => {
             let id = fund(&f.f);

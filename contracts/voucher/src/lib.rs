@@ -55,7 +55,7 @@ pub use events::{
     AdminChanged, AdminProposed, AttestationCapChanged, DisputeResolved,
     DisputeWindowBoundsChanged, EscrowCapChanged, Initialized, PresenceThresholdChanged,
     VoucherAmountReduced, VoucherAttested, VoucherClaimed, VoucherCreated, VoucherDeclined,
-    VoucherDisputed, VoucherRedirected, VoucherRefunded, VoucherSettled,
+    VoucherDisputed, VoucherReassigned, VoucherRedirected, VoucherRefunded, VoucherSettled,
 };
 pub use interfaces::{ReceiptClient, RegistryClient};
 pub use types::{Config, DataKey, Exposure, Voucher, VoucherError, VoucherOptions, VoucherStatus};
@@ -295,6 +295,50 @@ impl VoucherEscrow {
             previous_provider,
             new_provider,
             service_code: voucher.service_code,
+        }
+        .publish(&env);
+        Ok(())
+    }
+
+    /// Corrects the beneficiary reference on a voucher that is still `Funded`.
+    ///
+    /// A funder who entered the wrong patient reference can fix it without
+    /// waiting for expiry or cancelling and re-funding. Only the reference
+    /// changes: provider, service, amount, expiry and escrow stay as they
+    /// are. The reference is opaque, so the event carries the old and new
+    /// values and nothing about the patient. Once the clinic has claimed the
+    /// voucher the reference is what the care is recorded against, so the
+    /// change is closed.
+    ///
+    /// Errors:
+    ///
+    /// - `NotAuthorized` — the caller is not the voucher's funder.
+    /// - `InvalidStatus` — the voucher is no longer `Funded`.
+    pub fn reassign(
+        env: Env,
+        funder: Address,
+        voucher_id: u64,
+        new_ref: BytesN<32>,
+    ) -> Result<(), VoucherError> {
+        funder.require_auth();
+
+        let mut voucher = read_voucher(&env, voucher_id)?;
+        if voucher.funder != funder {
+            return Err(VoucherError::NotAuthorized);
+        }
+        if voucher.status != VoucherStatus::Funded {
+            return Err(VoucherError::InvalidStatus);
+        }
+
+        let old_ref = voucher.beneficiary_ref.clone();
+        voucher.beneficiary_ref = new_ref.clone();
+        write_voucher(&env, &mut voucher);
+
+        VoucherReassigned {
+            funder,
+            voucher_id,
+            old_ref,
+            new_ref,
         }
         .publish(&env);
         Ok(())
