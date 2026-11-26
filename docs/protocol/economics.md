@@ -9,11 +9,11 @@ translations:
 
 # Economics
 
-## Per-voucher exposure cap
+## Funding overpayments
 
-Each voucher is limited to the configured `max_amount`, expressed in the settlement token's smallest unit. The default deployment cap is **100 USDC** (`1,000,000,000` stroops). A voucher exactly at the cap is accepted; a larger voucher is rejected before funds are transferred. This bounds the protocol's exposure to any single funding or settlement mistake while keeping the limit adjustable as operational confidence grows.
+`create_voucher` accepts an amount from the listed service price up to **20% above it** (`MAX_OVERPAY_BPS = 2,000`). This allows small quote or rounding differences while preventing a mistyped amount from sending an arbitrarily large extra payment to the clinic. An amount exactly at the cap is accepted; one smallest token unit above it is rejected with `AmountAboveMaxPrice` (#25). The cap is calculated with checked integer arithmetic; an overflow returns `MathOverflow`.
 
-Changing the cap requires an admin to schedule a positive value at least 24 hours ahead. The active cap remains unchanged until anyone activates the proposal after its effective time. Replacing a pending proposal restarts the notice period, and a lower cap affects only newly created vouchers, not vouchers already escrowed.
+For example, a service listed at 30,000,000 stroops can be funded for at most 36,000,000 stroops. If a funder does overpay within that limit, `reduce_amount` can still return the difference before the clinic claims the voucher.
 
 ## The fee
 

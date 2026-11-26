@@ -223,16 +223,8 @@ pub enum VoucherError {
     /// The chosen dispute window is outside the allowed bounds, or the bounds
     /// themselves are invalid.
     InvalidDisputeWindow = 31,
-    /// The configured maximum voucher amount must be positive.
-    InvalidMaxAmount = 36,
-    /// The requested voucher amount exceeds the configured maximum.
-    AmountExceedsMax = 37,
-    /// A maximum amount change must be scheduled at least 24 hours ahead.
-    MaxAmountNoticeTooShort = 38,
-    /// There is no scheduled maximum amount change to activate.
-    NoPendingMaxAmount = 39,
-    /// The scheduled maximum amount change is not ready to activate.
-    MaxAmountChangeNotReady = 40,
+    /// The amount is more than `MAX_OVERPAY_BPS` above the listed service price.
+    AmountAboveMaxPrice = 35,
 }
 
 /// Maps the shared helpers' failures onto this contract's error numbers, so

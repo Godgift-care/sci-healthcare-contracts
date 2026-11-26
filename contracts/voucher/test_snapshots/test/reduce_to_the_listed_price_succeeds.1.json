@@ -182,7 +182,7 @@
                   "u32": 101
                 },
                 {
-                  "i128": "60000000"
+                  "i128": "36000000"
                 },
                 {
                   "u64": "1702592000"
@@ -204,7 +204,7 @@
                       "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAATYON"
                     },
                     {
-                      "i128": "60000000"
+                      "i128": "36000000"
                     }
                   ]
                 }
