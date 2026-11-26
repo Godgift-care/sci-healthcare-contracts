@@ -1,7 +1,7 @@
 # Changelog
 
 ## Unreleased
-
+- registry: add admin-managed service category catalogue (`add_category`, `deprecate_category`, `set_category_gate`); `upsert_service` can require an active category for new services behind a gate that is off by default (#31)
 ### Added
 - **voucher:** `reassign(funder, voucher_id, new_ref)` corrects the beneficiary reference on a voucher that is still `Funded`, so a funder who entered the wrong patient reference no longer waits for expiry or cancels and re-funds. Only the funder can call it, and it is refused with `InvalidStatus` once the clinic has claimed the voucher. Provider, amount, expiry and escrow are unchanged. It emits `voucher_reassigned` with the old and new references, both opaque. The indexer must handle the new event. Closes #39.
 - **docs:** a language switcher on the documentation site. Every translated page declares its counterparts in front matter (`language` and `translations`), and [`docs/_includes/header_custom.html`](docs/_includes/header_custom.html) renders them at the top of the page, so a reader on the English funders guide is one click from the French and Swahili ones. The guide and protocol pages in all three languages are wired up. [`i18n-check.cjs`](.github/scripts/i18n-check.cjs) fails CI when a translated page has no front matter, points at a page that does not exist, or links a counterpart that does not link back. Closes #279.

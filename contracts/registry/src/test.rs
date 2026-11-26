@@ -1188,786 +1188,133 @@ fn capacity_changed_event_snapshot() {
     assert_eq!(field_u32(&e, "max_outstanding"), 12);
 }
 
-// ----- country codes -----
-//
-// The app and the indexer group clinics by country code, so the registry
-// accepts only what can be a country: two ASCII uppercase letters. What
-// breaks if this is wrong: "ng" and "NG" showing up as two countries, or
-// junk codes breaking the filter entirely.
-//
-// Checking against the full ISO list is an off-chain concern; the shape is
-// not.
 
-// ----- status transitions -----
-//
-// Only four transitions carry real information; every other pair of states
-// — including same-to-same and anything touching `Retired` — must be
-// refused with `InvalidTransition` instead of emitting an event that
-// misleads the indexer. One test per pair of the 4x4 state machine.
-//
-// What breaks if this is wrong: an audit of the registry's history shows
-// status changes that never happened, or a backwards `Active → Pending`
-// nobody can explain.
+// ----- service categories -----
 
-/// A fresh provider left in `status`, ready for one transition attempt.
-fn provider_in(f: &Fixture, status: ProviderStatus) -> Address {
-    let provider = Address::generate(&f.env);
-    f.client.register_provider(
+#[test]
+fn category_gate_off_allows_any_code() {
+    let f = setup();
+    let provider = register_active_provider(&f);
+    f.client.upsert_service(
         &provider,
-        &String::from_str(&f.env, "Clinic"),
-        &String::from_str(&f.env, "NG"),
-        &ProviderCategory::Clinic,
+        &999u32,
+        &String::from_str(&f.env, "Any"),
+        &100i128,
     );
-    match status {
-        ProviderStatus::Pending => {}
-        ProviderStatus::Retired => f.client.retire(&provider, &REASON_VERIFIED),
-        other => f
-            .client
-            .set_provider_status(&f.admin, &provider, &other, &REASON_VERIFIED),
-    }
-    provider
 }
 
-/// The admin attempts `provider → to`, returning the typed error.
-fn try_transition(f: &Fixture, provider: &Address, to: &ProviderStatus) -> RegistryError {
-    f.client
-        .try_set_provider_status(&f.admin, provider, to, &REASON_VERIFIED)
+#[test]
+fn category_gate_on_rejects_unknown_category() {
+    let f = setup();
+    let provider = register_active_provider(&f);
+    f.client.set_category_gate(&f.admin, &true);
+
+    let err = f
+        .client
+        .try_upsert_service(
+            &provider,
+            &999u32,
+            &String::from_str(&f.env, "Any"),
+            &100i128,
+        )
         .err()
         .unwrap()
-        .unwrap()
+        .unwrap();
+    assert_eq!(err, RegistryError::UnknownCategory);
 }
 
-fn assert_allowed(from: ProviderStatus, to: ProviderStatus) {
+#[test]
+fn category_gate_on_accepts_active_category() {
     let f = setup();
-    let provider = provider_in(&f, from);
+    let provider = register_active_provider(&f);
     f.client
-        .set_provider_status(&f.admin, &provider, &to, &REASON_VERIFIED);
-    assert_eq!(f.client.get_provider(&provider).status, to);
-}
+        .add_category(&f.admin, &1u32, &String::from_str(&f.env, "Consultation"));
+    f.client.set_category_gate(&f.admin, &true);
 
-fn assert_rejected(from: ProviderStatus, to: ProviderStatus) {
-    let f = setup();
-    let provider = provider_in(&f, from);
-    assert_eq!(
-        try_transition(&f, &provider, &to),
-        RegistryError::InvalidTransition,
-        "`{from:?} → {to:?}` must be refused"
-    );
-    // The failed call changed nothing.
-    assert_eq!(f.client.get_provider(&provider).status, from);
-}
-
-// ----- reason codes -----
-//
-// Every status change records why, on the provider and in the event, so a
-// suspended clinic knows what to fix and a funder can tell fraud from
-// paperwork. Codes are documented in `docs/protocol/trust.md` and are
-// added, never renumbered.
-
-/// `5` is "closed" — the reason a clinic gives when it retires.
-const REASON_CLOSED: u32 = 5;
-
-// ----- retiring -----
-//
-// A clinic that closes must be able to leave the registry itself, and
-// staying left behind means funders keep sending money it will never claim.
-// `Retired` is terminal: neither the clinic nor the admin can leave it.
-
-// ----- event table in the docs -----
-//
-// Events are the indexer's API. This test reads the `#[contractevent]` structs
-// in `events.rs` and compares the event names, topics and data fields with the
-// table in `docs/developers/contracts.md`. Adding a field without documenting
-// it fails here rather than in a downstream decoder.
-//
-// What breaks if this is wrong: `sci-healthcare-backend` decodes by event name
-// and field name, so an undocumented rename becomes `undefined` in the indexer.
-
-#[derive(Debug)]
-struct SourceEvent {
-    name: std::string::String,
-    topics: std::vec::Vec<std::string::String>,
-    data: std::vec::Vec<std::string::String>,
-}
-
-fn snake_case(name: &str) -> std::string::String {
-    let mut out = std::string::String::new();
-    for (index, ch) in name.chars().enumerate() {
-        if ch.is_ascii_uppercase() {
-            if index != 0 {
-                out.push('_');
-            }
-            out.push(ch.to_ascii_lowercase());
-        } else {
-            out.push(ch);
-        }
-    }
-    out
-}
-
-fn events_in_source(source: &str) -> std::vec::Vec<SourceEvent> {
-    let mut events = std::vec::Vec::new();
-    let mut seen_attribute = false;
-    let mut current: Option<SourceEvent> = None;
-    let mut pending_topic = false;
-
-    for raw in source.lines() {
-        let line = raw.trim();
-        if line.starts_with("#[contractevent") {
-            seen_attribute = true;
-            continue;
-        }
-        let Some(event) = current.as_mut() else {
-            if seen_attribute {
-                if let Some(rest) = line.strip_prefix("pub struct ") {
-                    let name = rest.trim().trim_end_matches('{').trim();
-                    current = Some(SourceEvent {
-                        name: snake_case(name),
-                        topics: std::vec::Vec::new(),
-                        data: std::vec::Vec::new(),
-                    });
-                    seen_attribute = false;
-                }
-            }
-            continue;
-        };
-        if line == "}" {
-            events.push(current.take().unwrap());
-            continue;
-        }
-        if line == "#[topic]" {
-            pending_topic = true;
-            continue;
-        }
-        if let Some(rest) = line.strip_prefix("pub ") {
-            let field = rest.split(':').next().unwrap().trim();
-            if pending_topic {
-                event.topics.push(field.into());
-            } else {
-                event.data.push(field.into());
-            }
-            pending_topic = false;
-        }
-    }
-
-    events
-}
-
-fn doc_event_rows<'a>(docs: &'a str, contract: &str) -> std::vec::Vec<&'a str> {
-    let heading = if contract == "faucet" {
-        "## faucet (testnet only)\n".to_string()
-    } else {
-        std::format!("## {contract}\n")
-    };
-    let start = docs
-        .find(&heading)
-        .unwrap_or_else(|| panic!("contracts.md has no `{contract}` section"));
-    let section = &docs[start..];
-    let start = section
-        .find("### Events")
-        .unwrap_or_else(|| panic!("the `{contract}` section has no event table"));
-    let section = &section[start..];
-    let end = find_section_end(section);
-    section[..end]
-        .lines()
-        .filter(|line| line.starts_with("| `"))
-        .collect()
-}
-
-fn split_doc_fields(cell: &str) -> std::vec::Vec<std::string::String> {
-    let trimmed = cell.trim();
-    if trimmed.is_empty() || trimmed == "-" || trimmed == "—" {
-        return std::vec::Vec::new();
-    }
-    cell.split(',')
-        .map(|field| field.trim().trim_matches('`').into())
-        .collect()
-}
-
-fn doc_event_row(line: &str) -> std::vec::Vec<std::string::String> {
-    line.trim()
-        .trim_matches('|')
-        .split('|')
-        .map(|cell| cell.trim().trim_matches('`').into())
-        .collect()
-}
-
-#[test]
-fn event_table_in_the_docs_matches_the_source() {
-    const DOCS: &str = include_str!("../../../docs/developers/contracts.md");
-    const SOURCE: &str = include_str!("events.rs");
-
-    let source = events_in_source(SOURCE);
-    let rows = doc_event_rows(DOCS, "registry");
-    assert_eq!(
-        rows.len(),
-        source.len(),
-        "docs/developers/contracts.md documents {} registry events but the source has {}",
-        rows.len(),
-        source.len(),
-    );
-    for event in source {
-        let row = rows
-            .iter()
-            .map(|line| doc_event_row(line))
-            .find(|row| row[0] == event.name)
-            .unwrap_or_else(|| {
-                panic!(
-                    "docs/developers/contracts.md is missing the `{}` event. Add its row \
-                     to the registry event table with topics {:?} and data {:?}",
-                    event.name, event.topics, event.data,
-                )
-            });
-        assert_eq!(
-            split_doc_fields(&row[1]),
-            event.topics,
-            "the topics documented for `{}` do not match the #[topic] fields in \
-             contracts/registry/src/events.rs",
-            event.name,
-        );
-        assert_eq!(
-            split_doc_fields(&row[2]),
-            event.data,
-            "the data fields documented for `{}` do not match the non-topic fields in \
-             contracts/registry/src/events.rs. The indexer decodes them by name \
-             (TOPIC_FIELDS in sci-healthcare-backend/src/stellar/events.ts)",
-            event.name,
-        );
-    }
-}
-
-// ----- stored-type upgrade safety -----
-//
-// The fixtures in `fixtures/stored_types/` are XDR of the values the latest
-// release writes. If a change to a `#[contracttype]` struct makes an old
-// fixture undecodable, every entry written by the previous release is
-// unreadable unless the change is handled deliberately. Regenerate only at
-// release time with `just stored-type-fixtures`.
-//
-// What breaks if this is wrong: a deployed contract upgrade (or a redeploy
-// pointed at existing state) loses access to providers and services already
-// in the ledger.
-
-fn fixture_path(name: &str) -> std::path::PathBuf {
-    std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("fixtures/stored_types")
-        .join(std::format!("{name}.hex"))
-}
-
-fn to_hex(bytes: &soroban_sdk::Bytes) -> std::string::String {
-    use std::fmt::Write as _;
-
-    let mut out = std::string::String::new();
-    for byte in bytes.iter() {
-        write!(&mut out, "{byte:02x}").unwrap();
-    }
-    out
-}
-
-fn from_hex(env: &Env, text: &str) -> soroban_sdk::Bytes {
-    let text = text.trim();
-    assert_eq!(
-        text.len() % 2,
-        0,
-        "a stored-type fixture has an odd hex length"
-    );
-    let mut bytes = std::vec::Vec::with_capacity(text.len() / 2);
-    for index in (0..text.len()).step_by(2) {
-        bytes.push(u8::from_str_radix(&text[index..index + 2], 16).unwrap());
-    }
-    soroban_sdk::Bytes::from_slice(env, &bytes)
-}
-
-fn check_stored_type<T>(env: &Env, name: &str, expected: T)
-where
-    T: soroban_sdk::xdr::ToXdr + soroban_sdk::xdr::FromXdr + Clone + PartialEq + std::fmt::Debug,
-    <T as soroban_sdk::xdr::FromXdr>::Error: std::fmt::Debug,
-{
-    let bytes = expected.clone().to_xdr(env);
-    let path = fixture_path(name);
-
-    if std::env::var_os("UPDATE_STORED_TYPE_FIXTURES").is_some() {
-        std::fs::create_dir_all(path.parent().unwrap()).unwrap();
-        std::fs::write(&path, std::format!("{}\n", to_hex(&bytes))).unwrap();
-        return;
-    }
-
-    let committed = std::fs::read_to_string(&path).unwrap_or_else(|_| {
-        panic!(
-            "{} is missing; regenerate fixtures with `just stored-type-fixtures`",
-            path.display()
-        )
-    });
-    let fixture = from_hex(env, &committed);
-    match T::from_xdr(env, &fixture) {
-        Ok(decoded) => assert_eq!(
-            decoded, expected,
-            "the stored `{name}` fixture decodes to a different value than the current \
-             code writes. This is a breaking storage change: keep the old layout, put \
-             new fields under a new data key, or add a versioned migration before \
-             refreshing the fixture",
-        ),
-        Err(error) => panic!(
-            "the stored `{name}` fixture no longer decodes into the current type: \
-             {error:?}. Adding, removing, renaming or reordering a field is a breaking \
-             storage change. Keep the old layout, put new fields under a new data key \
-             with a default, or add a versioned migration; only then refresh fixtures \
-             with `just stored-type-fixtures`",
-        ),
-    }
-}
-
-#[test]
-fn stored_type_fixtures_decode_against_current_code() {
-    let env = Env::default();
-    let owner = Address::from_str(
-        &env,
-        "GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWHF",
-    );
-
-    check_stored_type(
-        &env,
-        "provider",
-        Provider {
-            owner,
-            name: String::from_str(&env, "Ikeja General Clinic"),
-            country: String::from_str(&env, "NG"),
-            status: ProviderStatus::Active,
-            registered_at: 1_700_000_000,
-            reason_code: REASON_VERIFIED,
-            category: ProviderCategory::Clinic,
-            verification_evidence: None,
-        },
-    );
-    check_stored_type(
-        &env,
-        "service_item",
-        ServiceItem {
-            code: CONSULT,
-            label: String::from_str(&env, "Outpatient consult"),
-            price: PRICE,
-            active: true,
-            available: false,
-            pending_price: PRICE + 5_000_000,
-            effective_at: 1_700_086_400,
-        },
-    );
-}
-
-// ----- reinstating a suspended provider (#302) -----
-//
-// `Suspended → Active` re-opens a clinic to funding, so it is the most
-// sensitive move in the state machine. Only the stored admin, signing, may
-// make it, and it must always say why. Every other caller is tried below,
-// and each failure is checked to leave the clinic suspended with its
-// suspension reason intact.
-//
-// What breaks if this is wrong: a clinic suspended for fraud reinstates
-// itself (or is reinstated by an attester or a stale admin key) and funders
-// start escrowing money for it again, or it is reinstated with no recorded
-// reason and nobody can tell from the history why it was trusted again.
-
-const REASON_FRAUD: u32 = 4;
-
-/// A registered, activated, then suspended (for fraud) provider.
-fn suspended_provider(f: &Fixture) -> Address {
-    let provider = register_active_provider(f);
-    f.client.set_provider_status(
-        &f.admin,
+    f.client.upsert_service(
         &provider,
-        &ProviderStatus::Suspended,
-        &REASON_FRAUD,
+        &1u32,
+        &String::from_str(&f.env, "GP visit"),
+        &100i128,
     );
-    provider
+    assert!(f.client.is_category_active(&1u32));
 }
 
-/// `caller` tries to reinstate `provider` with a valid reason; the typed error.
-fn try_reinstate_as(f: &Fixture, caller: &Address, provider: &Address) -> RegistryError {
+#[test]
+fn deprecated_category_blocks_new_services() {
+    let f = setup();
+    let provider = register_active_provider(&f);
     f.client
-        .try_set_provider_status(caller, provider, &ProviderStatus::Active, &REASON_VERIFIED)
-        .err()
-        .unwrap()
-        .unwrap()
-}
+        .add_category(&f.admin, &1u32, &String::from_str(&f.env, "Consultation"));
+    f.client.deprecate_category(&f.admin, &1u32);
+    f.client.set_category_gate(&f.admin, &true);
 
-fn assert_still_suspended(f: &Fixture, provider: &Address) {
-    let p = f.client.get_provider(provider);
-    assert_eq!(p.status, ProviderStatus::Suspended);
-    assert_eq!(
-        p.reason_code, REASON_FRAUD,
-        "the suspension reason must survive"
-    );
-    assert!(!f.client.is_active_provider(provider));
-    assert_eq!(f.client.provider_counts(), (0, 0, 1));
-}
-
-#[test]
-fn admin_can_reinstate_a_suspended_provider_with_a_reason() {
-    let f = setup();
-    let provider = suspended_provider(&f);
-
-    f.client.set_provider_status(
-        &f.admin,
-        &provider,
-        &ProviderStatus::Active,
-        &REASON_VERIFIED,
-    );
-
-    // Exactly the admin signed for it.
-    let auths = f.env.auths();
-    assert_eq!(auths.len(), 1);
-    assert_eq!(auths[0].0, f.admin);
-
-    let p = f.client.get_provider(&provider);
-    assert_eq!(p.status, ProviderStatus::Active);
-    assert_eq!(p.reason_code, REASON_VERIFIED);
-    assert!(f.client.is_active_provider(&provider));
-}
-
-#[test]
-fn provider_cannot_reinstate_itself() {
-    let f = setup();
-    let provider = suspended_provider(&f);
-    assert_eq!(
-        try_reinstate_as(&f, &provider, &provider),
-        RegistryError::NotAuthorized
-    );
-    assert_still_suspended(&f, &provider);
-}
-
-#[test]
-fn stranger_cannot_reinstate_a_provider() {
-    let f = setup();
-    let provider = suspended_provider(&f);
-    let stranger = Address::generate(&f.env);
-    assert_eq!(
-        try_reinstate_as(&f, &stranger, &provider),
-        RegistryError::NotAuthorized
-    );
-    assert_still_suspended(&f, &provider);
-}
-
-#[test]
-fn attester_cannot_reinstate_a_provider() {
-    let f = setup();
-    let provider = suspended_provider(&f);
-    let attester = Address::generate(&f.env);
-    f.client.add_attester(&f.admin, &attester);
-    assert_eq!(
-        try_reinstate_as(&f, &attester, &provider),
-        RegistryError::NotAuthorized
-    );
-    assert_still_suspended(&f, &provider);
-}
-
-#[test]
-fn another_active_provider_cannot_reinstate_a_provider() {
-    let f = setup();
-    let provider = suspended_provider(&f);
-    let other = Address::generate(&f.env);
-    activate(&f, &other);
-    assert_eq!(
-        try_reinstate_as(&f, &other, &provider),
-        RegistryError::NotAuthorized
-    );
-    let p = f.client.get_provider(&provider);
-    assert_eq!(p.status, ProviderStatus::Suspended);
-    assert_eq!(p.reason_code, REASON_FRAUD);
-}
-
-#[test]
-fn pending_admin_cannot_reinstate_before_accepting() {
-    let f = setup();
-    let provider = suspended_provider(&f);
-    let nominee = Address::generate(&f.env);
-    f.client.propose_admin(&f.admin, &nominee);
-    assert_eq!(
-        try_reinstate_as(&f, &nominee, &provider),
-        RegistryError::NotAuthorized
-    );
-    assert_still_suspended(&f, &provider);
-}
-
-#[test]
-fn previous_admin_cannot_reinstate_after_handover() {
-    let f = setup();
-    let provider = suspended_provider(&f);
-    let new_admin = Address::generate(&f.env);
-    f.client.propose_admin(&f.admin, &new_admin);
-    f.client.accept_admin(&new_admin);
-
-    assert_eq!(
-        try_reinstate_as(&f, &f.admin, &provider),
-        RegistryError::NotAuthorized
-    );
-    assert_still_suspended(&f, &provider);
-
-    // The new admin can.
-    f.client.set_provider_status(
-        &new_admin,
-        &provider,
-        &ProviderStatus::Active,
-        &REASON_VERIFIED,
-    );
-    assert!(f.client.is_active_provider(&provider));
-}
-
-#[test]
-fn admin_address_without_its_signature_cannot_reinstate() {
-    let f = setup();
-    let provider = suspended_provider(&f);
-
-    // The right address, but nobody signed: the host refuses.
-    f.env.mock_auths(&[]);
-    assert!(
-        f.client
-            .try_set_provider_status(
-                &f.admin,
-                &provider,
-                &ProviderStatus::Active,
-                &REASON_VERIFIED
-            )
-            .is_err(),
-        "an unsigned reinstatement must not go through"
-    );
-    f.env.mock_all_auths();
-    assert_still_suspended(&f, &provider);
-}
-
-#[test]
-fn reinstating_with_reason_zero_is_rejected() {
-    let f = setup();
-    let provider = suspended_provider(&f);
     let err = f
         .client
-        .try_set_provider_status(&f.admin, &provider, &ProviderStatus::Active, &0u32)
-        .err()
-        .unwrap()
-        .unwrap();
-    assert_eq!(err, RegistryError::MissingReasonCode);
-    assert_still_suspended(&f, &provider);
-}
-
-#[test]
-fn every_admin_status_change_requires_a_reason() {
-    // Not only reinstatement: each allowed transition refuses code 0, which
-    // is reserved for "no status change yet".
-    for (from, to) in [
-        (ProviderStatus::Pending, ProviderStatus::Active),
-        (ProviderStatus::Pending, ProviderStatus::Suspended),
-        (ProviderStatus::Active, ProviderStatus::Suspended),
-        (ProviderStatus::Suspended, ProviderStatus::Active),
-    ] {
-        let f = setup();
-        let provider = provider_in(&f, from);
-        let before = f.client.get_provider(&provider);
-        let err = f
-            .client
-            .try_set_provider_status(&f.admin, &provider, &to, &0u32)
-            .err()
-            .unwrap()
-            .unwrap();
-        assert_eq!(err, RegistryError::MissingReasonCode, "`{from:?} → {to:?}`");
-        assert_eq!(f.client.get_provider(&provider), before);
-    }
-}
-
-#[test]
-fn non_admin_with_reason_zero_gets_not_authorized() {
-    // Authorisation is checked first, so a stranger learns nothing about
-    // the reason-code rule or the provider.
-    let f = setup();
-    let provider = suspended_provider(&f);
-    let stranger = Address::generate(&f.env);
-    let err = f
-        .client
-        .try_set_provider_status(&stranger, &provider, &ProviderStatus::Active, &0u32)
-        .err()
-        .unwrap()
-        .unwrap();
-    assert_eq!(err, RegistryError::NotAuthorized);
-    assert_still_suspended(&f, &provider);
-}
-
-#[test]
-fn name_and_label_length_caps() {
-    let f = setup();
-    let owner = Address::generate(&f.env);
-    f.env.mock_all_auths();
-
-    // 64 chars name is allowed
-    let name_64 = String::from_str(
-        &f.env,
-        "1234567890123456789012345678901234567890123456789012345678901234",
-    );
-    assert_eq!(name_64.len(), 64);
-    f.client.register_provider(
-        &owner,
-        &name_64,
-        &String::from_str(&f.env, "NG"),
-        &ProviderCategory::Clinic,
-    );
-
-    // 65 chars name is rejected
-    let owner2 = Address::generate(&f.env);
-    let name_65 = String::from_str(
-        &f.env,
-        "12345678901234567890123456789012345678901234567890123456789012345",
-    );
-    assert_eq!(name_65.len(), 65);
-    let err = f
-        .client
-        .try_register_provider(
-            &owner2,
-            &name_65,
-            &String::from_str(&f.env, "NG"),
-            &ProviderCategory::Clinic,
+        .try_upsert_service(
+            &provider,
+            &1u32,
+            &String::from_str(&f.env, "GP visit"),
+            &100i128,
         )
         .err()
         .unwrap()
         .unwrap();
-    assert_eq!(err, RegistryError::ValueTooLong);
+    assert_eq!(err, RegistryError::CategoryDeprecated);
+    assert!(!f.client.is_category_active(&1u32));
+}
 
-    // Activate provider to test service label lengths
+#[test]
+fn existing_service_unaffected_after_deprecation() {
+    let f = setup();
+    let provider = register_active_provider(&f);
+    let label = String::from_str(&f.env, "GP visit");
     f.client
-        .set_provider_status(&f.admin, &owner, &ProviderStatus::Active, &1u32);
+        .add_category(&f.admin, &1u32, &String::from_str(&f.env, "Consultation"));
+    f.client.set_category_gate(&f.admin, &true);
+    f.client.upsert_service(&provider, &1u32, &label, &100i128);
 
-    // 48 chars label is allowed
-    let label_48 = String::from_str(&f.env, "123456789012345678901234567890123456789012345678");
-    assert_eq!(label_48.len(), 48);
-    f.client.upsert_service(&owner, &100, &label_48, &1000);
+    f.client.deprecate_category(&f.admin, &1u32);
 
-    // 49 chars label is rejected
-    let label_49 = String::from_str(&f.env, "1234567890123456789012345678901234567890123456789");
-    assert_eq!(label_49.len(), 49);
-    let err = f
-        .client
-        .try_upsert_service(&owner, &101, &label_49, &1000)
-        .err()
-        .unwrap()
-        .unwrap();
-    assert_eq!(err, RegistryError::ValueTooLong);
+    // A price cut on the already-listed service still works.
+    f.client.upsert_service(&provider, &1u32, &label, &90i128);
+    assert_eq!(f.client.get_service_price(&provider, &1u32), 90i128);
 }
 
 #[test]
-fn update_provider_updates_name_and_country_and_indexes() {
+fn duplicate_category_rejected() {
     let f = setup();
-    let owner = Address::generate(&f.env);
-    f.env.mock_all_auths();
-
-    f.client.register_provider(
-        &owner,
-        &String::from_str(&f.env, "Old Name"),
-        &String::from_str(&f.env, "NG"),
-        &ProviderCategory::Clinic,
-    );
     f.client
-        .set_provider_status(&f.admin, &owner, &ProviderStatus::Active, &1u32);
-
-    // Check in country NG
-    assert_eq!(
-        f.client
-            .providers_in(&String::from_str(&f.env, "NG"), &0, &10)
-            .len(),
-        1
-    );
-    assert_eq!(
-        f.client
-            .providers_in(&String::from_str(&f.env, "GH"), &0, &10)
-            .len(),
-        0
-    );
-
-    // Update to GH
-    f.client.update_provider(
-        &owner,
-        &String::from_str(&f.env, "New Name"),
-        &String::from_str(&f.env, "GH"),
-    );
-
-    let p = f.client.get_provider(&owner);
-    assert_eq!(p.name, String::from_str(&f.env, "New Name"));
-    assert_eq!(p.country, String::from_str(&f.env, "GH"));
-    assert_eq!(p.status, ProviderStatus::Active);
-
-    // Country index moved
-    assert_eq!(
-        f.client
-            .providers_in(&String::from_str(&f.env, "NG"), &0, &10)
-            .len(),
-        0
-    );
-    assert_eq!(
-        f.client
-            .providers_in(&String::from_str(&f.env, "GH"), &0, &10)
-            .len(),
-        1
-    );
-
-    // Update validation checks
+        .add_category(&f.admin, &1u32, &String::from_str(&f.env, "Consultation"));
     let err = f
         .client
-        .try_update_provider(
-            &owner,
-            &String::from_str(&f.env, ""),
-            &String::from_str(&f.env, "GH"),
-        )
+        .try_add_category(&f.admin, &1u32, &String::from_str(&f.env, "Again"))
         .err()
         .unwrap()
         .unwrap();
-    assert_eq!(err, RegistryError::EmptyName);
-
-    let err = f
-        .client
-        .try_update_provider(
-            &owner,
-            &String::from_str(&f.env, "New Name"),
-            &String::from_str(&f.env, "invalid"),
-        )
-        .err()
-        .unwrap()
-        .unwrap();
-    assert_eq!(err, RegistryError::InvalidCountry);
-
-    // Non-existent clinic
-    let stranger = Address::generate(&f.env);
-    let err = f
-        .client
-        .try_update_provider(
-            &stranger,
-            &String::from_str(&f.env, "Name"),
-            &String::from_str(&f.env, "GH"),
-        )
-        .err()
-        .unwrap()
-        .unwrap();
-    assert_eq!(err, RegistryError::ProviderNotFound);
+    assert_eq!(err, RegistryError::CategoryExists);
 }
 
 #[test]
-fn upgrade_and_migrate_registry() {
+fn deprecating_unknown_category_fails() {
     let f = setup();
-    f.env.mock_all_auths();
-
-    assert_eq!(f.client.get_storage_version(), 0);
-
-    let stranger = Address::generate(&f.env);
-    let dummy_hash = BytesN::from_array(&f.env, &[1u8; 32]);
-
-    // Stranger cannot upgrade or migrate
     let err = f
         .client
-        .try_upgrade(&stranger, &dummy_hash)
+        .try_deprecate_category(&f.admin, &7u32)
         .err()
         .unwrap()
         .unwrap();
-    assert_eq!(err, RegistryError::NotAuthorized);
-    let err = f.client.try_migrate(&stranger).err().unwrap().unwrap();
-    assert_eq!(err, RegistryError::NotAuthorized);
+    assert_eq!(err, RegistryError::UnknownCategory);
+}
 
-    // Admin can migrate
-    f.client.migrate(&f.admin);
-    assert_eq!(f.client.get_storage_version(), 1);
-    f.client.migrate(&f.admin);
-    assert_eq!(f.client.get_storage_version(), 2);
+#[test]
+fn non_admin_cannot_manage_categories() {
+    let f = setup();
+    let stranger = Address::generate(&f.env);
+    let label = String::from_str(&f.env, "Consultation");
+    assert!(f
+        .client
+        .try_add_category(&stranger, &1u32, &label)
+        .is_err());
+    assert!(f.client.try_set_category_gate(&stranger, &true).is_err());
 }

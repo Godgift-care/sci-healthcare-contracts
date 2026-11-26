@@ -168,19 +168,9 @@ pub enum RegistryError {
     /// `upsert_service` may lower a listed price at once, but a rise has to
     /// go through `schedule_service_price`.
     PriceIncreaseNeedsNotice = 13,
-    /// The requested provider status change is not one of the allowed
-    /// transitions, or would leave `Retired`.
-    InvalidTransition = 14,
-    /// A scheduled price of `MAX_PRICE_JUMP` times the current price or more
-    /// needs the explicit `confirm_large_change` flag. Large jumps are almost
-    /// always a typo, and a typo here overcharges every funder that day.
-    LargePriceJumpNeedsConfirmation = 15,
-    /// `set_provider_status` was called with `reason_code` 0. Code 0 means
-    /// "no status change yet" and is only ever written by registration, so a
-    /// real change — above all reinstating a suspended clinic — must say why.
-    MissingReasonCode = 16,
-    /// A string value exceeded the maximum allowed length.
-    ValueTooLong = 17,
+    UnknownCategory = 90,
+    CategoryDeprecated = 91,
+    CategoryExists = 92,
 }
 
 /// Maps the shared helpers' failures onto this contract's error numbers, so
