@@ -218,17 +218,8 @@ pub enum VoucherError {
     /// The chosen dispute window is outside the allowed bounds, or the bounds
     /// themselves are invalid.
     InvalidDisputeWindow = 31,
-    /// This voucher is above the admin-set presence threshold, so it must be
-    /// funded with a `presence_commitment`.
-    PresenceCommitmentRequired = 32,
-    /// The presence threshold cannot be negative.
-    InvalidPresenceThreshold = 33,
-    /// The settlement token moved a different amount than requested: the
-    /// escrow received less (or more) than a funder paid in, or a payout
-    /// debited the escrow or credited the recipient by something other than
-    /// the amount sent. Happens only with a token that charges transfer fees
-    /// or runs hooks; USDC on Stellar never does. The whole call reverts.
-    TokenAmountMismatch = 34,
+    /// The provider cannot fund a voucher to itself.
+    SelfFunded = 34,
     /// The registry price changed between the quote the funder saw and this
     /// call. Nothing was escrowed; re-quote before signing.
     PriceChanged = 42,

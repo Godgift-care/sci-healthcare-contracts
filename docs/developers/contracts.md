@@ -439,7 +439,7 @@ rejects the voucher's own provider even if it holds that role.
 
 ### What each function checks
 
-**`create_voucher`** — amount > 0; expiry in the future; provider is `Active`; the service exists and is active; amount ≥ listed price; the service is not paused (`ServiceUnavailable`); the clinic is below the capacity it declared in the registry (`ProviderAtCapacity`); the clinic's escrow plus this amount stays within the per-clinic cap (`EscrowCapReached`); an amount above `get_presence_threshold()` carries a `presence_commitment` (`PresenceCommitmentRequired`). Transfers the token *before* writing the voucher, so a failed transfer reverts everything. The contract measures its own token balance before and after the transfer and fails with `TokenAmountMismatch` unless it rose by exactly `amount`, so a token that charges transfer fees can never fund a voucher with less than its recorded amount.
+**`create_voucher`** — funder must not be the provider (`SelfFunded`); amount > 0; expiry in the future; provider is `Active`; the service exists and is active; amount ≥ listed price; the service is not paused (`ServiceUnavailable`); the clinic is below the capacity it declared in the registry (`ProviderAtCapacity`); the clinic's escrow plus this amount stays within the per-clinic cap (`EscrowCapReached`). Transfers the token *before* writing the voucher, so a failed transfer reverts everything.
 
 **`set_max_escrow_per_provider`** — caller is admin; `max` ≥ 0 (`InvalidEscrowCap`). `0`, the default, is unlimited. The cap limits what one clinic can hold in escrow across all its open vouchers, so a verified clinic that turns out to be fraudulent is exposed to at most this much. `get_exposure(provider)` returns the clinic's open voucher count and escrowed value; both fall when a voucher settles or refunds, including through `resolve_dispute` and `resolve_split`, and the value falls by the refunded difference when `reduce_amount` lowers a voucher. Lowering the cap only affects new vouchers.
 
@@ -512,11 +512,7 @@ rejects the voucher's own provider even if it holds that role.
 |  |  | 29 | `InvalidPresenceProof` |
 |  |  | 30 | `NoPresenceCommitment` |
 |  |  | 31 | `InvalidDisputeWindow` |
-|  |  | 32 | `InvalidResponseCode` |
-|  |  | 33 | `DisputeAlreadyResponded` |
-|  |  | 32 | `PresenceCommitmentRequired` |
-|  |  | 33 | `InvalidPresenceThreshold` |
-|  |  | 34 | `TokenAmountMismatch` |
+|  |  | 34 | `SelfFunded` |
 |  |  | 42 | `PriceChanged` |
 |  |  | 35 | `InvalidResponseCode` |
 |  |  | 36 | `DisputeAlreadyResponded` |
