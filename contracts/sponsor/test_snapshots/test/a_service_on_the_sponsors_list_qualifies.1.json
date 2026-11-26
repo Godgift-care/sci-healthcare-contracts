@@ -270,6 +270,14 @@
                   "map": [
                     {
                       "key": {
+                        "symbol": "cap_per_provider"
+                      },
+                      "val": {
+                        "i128": "0"
+                      }
+                    },
+                    {
+                      "key": {
                         "symbol": "cap_per_voucher"
                       },
                       "val": {
@@ -306,6 +314,14 @@
                     },
                     {
                       "key": {
+                        "symbol": "ends_at"
+                      },
+                      "val": {
+                        "u64": "0"
+                      }
+                    },
+                    {
+                      "key": {
                         "symbol": "match_bps"
                       },
                       "val": {
@@ -326,6 +342,14 @@
                       },
                       "val": {
                         "i128": "0"
+                      }
+                    },
+                    {
+                      "key": {
+                        "symbol": "starts_at"
+                      },
+                      "val": {
+                        "u64": "0"
                       }
                     }
                   ]
@@ -1714,6 +1738,25 @@
                   },
                   {
                     "key": {
+                      "symbol": "committed_per_provider"
+                    },
+                    "val": {
+                      "vec": [
+                        {
+                          "vec": [
+                            {
+                              "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAITA4"
+                            },
+                            {
+                              "i128": "3000000"
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  },
+                  {
+                    "key": {
                       "symbol": "deposited"
                     },
                     "val": {
@@ -1765,6 +1808,14 @@
                       "map": [
                         {
                           "key": {
+                            "symbol": "cap_per_provider"
+                          },
+                          "val": {
+                            "i128": "0"
+                          }
+                        },
+                        {
+                          "key": {
                             "symbol": "cap_per_voucher"
                           },
                           "val": {
@@ -1801,6 +1852,14 @@
                         },
                         {
                           "key": {
+                            "symbol": "ends_at"
+                          },
+                          "val": {
+                            "u64": "0"
+                          }
+                        },
+                        {
+                          "key": {
                             "symbol": "match_bps"
                           },
                           "val": {
@@ -1821,6 +1880,14 @@
                           },
                           "val": {
                             "i128": "0"
+                          }
+                        },
+                        {
+                          "key": {
+                            "symbol": "starts_at"
+                          },
+                          "val": {
+                            "u64": "0"
                           }
                         }
                       ]

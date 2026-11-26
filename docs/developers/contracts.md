@@ -793,7 +793,7 @@ Every public function, with the exact signer it demands. `AUTH_MATRIX` in `contr
 | --- | --- | --- |
 | `initialized` | - | `admin` |
 | `budget_deposited` | `sponsor` | `amount`, `available` |
-| `rules_set` | `sponsor` | `match_bps`, `cap_per_voucher`, `min_voucher_amount`, `min_voucher_age_secs` |
+| `rules_set` | `sponsor` | `match_bps`, `cap_per_voucher`, `min_voucher_amount`, `min_voucher_age_secs`, `starts_at`, `ends_at` |
 | `match_created` | `sponsor`, `original_voucher_id` | `matched_voucher_id`, `provider`, `service_code`, `amount`, `matched_at` |
 | `match_settled` | `sponsor` | `matched_voucher_id`, `amount` |
 | `match_refunded` | `sponsor` | `matched_voucher_id`, `amount` |

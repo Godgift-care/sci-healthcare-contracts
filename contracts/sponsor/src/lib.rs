@@ -61,9 +61,10 @@ pub use types::{
 
 use interfaces::{RegistryClient, VoucherClient, VoucherError};
 use storage::{
-    available_of, extend_instance, has_config, read_account, read_config, read_match,
-    read_original_of, read_totals, record_movement, write_account, write_config, write_match,
-    write_original_of, write_totals,
+    available_of, extend_instance, has_config,
+    read_account, read_config, read_match, read_original_of, read_totals,
+    reduce_committed_for_provider, record_movement, write_account, write_config,
+    write_match, write_original_of, write_totals,
 };
 
 /// Basis points in one hundred per cent.
@@ -170,6 +171,8 @@ impl SponsorDesk {
             cap_per_voucher: rules.cap_per_voucher,
             min_voucher_amount: rules.min_voucher_amount,
             min_voucher_age_secs: rules.min_voucher_age_secs,
+            starts_at: rules.starts_at,
+            ends_at: rules.ends_at,
         }
         .publish(&env);
         Ok(())
@@ -292,6 +295,17 @@ impl SponsorDesk {
         if account.open_matches.len() >= MAX_OPEN_MATCHES {
             return Err(SponsorError::TooManyOpenMatches);
         }
+
+        // Enforce per-provider cap if set.
+        let current_committed = storage::committed_for_provider(&account, &provider);
+        if rules.cap_per_provider > 0
+            && current_committed + match_amount > rules.cap_per_provider
+        {
+            return Err(SponsorError::CapExceeded);
+        }
+        // Track the committed value per provider.
+        // The total `account.committed` is increased by `record_movement` below.
+        storage::add_committed_for_provider(&mut account, &env, provider.clone(), match_amount);
 
         // The matching voucher, funded by this contract and escrowed by the
         // voucher contract.
@@ -541,6 +555,9 @@ impl SponsorDesk {
         if rules.cap_per_voucher <= 0 {
             return Err(SponsorError::InvalidRules);
         }
+        if rules.cap_per_provider < 0 {
+            return Err(SponsorError::InvalidRules);
+        }
         if rules.min_voucher_amount < 0 {
             return Err(SponsorError::InvalidRules);
         }
@@ -550,8 +567,8 @@ impl SponsorDesk {
                 return Err(SponsorError::InvalidRules);
             }
         }
-        // eligible_providers is bounded; enforce a reasonable cap.
-        if rules.eligible_providers.len() > 20 {
+        // A campaign cannot start after it ends (when both are set).
+        if rules.starts_at > 0 && rules.ends_at > 0 && rules.starts_at > rules.ends_at {
             return Err(SponsorError::InvalidRules);
         }
         Ok(())
@@ -674,11 +691,9 @@ impl SponsorDesk {
         let mut refunded = 0i128;
 
         for open in account.open_matches.iter() {
-            let Some((_, _, _, _, _, status, _, _)) =
-                vouchers.voucher_summary(&open.matched_voucher_id)
-            else {
-                return Err(SponsorError::VoucherNotFound);
-            };
+            let summary = vouchers.voucher_summary(&open.matched_voucher_id).unwrap();
+            let provider = summary.2;
+            let status = summary.5;
             match status {
                 VOUCHER_STATUS_SETTLED => {
                     // The money became care: it stays spent.
@@ -694,6 +709,13 @@ impl SponsorDesk {
                     refunded = refunded
                         .checked_add(open.amount)
                         .ok_or(SponsorError::MathOverflow)?;
+                    // The per-provider committed balance should also decrease.
+                    reduce_committed_for_provider(
+                        account,
+                        env,
+                        &provider,
+                        open.amount,
+                    )?;
                     MatchRefunded {
                         sponsor: account.sponsor.clone(),
                         matched_voucher_id: open.matched_voucher_id,

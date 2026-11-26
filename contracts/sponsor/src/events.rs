@@ -37,6 +37,10 @@ pub struct RulesSet {
     pub min_voucher_amount: i128,
     /// How long a voucher must have been funded before it qualifies.
     pub min_voucher_age_secs: u64,
+    /// The campaign start time, in ledger seconds since the epoch.
+    pub starts_at: u64,
+    /// The campaign end time, in ledger seconds since the epoch.
+    pub ends_at: u64,
 }
 
 #[contractevent]

@@ -40,6 +40,7 @@ pub(crate) fn read_account(env: &Env, sponsor: &Address) -> SponsorAccount {
             withdrawn: 0,
             rules: empty_rules(env),
             open_matches: soroban_sdk::Vec::new(env),
+            committed_per_provider: soroban_sdk::Vec::new(env),
         },
     }
 }
@@ -53,7 +54,9 @@ pub(crate) fn empty_rules(env: &Env) -> Rules {
         min_voucher_age_secs: 0,
         eligible_countries: soroban_sdk::Vec::new(env),
         eligible_service_codes: soroban_sdk::Vec::new(env),
-        eligible_providers: soroban_sdk::Vec::new(env),
+        starts_at: 0,
+        ends_at: 0,
+        cap_per_provider: 0,
     }
 }
 
@@ -113,6 +116,92 @@ pub(crate) fn read_totals(env: &Env) -> Totals {
 pub(crate) fn write_totals(env: &Env, totals: &Totals) {
     env.storage().instance().set(&DataKey::Totals, totals);
     extend_instance(env);
+}
+
+/// Return the committed value for a given provider, if any.
+pub(crate) fn committed_for_provider(
+    account: &SponsorAccount,
+    provider: &Address,
+) -> i128 {
+    for (p, amount) in &account.committed_per_provider {
+        if p.eq(provider) {
+            return amount;
+        }
+    }
+    0
+}
+
+/// Add or update the committed value for a provider.
+pub(crate) fn add_committed_for_provider(
+    account: &mut SponsorAccount,
+    env: &Env,
+    provider: Address,
+    amount: i128,
+) {
+    let vec = &mut account.committed_per_provider;
+    // Remove any existing entry for this provider.
+    // Soroban Vec does not support indexing or retain, so we drain and filter.
+    let mut new_vec = soroban_sdk::Vec::new(env);
+    for entry in vec.iter() {
+        if entry.0 != provider {
+            new_vec.push_back(entry.clone());
+        }
+    }
+    *vec = new_vec;
+    // Add the new entry.
+    vec.push_back((provider, amount));
+}
+
+/// Subtract the committed value for a provider (reduces or removes the entry),
+/// and also decreases the sponsor's total committed balance.
+pub(crate) fn reduce_committed_for_provider(
+    account: &mut SponsorAccount,
+    env: &Env,
+    provider: &Address,
+    amount: i128,
+) -> Result<(), SponsorError> {
+    let vec = &mut account.committed_per_provider;
+    let mut found = false;
+    for _i in (0..vec.len()).rev() {
+        let idx = vec.iter().position(|(p, _)| p == *provider);
+        match idx {
+            Some(_) => {
+                // Soroban Vec does not support indexing, so we drain and rebuild.
+                let mut remaining: soroban_sdk::Vec<(Address, i128)> = soroban_sdk::Vec::new(env);
+                for entry in vec.iter() {
+                    let (p, a) = entry.clone();
+                    if p == *provider {
+                        found = true;
+                        let new_a = a.checked_sub(amount).unwrap_or(0);
+                        if new_a > 0 {
+                            remaining.push_back((provider.clone(), new_a));
+                        }
+                        // If new_a == 0, the entry is removed (not re-added)
+                    } else {
+                        remaining.push_back(entry);
+                    }
+                }
+                *vec = remaining;
+            }
+            None => {}
+        }
+    }
+    if found {
+        // Also decrease the total committed balance.
+        account.committed = account
+            .committed
+            .checked_sub(amount)
+            .ok_or(SponsorError::MathOverflow)?;
+    }
+    // If provider not found but amount > 0, still decrease total committed
+    // to avoid getting stuck (defensive).
+    if !found && amount > 0 {
+        account.committed = account
+            .committed
+            .checked_sub(amount)
+            .ok_or(SponsorError::MathOverflow)?;
+    }
+    Ok(())
 }
 
 /// A sponsor's unused budget: what is still theirs to match with or to
