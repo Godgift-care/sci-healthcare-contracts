@@ -39,7 +39,7 @@ jobs:
     name: malware scan
     # Re-runs on labels only for the maintainer review label.
     if: github.event.action != 'labeled' || github.event.label.name == 'security-reviewed'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     steps:
       - name: Resolve the pull request
         id: pr

@@ -1105,10 +1105,7 @@
                     "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAITA4"
                   },
                   {
-                    "u32": 0
-                  },
-                  {
-                    "u32": 0
+                    "u64": "0"
                   }
                 ]
               }

@@ -35,50 +35,7 @@ pub(crate) struct StoredVoucher(
     u64,             // attested_at
     u64,             // dispute_deadline
     Option<Address>, // attester
-    u32,             // updated_ledger
-    u32,             // response_code
-);
-
-/// The positional layout before `updated_ledger` was appended.
-///
-/// Kept only so a voucher written by an older deployment still decodes. New
-/// writes always use `StoredVoucher`; a read falls back to this and reports
-/// `updated_ledger = 0`, meaning the ledger is unknown.
-#[contracttype]
-#[derive(Clone)]
-pub(crate) struct StoredVoucherV2(
-    pub(crate) Address,
-    pub(crate) BytesN<32>,
-    pub(crate) Address,
-    pub(crate) u32,
-    pub(crate) i128,
-    pub(crate) VoucherStatus,
-    pub(crate) u64,
-    pub(crate) u64,
-    pub(crate) u64,
-    pub(crate) u64,
-    pub(crate) u64,
-    pub(crate) Option<Address>,
-    pub(crate) u32,
-);
-
-/// The positional layout before both the ledger stamp and dispute response
-/// were appended.
-#[contracttype]
-#[derive(Clone)]
-pub(crate) struct StoredVoucherV1(
-    pub(crate) Address,
-    pub(crate) BytesN<32>,
-    pub(crate) Address,
-    pub(crate) u32,
-    pub(crate) i128,
-    pub(crate) VoucherStatus,
-    pub(crate) u64,
-    pub(crate) u64,
-    pub(crate) u64,
-    pub(crate) u64,
-    pub(crate) u64,
-    pub(crate) Option<Address>,
+    u64,             // disputed_at
 );
 
 impl StoredVoucher {
@@ -96,8 +53,7 @@ impl StoredVoucher {
             v.attested_at,
             v.dispute_deadline,
             v.attester.clone(),
-            v.updated_ledger,
-            v.response_code,
+            v.disputed_at,
         )
     }
 
@@ -116,52 +72,7 @@ impl StoredVoucher {
             attested_at: self.9,
             dispute_deadline: self.10,
             attester: self.11,
-            updated_ledger: self.12,
-            response_code: self.13,
-        }
-    }
-}
-
-impl StoredVoucherV2 {
-    pub(crate) fn into_voucher(self, id: u64) -> Voucher {
-        Voucher {
-            id,
-            funder: self.0,
-            beneficiary_ref: self.1,
-            provider: self.2,
-            service_code: self.3,
-            amount: self.4,
-            status: self.5,
-            created_at: self.6,
-            expires_at: self.7,
-            claimed_at: self.8,
-            attested_at: self.9,
-            dispute_deadline: self.10,
-            attester: self.11,
-            updated_ledger: self.12,
-            response_code: 0,
-        }
-    }
-}
-
-impl StoredVoucherV1 {
-    pub(crate) fn into_voucher(self, id: u64) -> Voucher {
-        Voucher {
-            id,
-            funder: self.0,
-            beneficiary_ref: self.1,
-            provider: self.2,
-            service_code: self.3,
-            amount: self.4,
-            status: self.5,
-            created_at: self.6,
-            expires_at: self.7,
-            claimed_at: self.8,
-            attested_at: self.9,
-            dispute_deadline: self.10,
-            attester: self.11,
-            updated_ledger: 0,
-            response_code: 0,
+            disputed_at: self.12,
         }
     }
 }
