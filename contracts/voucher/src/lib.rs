@@ -720,6 +720,14 @@ impl VoucherEscrow {
 
         let to_provider = if refund_funder { 0 } else { voucher.amount };
         let fee = Self::fee_for(to_provider, config.fee_bps)?;
+        if refund_funder {
+            Self::pay_back(&env, &config, &mut voucher)?;
+        } else {
+            Self::pay_out(&env, &config, &mut voucher)?;
+        }
+
+        // Published last: the event is only emitted for a resolution whose
+        // transfers actually landed.
         DisputeResolved {
             admin,
             voucher_id,
@@ -729,12 +737,7 @@ impl VoucherEscrow {
             to_funder: voucher.amount - to_provider,
         }
         .publish(&env);
-
-        if refund_funder {
-            Self::pay_back(&env, &config, &mut voucher)
-        } else {
-            Self::pay_out(&env, &config, &mut voucher)
-        }
+        Ok(())
     }
 
     /// Admin resolves a dispute by splitting the escrow between the parties.
@@ -772,6 +775,8 @@ impl VoucherEscrow {
         let fee = Self::fee_for(to_provider, config.fee_bps)?;
         let to_funder = voucher.amount - to_provider;
 
+        Self::pay_split(&env, &config, &mut voucher, to_provider, fee, to_funder)?;
+
         DisputeResolved {
             admin,
             voucher_id,
@@ -781,8 +786,6 @@ impl VoucherEscrow {
             to_funder,
         }
         .publish(&env);
-
-        Self::pay_split(&env, &config, &mut voucher, to_provider, fee, to_funder)?;
         Ok(())
     }
 
@@ -1484,7 +1487,12 @@ impl VoucherEscrow {
         let fee_account_share = fee - attester_share;
 
         let token_client = token::Client::new(env, &config.token);
-        let escrow = env.current_contract_address();
+
+        // Effects first: a token or provider contract that re-enters from
+        // inside a transfer sees a settled voucher and cannot be paid twice.
+        // Any error below rolls the whole call back, status included.
+        voucher.status = VoucherStatus::Settled;
+        write_voucher(env, voucher);
 
         Self::ensure_escrow_covers(env, &token_client, voucher.amount)?;
         Self::send(env, &token_client, &voucher.provider, net)?;
@@ -1497,21 +1505,9 @@ impl VoucherEscrow {
             Self::send(env, &token_client, &config.fee_account, fee_account_share)?;
         }
         decrease_open_escrow(env, voucher.amount)?;
-
-        voucher.status = VoucherStatus::Settled;
-        write_voucher(env, voucher);
         Self::release_exposure(env, voucher);
 
-        ReceiptClient::new(env, &config.receipt_book).mint(
-            &escrow,
-            &voucher.id,
-            &voucher.beneficiary_ref,
-            &voucher.provider,
-            &voucher.service_code,
-            &voucher.amount,
-            &fee,
-            &net,
-        );
+        Self::mint_receipt(env, config, voucher, voucher.amount)?;
 
         VoucherSettled {
             provider: voucher.provider.clone(),
@@ -1539,7 +1535,13 @@ impl VoucherEscrow {
     ) -> Result<(), VoucherError> {
         let net = to_provider - fee;
         let token_client = token::Client::new(env, &config.token);
-        let escrow = env.current_contract_address();
+
+        voucher.status = if to_provider == 0 {
+            VoucherStatus::Refunded
+        } else {
+            VoucherStatus::Settled
+        };
+        write_voucher(env, voucher);
 
         Self::ensure_escrow_covers(env, &token_client, voucher.amount)?;
         if net > 0 {
@@ -1555,26 +1557,10 @@ impl VoucherEscrow {
         decrease_open_escrow(env, voucher.amount)?;
         Self::release_exposure(env, voucher);
 
-        voucher.status = if to_provider == 0 {
-            VoucherStatus::Refunded
-        } else {
-            VoucherStatus::Settled
-        };
-        write_voucher(env, voucher);
-
         // No care was paid for when the split sends everything back, so no
         // receipt is minted and the beneficiary's episode count stays put.
         if to_provider > 0 {
-            ReceiptClient::new(env, &config.receipt_book).mint(
-                &escrow,
-                &voucher.id,
-                &voucher.beneficiary_ref,
-                &voucher.provider,
-                &voucher.service_code,
-                &to_provider,
-                &fee,
-                &net,
-            );
+            Self::mint_receipt(env, config, voucher, to_provider)?;
         }
         Ok(())
     }
@@ -1583,12 +1569,12 @@ impl VoucherEscrow {
     /// care that never happened.
     fn pay_back(env: &Env, config: &Config, voucher: &mut Voucher) -> Result<(), VoucherError> {
         let token_client = token::Client::new(env, &config.token);
+        voucher.status = VoucherStatus::Refunded;
+        write_voucher(env, voucher);
+
         Self::ensure_escrow_covers(env, &token_client, voucher.amount)?;
         Self::send(env, &token_client, &voucher.funder, voucher.amount)?;
         decrease_open_escrow(env, voucher.amount)?;
-
-        voucher.status = VoucherStatus::Refunded;
-        write_voucher(env, voucher);
         Self::release_exposure(env, voucher);
 
         VoucherRefunded {
