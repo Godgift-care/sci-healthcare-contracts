@@ -1,0 +1,140 @@
+name: SDK compatibility
+
+# Non-blocking check: build and test against the latest soroban-sdk release
+# candidate once a week. Failures open one tracking issue (deduplicated by
+# title) rather than one per run, so the noise stays manageable. This job
+# never runs against pull requests, so it cannot block merges.
+#
+# To trigger manually: Actions → "SDK compatibility" → Run workflow.
+# To test against a specific version set sdk_version in the workflow_dispatch
+# input (e.g. "30.0.0-rc.1"). Leave it blank to pick the latest pre-release.
+
+on:
+  schedule:
+    # Every Monday at 06:00 UTC.
+    - cron: '0 6 * * 1'
+  workflow_dispatch:
+    inputs:
+      sdk_version:
+        description: 'soroban-sdk version to test against (blank = latest pre-release)'
+        required: false
+        default: ''
+
+permissions:
+  issues: write
+  contents: read
+
+jobs:
+  sdk-compat:
+    name: build + test against next SDK
+    runs-on: ubuntu-latest
+    # Never block anything: this is a canary, not a gate.
+    continue-on-error: true
+    outputs:
+      sdk_version: ${{ steps.pick.outputs.sdk_version }}
+      outcome: ${{ steps.test.outcome }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: dtolnay/rust-toolchain@1.96.0
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          # Separate cache key so the compat build never evicts the main cache.
+          key: sdk-compat
+
+      - name: Pick SDK version
+        id: pick
+        env:
+          REQUESTED: ${{ inputs.sdk_version }}
+        run: |
+          if [ -n "$REQUESTED" ]; then
+            echo "sdk_version=$REQUESTED" >> "$GITHUB_OUTPUT"
+          else
+            # Latest pre-release on crates.io (rc, alpha, beta).
+            version="$(curl -sSf 'https://crates.io/api/v1/crates/soroban-sdk' \
+              -H 'User-Agent: sci-healthcare-contracts sdk-compat CI' \
+              | python3 -c "
+          import json, sys
+          data = json.load(sys.stdin)
+          versions = [v['num'] for v in data['versions']
+                      if any(tag in v['num'] for tag in ('rc', 'alpha', 'beta'))
+                      and not v['yanked']]
+          print(versions[0] if versions else '')
+          ")"
+            if [ -z "$version" ]; then
+              echo "No pre-release found on crates.io; skipping."
+              echo "sdk_version=none" >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
+            echo "sdk_version=$version" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Patch Cargo.toml to use next SDK
+        if: steps.pick.outputs.sdk_version != 'none'
+        env:
+          SDK_VERSION: ${{ steps.pick.outputs.sdk_version }}
+        run: |
+          # Update the workspace-level soroban-sdk requirement. The lock file
+          # is regenerated, so --locked is intentionally absent below.
+          sed -i "s/^soroban-sdk = .*/soroban-sdk = \"${SDK_VERSION}\"/" Cargo.toml
+          # Also patch any per-crate overrides.
+          find contracts -name 'Cargo.toml' -exec \
+            sed -i "s/soroban-sdk = { version = \"[^\"]*\"/soroban-sdk = { version = \"${SDK_VERSION}\"/" {} +
+
+      - name: Build
+        id: build
+        if: steps.pick.outputs.sdk_version != 'none'
+        run: cargo build --all 2>&1 | tee /tmp/build.log
+
+      - name: Test
+        id: test
+        if: steps.build.outcome == 'success'
+        run: cargo test --all 2>&1 | tee /tmp/test.log
+
+  open-or-update-issue:
+    name: open tracking issue on failure
+    runs-on: ubuntu-latest
+    needs: sdk-compat
+    if: needs.sdk-compat.outputs.outcome == 'failure' && needs.sdk-compat.outputs.sdk_version != 'none'
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Deduplicate and open/update tracking issue
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SDK_VERSION: ${{ needs.sdk-compat.outputs.sdk_version }}
+          REPO: ${{ github.repository }}
+        run: |
+          TITLE="ci: incompatibility with soroban-sdk ${SDK_VERSION}"
+
+          # Look for an open issue with the same title.
+          EXISTING="$(gh issue list \
+            --repo "$REPO" \
+            --state open \
+            --search "\"${TITLE}\"" \
+            --json number,title \
+            --jq ".[] | select(.title == \"${TITLE}\") | .number" \
+            | head -1)"
+
+          RUN_URL="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          BODY="The weekly SDK compatibility check failed against **soroban-sdk ${SDK_VERSION}**.
+
+          CI run: ${RUN_URL}
+
+          Resolve this before the next SDK stable release. The check is non-blocking and will not prevent merging PRs."
+
+          if [ -n "$EXISTING" ]; then
+            # Add a comment so the issue stays current without flooding.
+            gh issue comment "$EXISTING" \
+              --repo "$REPO" \
+              --body "Still failing as of run ${RUN_URL} (soroban-sdk ${SDK_VERSION})."
+            echo "Updated existing issue #${EXISTING}."
+          else
+            gh issue create \
+              --repo "$REPO" \
+              --title "$TITLE" \
+              --body "$BODY" \
+              --label "ci,infrastructure"
+            echo "Opened new tracking issue."
+          fi

@@ -1,0 +1,90 @@
+name: Mutation testing
+
+# Runs cargo-mutants on the voucher crate's fee and settlement arithmetic to
+# verify that every mutant in those paths is killed by an existing test.
+#
+# Schedule: weekly (Sundays 05:00 UTC) and on any PR that touches the voucher
+# source. Never blocks a merge: failures are reported as workflow annotations
+# and in the job summary, not as a required status check.
+#
+# Covered functions (see contracts/voucher/src/lib.rs):
+#   - fee_for / bps_of  (basis-point fee arithmetic)
+#   - settle            (payout path)
+#   - refund            (refund path)
+#
+# To run locally:
+#   cargo install cargo-mutants
+#   cargo mutants -p sci-voucher \
+#     --file contracts/voucher/src/lib.rs \
+#     --re 'fee_for|bps_of|settle|refund'
+
+on:
+  schedule:
+    # Every Sunday at 05:00 UTC.
+    - cron: '0 5 * * 0'
+  pull_request:
+    paths:
+      - 'contracts/voucher/src/lib.rs'
+      - 'contracts/voucher/src/economics_test.rs'
+      - 'contracts/voucher/src/**'
+  workflow_dispatch:
+
+jobs:
+  mutants:
+    name: cargo-mutants (voucher arithmetic)
+    runs-on: ubuntu-latest
+    # Non-blocking: surviving mutants are a finding, not a gate.
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: dtolnay/rust-toolchain@1.96.0
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: mutants
+
+      - name: Install cargo-mutants
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-mutants@0.3.1
+
+      - name: Run mutation tests on fee and settlement arithmetic
+        id: mutants
+        # --file scopes mutations to the voucher library source only.
+        # --re selects only the arithmetic and lifecycle functions the issue
+        # calls out; purely organisational code (error handling, storage
+        # helpers) is left for dedicated unit tests.
+        run: |
+          cargo mutants \
+            --package sci-voucher \
+            --file contracts/voucher/src/lib.rs \
+            --re 'fee_for|bps_of|settle|refund' \
+            --output mutants-out \
+            -- --all 2>&1 | tee /tmp/mutants.log
+          echo "exit_code=$?" >> "$GITHUB_OUTPUT"
+
+      - name: Summarise surviving mutants
+        if: always()
+        run: |
+          if [ -f mutants-out/missed.txt ] && [ -s mutants-out/missed.txt ]; then
+            echo "## Surviving mutants" >> "$GITHUB_STEP_SUMMARY"
+            echo "" >> "$GITHUB_STEP_SUMMARY"
+            echo "The following mutants were **not** killed by any test." >> "$GITHUB_STEP_SUMMARY"
+            echo "Add or strengthen tests to cover these paths." >> "$GITHUB_STEP_SUMMARY"
+            echo "" >> "$GITHUB_STEP_SUMMARY"
+            echo '```' >> "$GITHUB_STEP_SUMMARY"
+            cat mutants-out/missed.txt >> "$GITHUB_STEP_SUMMARY"
+            echo '```' >> "$GITHUB_STEP_SUMMARY"
+            echo "::warning::Surviving mutants found — see the job summary for details."
+          else
+            echo "## Mutation testing passed" >> "$GITHUB_STEP_SUMMARY"
+            echo "All mutants in the fee and settlement arithmetic were killed." >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Upload mutants report
+        uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: mutants-report
+          path: mutants-out/

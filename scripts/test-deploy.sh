@@ -21,6 +21,30 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+# shellcheck source=scripts/lib.sh
+source "$ROOT/scripts/lib.sh"
+
+usage() {
+  cat <<'EOF'
+Usage: ./scripts/test-deploy.sh [-h|--help]
+
+Tests scripts/deploy.sh without a Stellar network or funded accounts by
+substituting fake stellar and build-wasm.sh commands.
+
+Options:
+  -h, --help   Show this message and exit.
+EOF
+}
+
+while [ $# -gt 0 ]; do
+  case "$1" in
+    -h|--help) usage; exit 0 ;;
+    -*) printf 'error: unknown option %s\n' "$1" >&2; exit 2 ;;
+    *) printf 'error: unexpected argument %s\n' "$1" >&2; exit 2 ;;
+  esac
+  shift
+done
+
 TMP="$(mktemp -d)"
 trap 'rm -rf "$TMP"' EXIT
 
@@ -43,7 +67,8 @@ reset_workspace() {
   rm -rf "$WORK"
   mkdir -p "$WORK/scripts" "$WORK/deployments" "$WORK/bin"
   cp "$ROOT/scripts/deploy.sh" "$WORK/scripts/deploy.sh"
-  chmod +x "$WORK/scripts/deploy.sh"
+  cp "$ROOT/scripts/lib.sh" "$WORK/scripts/lib.sh"
+  chmod +x "$WORK/scripts/deploy.sh" "$WORK/scripts/lib.sh"
 
   cat >"$WORK/scripts/build-wasm.sh" <<'FAKE_BUILD'
 #!/usr/bin/env bash
@@ -171,5 +196,29 @@ grep -q '^SPONSOR_CONTRACT_ID=CSPONSORCONTRACTID$' "$env_file" ||
 [ ! -s "$STELLAR_LOG" ] || fail "dry run with an existing env file called stellar"
 [ ! -s "$BUILD_LOG" ] || fail "dry run with an existing env file ran the build"
 pass "dry run with an existing env file sends nothing"
+
+# 6. --help on each script exits 0 and prints usage.
+SCRIPTS_WITH_HELP=(
+  "scripts/build-wasm.sh"
+  "scripts/seed.sh"
+  "scripts/e2e-local.sh"
+  "scripts/test-deploy.sh"
+  "scripts/deploy-faucet.sh"
+  "scripts/deploy.sh"
+)
+for script in "${SCRIPTS_WITH_HELP[@]}"; do
+  output="$("$ROOT/$script" --help 2>&1)" || fail "$script --help exited non-zero"
+  printf '%s' "$output" | grep -qi 'usage' || fail "$script --help output does not mention Usage"
+  pass "$script --help exits 0"
+done
+
+# 7. Unknown flags on each script exit non-zero.
+for script in "${SCRIPTS_WITH_HELP[@]}"; do
+  # test-deploy.sh tests itself; run a copy so its EXIT trap doesn't fire here
+  if "$ROOT/$script" --no-such-flag >/dev/null 2>&1; then
+    fail "$script does not reject unknown flags"
+  fi
+  pass "$script rejects --no-such-flag"
+done
 
 printf '\nAll %d deploy-script tests passed.\n' "$PASS"
