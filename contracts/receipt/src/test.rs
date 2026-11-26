@@ -2101,3 +2101,29 @@ fn old_format_receipt_still_decodes() {
     assert_eq!(receipts.len(), 1);
     assert_eq!(receipts.get(0).unwrap().net, 30_000_000);
 }
+
+#[test]
+fn upgrade_and_migrate_receipt() {
+    let f = setup();
+    f.env.mock_all_auths();
+
+    assert_eq!(f.client.get_storage_version(), 0);
+
+    let stranger = Address::generate(&f.env);
+    let dummy_hash = BytesN::from_array(&f.env, &[1u8; 32]);
+
+    // Stranger cannot upgrade or migrate
+    let err = f
+        .client
+        .try_upgrade(&stranger, &dummy_hash)
+        .err()
+        .unwrap()
+        .unwrap();
+    assert_eq!(err, ReceiptError::NotAuthorized);
+    let err = f.client.try_migrate(&stranger).err().unwrap().unwrap();
+    assert_eq!(err, ReceiptError::NotAuthorized);
+
+    // Admin can migrate
+    f.client.migrate(&f.admin);
+    assert_eq!(f.client.get_storage_version(), 1);
+}

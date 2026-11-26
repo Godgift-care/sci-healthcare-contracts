@@ -940,6 +940,43 @@ impl VoucherEscrow {
         Ok((open_escrow, token_balance))
     }
 
+    /// Storage layout version, or 0 if not yet set.
+    pub fn get_storage_version(env: Env) -> u32 {
+        env.storage()
+            .instance()
+            .get(&DataKey::StorageVersion)
+            .unwrap_or(0)
+    }
+
+    /// Upgrades the contract's Wasm byte-code in place. Admin only.
+    pub fn upgrade(
+        env: Env,
+        admin: Address,
+        new_wasm_hash: BytesN<32>,
+    ) -> Result<(), VoucherError> {
+        let config = read_config(&env)?;
+        common::require_admin(&config.admin, &admin)?;
+        #[allow(deprecated)]
+        env.deployer()
+            .update_current_contract_wasm(new_wasm_hash.clone());
+        extend_instance(&env);
+        events::Upgraded { new_wasm_hash }.publish(&env);
+        Ok(())
+    }
+
+    /// Migrates the contract storage layout after an upgrade. Admin only.
+    pub fn migrate(env: Env, admin: Address) -> Result<(), VoucherError> {
+        let config = read_config(&env)?;
+        common::require_admin(&config.admin, &admin)?;
+        let current_version = Self::get_storage_version(env.clone());
+        let new_version = current_version.saturating_add(1);
+        env.storage()
+            .instance()
+            .set(&DataKey::StorageVersion, &new_version);
+        extend_instance(&env);
+        Ok(())
+    }
+
     /// Crate version this contract was built from, e.g. `"0.2.0"`.
     ///
     /// Lets integrators and the indexer tell deployments apart without

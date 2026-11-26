@@ -5,6 +5,7 @@
 
 pub use sci_common::AdminChanged;
 pub use sci_common::AdminProposed;
+pub use sci_common::Upgraded;
 use soroban_sdk::{contractevent, Address, BytesN};
 
 #[contractevent]

@@ -27,8 +27,9 @@ use soroban_sdk::{contract, contractimpl, token, Address, BytesN, Env, String, V
 
 pub use events::{
     AdminChanged, AdminProposed, AttesterAdded, AttesterRemoved, CapacityChanged, Initialized,
-    ProviderCategoryChanged, ProviderRegistered, ProviderStatusChanged, ServiceAvailabilityChanged,
-    ServicePriceScheduled, ServiceRemoved, ServiceUpserted, VerificationEvidenceSet,
+    ProviderCategoryChanged, ProviderRegistered, ProviderStatusChanged, ProviderUpdated,
+    ServiceAvailabilityChanged, ServicePriceScheduled, ServiceRemoved, ServiceUpserted, Upgraded,
+    VerificationEvidenceSet,
 };
 pub use types::{
     DataKey, Provider, ProviderCategory, ProviderStatus, RegistrationDepositConfig, RegistryError,
@@ -45,6 +46,12 @@ use storage::{
 /// Least notice a clinic must give before a scheduled price takes effect.
 /// 24 hours, so a funder who has just seen a price can still pay it.
 pub const MIN_PRICE_NOTICE_SECS: u64 = 24 * 60 * 60;
+
+/// Maximum length of a clinic/provider name in characters.
+pub const MAX_NAME_LEN: u32 = 64;
+
+/// Maximum length of a service label in characters.
+pub const MAX_LABEL_LEN: u32 = 48;
 
 /// Most providers one `list_providers` call may return.
 pub use storage::MAX_PROVIDERS_PAGE;
@@ -127,6 +134,9 @@ impl Registry {
         if name.is_empty() {
             return Err(RegistryError::EmptyName);
         }
+        if name.len() > MAX_NAME_LEN {
+            return Err(RegistryError::ValueTooLong);
+        }
         // ISO 3166-1 alpha-2 is exactly two ASCII uppercase letters — never
         // two arbitrary characters. A lowercase "ng", a digit, two spaces or
         // a multi-byte character that happens to occupy two bytes would
@@ -184,6 +194,73 @@ impl Registry {
             country,
             registered_at,
             category,
+        }
+        .publish(&env);
+        Ok(())
+    }
+
+    /// Updates a clinic's name and/or country. Callable by provider owner only.
+    pub fn update_provider(
+        env: Env,
+        owner: Address,
+        name: String,
+        country: String,
+    ) -> Result<(), RegistryError> {
+        owner.require_auth();
+
+        if name.is_empty() {
+            return Err(RegistryError::EmptyName);
+        }
+        if name.len() > MAX_NAME_LEN {
+            return Err(RegistryError::ValueTooLong);
+        }
+
+        let country_bytes = country.to_bytes();
+        if country_bytes.len() != 2 || !country_bytes.iter().all(|byte| byte.is_ascii_uppercase()) {
+            return Err(RegistryError::InvalidCountry);
+        }
+
+        let mut provider = read_provider(&env, &owner)?;
+        let old_country = provider.country.clone();
+
+        provider.name = name.clone();
+        provider.country = country.clone();
+        write_provider(&env, &owner, &provider);
+        extend_instance(&env);
+
+        if provider.status == ProviderStatus::Active && old_country != country {
+            // Remove from old country index
+            let total = storage::read_country_count(&env, &old_country);
+            let mut idx = None;
+            for i in 0..total {
+                if let Some(addr) = storage::read_country_at(&env, &old_country, i) {
+                    if addr == owner {
+                        idx = Some(i);
+                        break;
+                    }
+                }
+            }
+            if let Some(i) = idx {
+                let last_idx = total.saturating_sub(1);
+                if i != last_idx {
+                    if let Some(last_addr) = storage::read_country_at(&env, &old_country, last_idx)
+                    {
+                        storage::write_country_at(&env, &old_country, i, &last_addr);
+                    }
+                }
+                storage::write_country_count(&env, &old_country, &(total - 1));
+            }
+
+            // Add to new country index
+            let new_count = storage::read_country_count(&env, &country);
+            storage::write_country_at(&env, &country, new_count, &owner);
+            storage::write_country_count(&env, &country, &(new_count + 1));
+        }
+
+        ProviderUpdated {
+            owner,
+            name,
+            country,
         }
         .publish(&env);
         Ok(())
@@ -415,6 +492,9 @@ impl Registry {
         }
         if label.is_empty() {
             return Err(RegistryError::EmptyName);
+        }
+        if label.len() > MAX_LABEL_LEN {
+            return Err(RegistryError::ValueTooLong);
         }
 
         let provider = read_provider(&env, &provider_addr)?;
@@ -819,6 +899,41 @@ impl Registry {
     /// trusting an indexer.
     pub fn providers_in(env: Env, country: String, start: u32, limit: u32) -> Vec<Provider> {
         list_providers_by_country(&env, &country, start, limit)
+    }
+
+    /// Storage layout version, or 0 if not yet set.
+    pub fn get_storage_version(env: Env) -> u32 {
+        env.storage()
+            .instance()
+            .get(&DataKey::StorageVersion)
+            .unwrap_or(0)
+    }
+
+    /// Upgrades the contract's Wasm byte-code in place. Admin only.
+    pub fn upgrade(
+        env: Env,
+        admin: Address,
+        new_wasm_hash: BytesN<32>,
+    ) -> Result<(), RegistryError> {
+        Self::require_admin(&env, &admin)?;
+        #[allow(deprecated)]
+        env.deployer()
+            .update_current_contract_wasm(new_wasm_hash.clone());
+        extend_instance(&env);
+        Upgraded { new_wasm_hash }.publish(&env);
+        Ok(())
+    }
+
+    /// Migrates the contract storage layout after an upgrade. Admin only.
+    pub fn migrate(env: Env, admin: Address) -> Result<(), RegistryError> {
+        Self::require_admin(&env, &admin)?;
+        let current_version = Self::get_storage_version(env.clone());
+        let new_version = current_version.saturating_add(1);
+        env.storage()
+            .instance()
+            .set(&DataKey::StorageVersion, &new_version);
+        extend_instance(&env);
+        Ok(())
     }
 
     /// Crate version this contract was built from, e.g. `"0.2.0"`.

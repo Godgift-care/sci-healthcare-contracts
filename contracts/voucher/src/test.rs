@@ -5113,6 +5113,32 @@ fn reducing_a_voucher_lowers_the_clinics_exposure() {
     let (open_escrow, _) = f.voucher.escrow_summary();
     assert_eq!(open_escrow, 3 * CONSULT_PRICE);
 }
+
+#[test]
+fn upgrade_and_migrate_voucher() {
+    let f = setup();
+    f.env.mock_all_auths();
+
+    assert_eq!(f.voucher.get_storage_version(), 0);
+
+    let stranger = Address::generate(&f.env);
+    let dummy_hash = BytesN::from_array(&f.env, &[1u8; 32]);
+
+    // Stranger cannot upgrade or migrate
+    let err = f
+        .voucher
+        .try_upgrade(&stranger, &dummy_hash)
+        .err()
+        .unwrap()
+        .unwrap();
+    assert_eq!(err, VoucherError::NotAuthorized);
+    let err = f.voucher.try_migrate(&stranger).err().unwrap().unwrap();
+    assert_eq!(err, VoucherError::NotAuthorized);
+
+    // Admin can migrate
+    f.voucher.migrate(&f.admin);
+    assert_eq!(f.voucher.get_storage_version(), 1);
+}
 #[cfg(test)]
 mod costs;
 #[cfg(test)]

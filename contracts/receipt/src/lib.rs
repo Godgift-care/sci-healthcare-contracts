@@ -53,6 +53,7 @@ pub struct MinterChanged {
 
 pub use sci_common::AdminChanged;
 pub use sci_common::AdminProposed;
+pub use sci_common::Upgraded;
 
 #[contractevent]
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -137,10 +138,8 @@ pub enum DataKey {
     /// Running total of the amounts of a provider's receipts: the money side
     /// of the clinic's on-chain track record, read by `provider_stats`.
     ProviderTotal(Address),
-    /// Global number of receipts minted.
-    TotalCount,
-    /// Global total amount paid for settled care.
-    TotalAmount,
+    /// Contract storage layout version for upgrades.
+    StorageVersion,
 }
 
 #[contracterror]
@@ -563,6 +562,41 @@ impl ReceiptBook {
             .instance()
             .get(&DataKey::Admin)
             .ok_or(ReceiptError::NotInitialized)
+    }
+
+    /// Storage layout version, or 0 if not yet set.
+    pub fn get_storage_version(env: Env) -> u32 {
+        env.storage()
+            .instance()
+            .get(&DataKey::StorageVersion)
+            .unwrap_or(0)
+    }
+
+    /// Upgrades the contract's Wasm byte-code in place. Admin only.
+    pub fn upgrade(
+        env: Env,
+        admin: Address,
+        new_wasm_hash: BytesN<32>,
+    ) -> Result<(), ReceiptError> {
+        Self::require_admin(&env, &admin)?;
+        #[allow(deprecated)]
+        env.deployer()
+            .update_current_contract_wasm(new_wasm_hash.clone());
+        common::extend_instance(&env);
+        Upgraded { new_wasm_hash }.publish(&env);
+        Ok(())
+    }
+
+    /// Migrates the contract storage layout after an upgrade. Admin only.
+    pub fn migrate(env: Env, admin: Address) -> Result<(), ReceiptError> {
+        Self::require_admin(&env, &admin)?;
+        let current_version = Self::get_storage_version(env.clone());
+        let new_version = current_version.saturating_add(1);
+        env.storage()
+            .instance()
+            .set(&DataKey::StorageVersion, &new_version);
+        common::extend_instance(&env);
+        Ok(())
     }
 
     /// Crate version this contract was built from, e.g. `"0.2.0"`.

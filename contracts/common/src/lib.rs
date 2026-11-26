@@ -15,7 +15,7 @@
 //! contract documents is archived early, and a handover that skips the
 //! acceptance step strands a role on an address nobody controls.
 
-use soroban_sdk::{contractevent, Address, Env, IntoVal, Val};
+use soroban_sdk::{contractevent, Address, BytesN, Env, IntoVal, Val};
 
 // ----- shared events -----
 
@@ -42,6 +42,13 @@ pub struct AdminProposed {
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct AdminChanged {
     pub new_admin: Address,
+}
+
+/// Emitted when a contract's WASM executable is upgraded in place.
+#[contractevent]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct Upgraded {
+    pub new_wasm_hash: BytesN<32>,
 }
 
 /// Roughly one day of ledgers, assuming ~5 second close times.
